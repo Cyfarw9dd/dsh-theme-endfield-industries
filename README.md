@@ -48,7 +48,7 @@ dsh plugin --profile web rm dsh-theme-endfield
 | [docs/engineering-notes.md](docs/engineering-notes.md) | 主题 | 工程深水笔记：实现决策与实测数据 |
 | [docs/development.md](docs/development.md) | 主题 | 开发与发布工作流 |
 | [docs/git.md](docs/git.md) | 主题 | Git 提交策略与 Conventional Commits 规范 |
-| [docs/cookbook/](docs/cookbook/) | 手册 | 功能专题：[音频通知](docs/cookbook/audio-notifications.md) · [磨砂玻璃](docs/cookbook/glass.md) |
+| [docs/cookbook/](docs/cookbook/) | 手册 | 功能专题：[音频通知](docs/cookbook/audio-notifications.md) · [磨砂玻璃](docs/cookbook/glass.md) · [DSH 版本追踪](docs/cookbook/dsh-version-tracking.md) |
 | [docs/notes/](docs/notes/) | 记录 | 一次性存档（[PR 说明](docs/notes/PR-description.md)、[官网动效调研](docs/notes/endfield-motion-research.md)） |
 
 ## 开发与验证

@@ -1,0 +1,328 @@
+name: DSH 版本追踪
+
+# 监测 @deepseek-ai/dsh（npm 官方源）的 latest / next 通道，版本变化时：
+#   1. 安装该版本，跑契约漂移探针 + 完整测试套件（validate）
+#   2. 全绿 → package.json 同号提升、打 tag v<版本>、GitHub Release、关追踪 issue（release）
+#   3. 有红 → 不发版，开/更新带标记的追踪 issue，修复后下一次运行自动补发（report）
+# 设计与操作细节：docs/cookbook/dsh-version-tracking.md
+#
+# 发版=同号：本主题的版本号就是它验证过的 DSH 版本（如 v0.2.0-rc.2）。
+# 主题自身的日常改动只进 main，不发版；下一个 DSH 版本验证通过时一并带出。
+
+on:
+  schedule:
+    # 每 6 小时一次，错开整点（GitHub 整点 cron 拥堵）。UTC 时间。
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dsh_version:
+        description: '手动指定要验证的 @deepseek-ai/dsh 版本（如 0.2.1-alpha.1；留空则自动监测）'
+        required: false
+        default: ''
+
+# 串行：同一时刻最多一个追踪运行，避免两个版本同时发版互相顶。
+concurrency:
+  group: dsh-track
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 探测：对比 npm dist-tags 与已验证记录。纯查询，不装包不跑测试。
+  # ---------------------------------------------------------------------------
+  detect:
+    name: 探测版本变化
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.resolve.outputs.changed }}
+      version: ${{ steps.resolve.outputs.version }}
+      channel: ${{ steps.resolve.outputs.channel }}
+      distTags: ${{ steps.resolve.outputs.distTags }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - id: resolve
+        env:
+          MANUAL_VERSION: ${{ github.event.inputs.dsh_version }}
+        run: |
+          if [ -n "$MANUAL_VERSION" ]; then
+            # 手动入口：不查 dist-tags（验证 alpha 等未进通道的版本时用），
+            # 但仍取一份快照放进发版记录，便于审计“当时各通道在哪”。
+            tags="$(npm view @deepseek-ai/dsh dist-tags --json --prefer-online)"
+            echo "changed=true"        >> "$GITHUB_OUTPUT"
+            echo "version=$MANUAL_VERSION" >> "$GITHUB_OUTPUT"
+            echo "channel=manual"      >> "$GITHUB_OUTPUT"
+            dist="$(node -e 'console.log(JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8"))))' <<<"$tags")"
+            echo "distTags=$dist"      >> "$GITHUB_OUTPUT"
+            echo "手动验证 $MANUAL_VERSION（dist-tags: $dist）"
+            exit 0
+          fi
+
+          json="$(node .github/scripts/dsh-track.js --check)"
+          echo "$json"
+          node -e '
+            const j = JSON.parse(process.argv[1])
+            const out = `changed=${j.changed}\nversion=${j.version ?? ""}\nchannel=${j.channel ?? ""}\ndistTags=${JSON.stringify(j.distTags)}\n`
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out)
+          ' "$json"
+
+      - name: 无变化时给个明确摘要
+        if: steps.resolve.outputs.changed != 'true'
+        run: echo '未发现新版本，本次运行到此为止。' >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 验证：安装目标版本 → 漂移探针（对真实 bundle 的契约检查）→ 完整测试套件。
+  # 与 ci.yml 的 test job 同构（同样的 Chrome 定位与 file:// 冒烟检查），
+  # 区别是测试跑在“新 DSH 已安装”的语境之后，探针红即本 job 红。
+  # ---------------------------------------------------------------------------
+  validate:
+    name: 验证 @deepseek-ai/dsh@${{ needs.detect.outputs.version }}
+    needs: detect
+    if: needs.detect.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: 安装目标版 DSH
+        env:
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dsh-tree" \
+            --omit=dev --ignore-scripts --no-audit --no-fund \
+            "@deepseek-ai/dsh@$DSH_VERSION"
+          got="$(node -p "require('$RUNNER_TEMP/dsh-tree/node_modules/@deepseek-ai/dsh/package.json').version")"
+          if [ "$got" != "$DSH_VERSION" ]; then
+            echo "::error title=安装版本不符::要求 $DSH_VERSION，装上的是 $got"
+            exit 1
+          fi
+          echo "已安装 @deepseek-ai/dsh@$got"
+
+      - name: 契约漂移探针
+        run: |
+          set -o pipefail
+          node .github/scripts/dsh-drift-probe.js "$RUNNER_TEMP/dsh-tree/node_modules/@deepseek-ai" 2>&1 | tee probe.log
+
+      - name: 定位 Chrome
+        run: |
+          p="$(command -v google-chrome || command -v google-chrome-stable \
+            || command -v chromium-browser || command -v chromium || true)"
+          if [ -z "$p" ]; then
+            echo "::error title=环境缺失::runner 上找不到 Chrome/Chromium，浏览器测试无法运行"
+            exit 1
+          fi
+          echo "CHROME_PATH=$p" >> "$GITHUB_ENV"
+          echo "使用 $p"
+
+      # 与 ci.yml 相同的冒烟检查：这批测试用 'file:///' + 绝对路径 拼 URL，
+      # 该拼法的 Linux 行为要先探一次，否则失败会是一堆神秘的红。
+      - name: headless Chrome 冒烟检查
+        run: |
+          tmp="$(mktemp -d)"
+          printf '<!doctype html><title>SMOKE-OK</title>' > "$tmp/probe.html"
+          dom="$("$CHROME_PATH" --headless=new --disable-gpu --no-sandbox \
+            --user-data-dir="$(mktemp -d)" --dump-dom "file:///$tmp/probe.html" 2>/dev/null || true)"
+          case "$dom" in
+            *SMOKE-OK*) echo "ok    headless Chrome 冒烟通过" ;;
+            *) echo "::error title=file URL 拼法在 Linux 上失效::见 ci.yml 同名步骤的说明"; exit 1 ;;
+          esac
+
+      - name: 完整测试套件
+        run: |
+          set -o pipefail
+          node .github/scripts/run-tests.js test:ci 2>&1 | tee suite.log
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "## DSH ${{ needs.detect.outputs.version }} 验证（${{ needs.detect.outputs.channel }} 通道）"
+            echo ''
+            echo '```text'
+            tail -n 5 probe.log 2>/dev/null || true
+            tail -n 3 suite.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 发版：验证全绿后——记录状态、package.json 同号提升、提交、tag、Release，
+  # 并关闭仍开着的追踪 issue（上一版验证失败留下的）。
+  # 提交身份是 github-actions[bot]；提交信息走 Conventional Commits。
+  # ---------------------------------------------------------------------------
+  release:
+    name: 发版 v${{ needs.detect.outputs.version }}
+    needs: [detect, validate]
+    if: needs.detect.outputs.changed == 'true' && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: 记录状态并提升版本号
+        env:
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
+        run: node .github/scripts/dsh-track.js --apply "$DSH_VERSION" --dist-tags "$DIST_TAGS"
+
+      - name: 提交与打 tag
+        id: commit
+        env:
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+          CHANNEL: ${{ needs.detect.outputs.channel }}
+          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          committed=no; tagged=no
+          if ! git diff --quiet; then
+            # 不用 printf 反斜杠续行——单引号里的字面反斜杠会进提交信息。
+            {
+              echo "chore(release): v$DSH_VERSION — validated against @deepseek-ai/dsh $DSH_VERSION"
+              echo ''
+              echo "- 契约漂移探针 + 完整测试套件全绿（$CHANNEL 通道发现）"
+              echo "- dist-tags 快照: $DIST_TAGS"
+              echo "- 验证运行: $RUN_URL"
+            } > commit-msg.txt
+            git add -A
+            git commit -F commit-msg.txt
+            committed=yes
+          else
+            echo '工作树无变更（版本号已是目标值）——跳过提交。'
+          fi
+
+          # 不用 `ls-remote | grep -q .`：grep 提前退出给 ls-remote 一个 SIGPIPE，
+          # 配合 pipefail 会把“远端没有 tag”误判成“有”。先落变量再判空。
+          remote_tag="$(git ls-remote --tags origin "refs/tags/v$DSH_VERSION")"
+          if [ -z "$remote_tag" ] && ! git rev-parse -q --verify "refs/tags/v$DSH_VERSION" >/dev/null; then
+            git tag -a "v$DSH_VERSION" -m "Theme release validated against @deepseek-ai/dsh $DSH_VERSION"
+            tagged=yes
+          else
+            echo "tag v$DSH_VERSION 已存在——跳过。"
+          fi
+
+          # 只有真的产生了提交或新 tag 才需要推。
+          if [ "$committed" = yes ] || [ "$tagged" = yes ]; then
+            git push origin HEAD:main
+            [ "$tagged" = yes ] && git push origin "refs/tags/v$DSH_VERSION"
+            echo "pushed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "pushed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+          CHANNEL: ${{ needs.detect.outputs.channel }}
+          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if gh release view "v$DSH_VERSION" >/dev/null 2>&1; then
+            echo "Release v$DSH_VERSION 已存在，跳过。"
+            exit 0
+          fi
+          {
+            echo "## 主题 v$DSH_VERSION — 验证于 @deepseek-ai/dsh $DSH_VERSION"
+            echo ''
+            echo '- 契约漂移探针：主题 client.js 提取的全部上游契约在新版 bundle 中逐项核验通过'
+            echo '- 完整测试套件：全绿'
+            echo "- 发现通道: \`$CHANNEL\` · dist-tags 快照: \`${DIST_TAGS}\`"
+            echo "- 验证运行: $RUN_URL"
+            echo ''
+            echo '> 发版同号约定：本主题的版本号即它验证过的 DSH 版本；'
+            echo '> 主题自身改动随下一个 DSH 版本一并带出。'
+          } > release-notes.md
+          gh release create "v$DSH_VERSION" --title "v$DSH_VERSION" --notes-file release-notes.md
+
+      - name: 关闭仍开着的追踪 issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          MARKER='<!-- dsh-drift -->'
+          ids="$(gh issue list --state open --json number,body --jq ".[] | select(.body | startswith(\"$MARKER\")) | .number")"
+          if [ -z "$ids" ]; then echo '没有开着的追踪 issue。'; exit 0; fi
+          for id in $ids; do
+            gh issue close "$id" --comment "v$DSH_VERSION 验证全绿并已发版，追踪关闭。"
+            echo "已关闭 issue #$id"
+          done
+
+  # ---------------------------------------------------------------------------
+  # 报告：验证有红时不发版，把失败收进一个固定标记的 issue（覆盖更新，不堆楼）。
+  # 记录文件**不**更新——下一次运行会重试同一版本，主题修复后自动补发。
+  # ---------------------------------------------------------------------------
+  report:
+    name: 开追踪 issue
+    needs: [detect, validate]
+    if: needs.detect.outputs.changed == 'true' && needs.validate.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: 开/更新追踪 issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DSH_VERSION: ${{ needs.detect.outputs.version }}
+          CHANNEL: ${{ needs.detect.outputs.channel }}
+          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MARKER='<!-- dsh-drift -->'
+          gh label create dsh-drift --color D93F0B \
+            --description 'DSH 新版本破坏了主题契约，待适配' 2>/dev/null || true
+
+          # 失败步骤的日志（探针/套件输出都在里面），截尾防超长。
+          gh run view "$GITHUB_RUN_ID" --log-failed > failed-full.log 2>/dev/null || true
+          tail -c 8000 failed-full.log > failed.log || true
+
+          {
+            echo "$MARKER"
+            echo "## DSH \`$DSH_VERSION\` 契约验证失败"
+            echo ''
+            echo "- 发现通道: \`$CHANNEL\` · dist-tags: \`${DIST_TAGS}\`"
+            echo "- 验证运行: $RUN_URL（本 issue 由工作流覆盖更新，修复后自动关闭）"
+            echo ''
+            echo '探针或测试套件的失败输出（截尾）：'
+            echo ''
+            echo '```text'
+            cat failed.log 2>/dev/null || echo '(取日志失败——点上面的运行链接看)'
+            echo '```'
+            echo ''
+            echo '<sub>处置指引见 docs/compatibility.md 的新版本流程；'
+            echo '已退役钩子豁免清单在 .github/scripts/dsh-drift-probe.js 顶部。</sub>'
+          } > issue-body.md
+
+          ids="$(gh issue list --state open --json number,body --jq ".[] | select(.body | startswith(\"$MARKER\")) | .number")"
+          id="$(printf '%s\n' "$ids" | head -n 1)"
+          if [ -n "$id" ]; then
+            gh issue edit "$id" --body-file issue-body.md >/dev/null
+            gh issue comment "$id" --body "重跑于 $RUN_URL" >/dev/null
+            echo "已更新 issue #$id"
+          else
+            gh issue create --title "DSH $DSH_VERSION 契约验证失败，主题待适配" \
+              --label dsh-drift --body-file issue-body.md >/dev/null
+            echo '已创建追踪 issue'
+          fi
