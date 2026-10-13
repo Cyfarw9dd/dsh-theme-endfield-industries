@@ -78,6 +78,8 @@ const hooks = [
   ["[class*='_add']", 'composer + button (composer-scoped, see part 3)'],
   ["[class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary']",
     'composer primary send/stop button'],
+  ["[data-question-key] button[class*='_primary']", 'question-card 提交 button (material hook)'],
+  ["[data-question-key] button[class*='_outline']", 'question-card 跳过 button (material hook)'],
   ["[class*='_secondaryButton']", 'accent-filled secondary button ink'],
   ["[class*='_inspectButton']", 'inspect-panel button ink'],
   ["[class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow']",
