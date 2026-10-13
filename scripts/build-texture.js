@@ -45,6 +45,14 @@
  *   IDAT untouched — the indices are the same). Only that one chunk (plus its
  *   CRC) is rewritten; everything else stays byte-for-byte.
  *
+ *   LEFT-FADE WRAPPER: both button-material variants ship inside a one-rect
+ *   SVG mask (opacity 0 until x=95 of 320, ramping to 1 at x=165). Reason:
+ *   the official ink starts HARD at x≈103 (its left 103 columns are fully
+ *   transparent), which on the official 1:1 320x72 button reads as pattern
+ *   structure, but on our right-flush band is a harsh vertical cut against
+ *   the flat button fill (owner review, 2026-10-13). The PNG bytes inside
+ *   the SVG remain the official image verbatim.
+ *
  *   The local download-source policy defaults to official channels only; these
  *   ARE official (the game's own site, its own CDN hosts no third-party code),
  *   and taking them was explicitly instructed by the repository owner
@@ -154,6 +162,29 @@ const invertPalettePng = (buf) => {
   throw new Error('endfield-button-texture.png has no PLTE chunk — the invert derivation expects a colormap image')
 }
 
+/* Left-fade wrapper for the button material. Measured fact: the official ink
+   STARTS HARD at x≈103 of 320 (columns 0..102 are fully transparent, the
+   flowing lines' left endpoints appear abruptly). The official site maps the
+   texture 1:1 onto a 320x72 button where that hard start reads as pattern
+   structure; on our right-flush band it reads as a harsh vertical cut against
+   the flat button colour. The wrapper masks the image with a horizontal
+   gradient (opacity 0 until x=95, ramping to 1 at x=165) so the ink fades in
+   over ~62 image px. The PNG bytes inside are the official image verbatim. */
+const wrapFadeSvg = (pngBuf) => {
+  const b64 = pngBuf.toString('base64')
+  const svg = ''
+    + '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72">'
+    + '<defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0">'
+    + '<stop offset="0" stop-color="#fff" stop-opacity="0"/>'
+    + '<stop offset="0.297" stop-color="#fff" stop-opacity="0"/>'
+    + '<stop offset="0.516" stop-color="#fff" stop-opacity="1"/>'
+    + '</linearGradient>'
+    + '<mask id="m"><rect width="320" height="72" fill="url(#f)"/></mask></defs>'
+    + `<image width="320" height="72" mask="url(#m)" href="data:image/png;base64,${b64}"/>`
+    + '</svg>'
+  return 'data:image/svg+xml;base64,' + Buffer.from(svg, 'utf8').toString('base64')
+}
+
 /* Same minimize pass as build-emblem.js: drop the prolog/comments, rebuild the
    root with only the default namespace + viewBox, collapse whitespace. */
 const minimizeSvg = (src) => {
@@ -183,24 +214,32 @@ const main = () => {
     }
     const payload = a.kind === 'svg' ? Buffer.from(minimizeSvg(raw.toString('utf8')), 'utf8') : raw
     const mime = a.kind === 'svg' ? 'image/svg+xml' : 'image/png'
-    const uri = `data:${mime};base64,` + payload.toString('base64')
+    let uri = `data:${mime};base64,` + payload.toString('base64')
+    let extra = ''
+    if (a.prop === '--edge-btn-tex') {
+      /* The button material ships INSIDE the left-fade wrapper (see
+         wrapFadeSvg): the official PNG bytes are embedded verbatim in the
+         SVG; only their left entry is softened. */
+      uri = wrapFadeSvg(raw)
+      extra = ' + left-fade mask'
+    }
     parts.push({
       prop: a.prop,
       uri,
-      line: `${a.file} (${a.note}) — ${raw.length}B raw, ${Math.round(uri.length / 1024)}KB base64, sha256 ${a.sha256.slice(0, 16)}…`,
+      line: `${a.file} (${a.note}${extra}) — ${raw.length}B raw, ${Math.round(uri.length / 1024)}KB base64, sha256 ${a.sha256.slice(0, 16)}…`,
     })
   }
   /* Derived dark twin (see header): rebuilt from the same committed bytes with
      only the PLTE chunk flipped, so the official image and its inverse can
-     never drift apart. */
+     never drift apart. Wrapped in the same left-fade mask. */
   {
     const raw = fs.readFileSync(path.join(ROOT, 'assets', 'endfield-button-texture.png'))
     const inv = invertPalettePng(raw)
-    const uri = `data:image/png;base64,` + inv.toString('base64')
+    const uri = wrapFadeSvg(inv)
     parts.push({
       prop: '--edge-btn-tex-inv',
       uri,
-      line: `endfield-button-texture.png (derived: PLTE-inverted twin of --edge-btn-tex — the data form of the official invert(1) light branch) — ${inv.length}B raw, ${Math.round(uri.length / 1024)}KB base64`,
+      line: `endfield-button-texture.png (derived: PLTE-inverted twin of --edge-btn-tex + left-fade mask — the data form of the official invert(1) light branch) — ${inv.length}B raw, ${Math.round(uri.length / 1024)}KB base64`,
     })
   }
   const block = BEGIN + '\n' +
