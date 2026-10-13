@@ -423,6 +423,9 @@ if (src.includes("turnStatus")) {
       '左侧渐隐遮罩钉在构建脚本（x≤95 全隐 → x=165 全显，消除官方墨迹 x≈103 硬起笔的生硬左界）'],
     [src.includes('body { --edge-btn-tex-inv: url("data:image/svg+xml;base64,'), '反相派生同样走 SVG 包装（原图 + 渐隐在同一管线，不会漂移）'],
     [/body\[data-ds-dark-theme\] \[data-question-key\] button\[class\*='_outline'\][^{]*\{[^}]*background-image:\s*var\(--edge-btn-tex-inv\) !important/.test(s3), '暗色跳过换反相墨 --edge-btn-tex-inv（官方 invert(1) 的数据版）'],
+    [/\[class\$='_newSession'\]\s*\{[^}]*border-color:\s*transparent !important[^}]*\}/.test(s3)
+      && /\[class\$='_newSession'\]:hover,\s*\[class\$='_newSession'\]:focus-visible\s*\{[^}]*border-color:\s*transparent !important[^}]*\}/.test(s3.replace(/\n\s*/g, ' ')),
+      '新会话边框透明（accent 同色边框会在上/下/右盖住 .5px 平色发丝带、隔断墨迹达缘，DPR≥2 实测外缘 1-2 设备行零墨）'],
   ]
   for (const [ok, what] of materialChecks) {
     if (ok) pass('等高线材质 · ' + what)

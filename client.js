@@ -4133,7 +4133,16 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_newSession'] {
         color: var(--edge-accent-ink, #000) !important;
         background: var(--edge-accent) !important;
-        border-color: var(--edge-accent) !important;
+        /* TRANSPARENT, not accent-matched: the border paints ABOVE the
+           background, and the upstream button carries .5px of it. An
+           accent-matched border is invisible against the fill but still
+           COVERS the material band with a flat hairline (at DPR>=2 that is
+           a whole device pixel) between the ink and the true edge —
+           measured at DPR 2: the outermost 1-2 device rows/columns of the
+           band rendered flat 217 with zero ink. Transparent keeps the
+           identical look (same fill shows through) and lets the ink reach
+           the edge. */
+        border-color: transparent !important;
       }
       body:not(.theme-endfield-round) [class$='_newSession'] {
         border-radius: 0 !important;
@@ -4142,7 +4151,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_newSession']:focus-visible {
         color: var(--edge-accent-ink, #000) !important;
         background: var(--edge-accent-deep) !important;
-        border-color: var(--edge-accent-deep) !important;
+        /* Same reason as the resting state: keep the border from covering
+           the material band at the edges. */
+        border-color: transparent !important;
       }
       [class$='_newSession'] svg {
         color: var(--edge-accent-ink, #000) !important;
