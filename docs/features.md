@@ -86,7 +86,7 @@
 
 ### 按钮等高线材质（自动生效）
 
-官网基础按钮（`.Button_button`）的 `::before` 铺一张 **320×72 的流线淡墨图**（墨 ≈`#090909`、α 4–11%、上浅下深、覆盖 63%），在暗底上就是隐约的等高线层叠；官方亮底分支是同一张图 `invert(1)`。本主题把这层材质复刻到**新会话、发送/停止、提问卡的提交与跳过**四类按钮上（2026-10 所有者指定）：走元素自身 `background-image`（不占伪元素），**居中一条 56% 宽的带、高 auto 保官方 320:72 内禀比例**，不铺满按钮；暗色下的「跳过」（透明底 outline）换调色板反相的派生变体 `--edge-btn-tex-inv`。素材为官方原字节内嵌，量测规格见 [endfield-ui-research.md § 七](endfield-ui-research.md#七官方按钮等高线材质button-texture2026-10-13-补测)，来源与 sha256 见 [scripts/build-texture.js](../scripts/build-texture.js)；挂载与形制由 `node check.js` 第 6 节钉住。
+官网基础按钮（`.Button_button`）的 `::before` 铺一张 **320×72 的流线淡墨图**（墨 ≈`#090909`、α 4–11%、上浅下深、覆盖 63%），在暗底上就是隐约的等高线层叠；官方亮底分支是同一张图 `invert(1)`。本主题把这层材质复刻到**新会话、发送/停止、提问卡的提交与跳过**四类按钮上（2026-10 所有者指定）：走元素自身 `background-image`（不占伪元素），**满高、右缘贴合**（`auto 100%` + `right center`，上下无空隙），宽度按官方 **320:72 内禀比例**向左延展——按钮比带宽时左侧自然留白，「不铺满」由比例本身给出；暗色下的「跳过」（透明底 outline）换调色板反相的派生变体 `--edge-btn-tex-inv`。素材为官方原字节内嵌，量测规格见 [endfield-ui-research.md § 七](endfield-ui-research.md#七官方按钮等高线材质button-texture2026-10-13-补测)，来源与 sha256 见 [scripts/build-texture.js](../scripts/build-texture.js)；挂载与形制由 `node check.js` 第 6 节钉住。
 
 ### 按钮动效（下拉：开启/关闭，默认开启）
 

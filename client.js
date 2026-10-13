@@ -4479,17 +4479,21 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          2026-10-13, spec in docs/endfield-ui-research.md.
 
          Owner request: 新会话 / 发送 / 提交 / 跳过 carry it, pattern replicated
-         from the official bytes, NOT covering the whole button, keeping the
-         official 320:72 proportion. Per 素材取最省表达 this paints the element's
-         own background-image layer instead of a pseudo (the new-session
-         ::after already belongs to the signal arrow, and the app's own pseudo
-         usage is not ours to take): one centred band at 56% width, height auto
-         = intrinsic 320:72. All four hosts are accent-filled or on paper in
-         both schemes, so the dark-ink image serves both — except 跳过 (an
-         outline button on the card surface), which takes the palette-inverted
-         twin in dark. The theme's own shorthand background rules above reset
-         the image layer, so every state they cover is restated here, after
-         them; disabled buttons stay clean (upstream dims them to .4). */
+         from the official bytes, keeping the official 320:72 proportion, and
+         (2026-10-13 follow-up) the band is FULL HEIGHT and FLUSH RIGHT — no
+         gaps above or below, hugging the right edge; it grows leftward at the
+         intrinsic ratio, so a button wider than the band keeps clean space on
+         the left (that is the "not covering the whole button" part, given by
+         the ratio itself rather than a centred 56% patch). Per 素材取最省表达
+         this paints the element's own background-image layer instead of a
+         pseudo (the new-session ::after already belongs to the signal arrow,
+         and the app's own pseudo usage is not ours to take). All four hosts
+         are accent-filled or on paper in both schemes, so the dark-ink image
+         serves both — except 跳过 (an outline button on the card surface),
+         which takes the palette-inverted twin in dark. The theme's own
+         shorthand background rules above reset the image layer, so every
+         state they cover is restated here, after them; disabled buttons stay
+         clean (upstream dims them to .4). */
       [class$='_newSession'],
       [class$='_newSession']:hover,
       [class$='_newSession']:focus-visible,
@@ -4501,8 +4505,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [data-question-key] button[class*='_outline']:hover:not(:disabled) {
         background-image: var(--edge-btn-tex) !important;
         background-repeat: no-repeat !important;
-        background-position: 50% 50% !important;
-        background-size: 56% auto !important;
+        background-position: right center !important;
+        background-size: auto 100% !important;
       }
       /* 跳过 sits on the card surface itself: near-black ink would vanish on
          the dark card, so dark swaps to --edge-btn-tex-inv — the data form of
