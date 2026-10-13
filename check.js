@@ -414,6 +414,7 @@ if (src.includes("turnStatus")) {
     [/background-image:\s*var\(--edge-btn-tex\) !important/.test(decls), '图层读 --edge-btn-tex（官方原字节，由 build-texture.js 钉 sha）'],
     [/background-size:\s*auto 100% !important/.test(decls), '满高（auto 100%，上下无空隙），宽随内禀比例 320:72 向左延展'],
     [/background-position:\s*right center !important/.test(decls) && /background-repeat:\s*no-repeat !important/.test(decls), '右缘贴合（right center）+ 单带 no-repeat'],
+    [/background-origin:\s*border-box !important/.test(decls), '几何按 border-box（新会话按钮自带 .5px 边框，padding-box 会在右/上/下留发丝缝）'],
     [!/cover|100% 100%/.test(decls), '不用 cover/100%（那会把比例拉变形；「不铺满」由 320:72 比例自然给出）'],
     [src.includes('body { --edge-btn-tex: url("data:image/png;base64,') && src.includes('body { --edge-btn-tex-inv: url("data:image/png;base64,'), '两个数据 URI 都在生成区（原图 + 调色板反相派生）'],
     [/body\[data-ds-dark-theme\] \[data-question-key\] button\[class\*='_outline'\][^{]*\{[^}]*background-image:\s*var\(--edge-btn-tex-inv\) !important/.test(s3), '暗色跳过换反相墨 --edge-btn-tex-inv（官方 invert(1) 的数据版）'],
