@@ -410,13 +410,18 @@ if (src.includes("turnStatus")) {
       + '（hover 变体 ' + hoverVariants + '<3）——悬停时图层会被 background 简写清掉')
   }
   const decls = matRule ? matRule[2] : ''
+  const btnTexUri = (src.match(/--edge-btn-tex: url\("([^"]+)"\)/) || [])[1] || ''
   const materialChecks = [
     [/background-image:\s*var\(--edge-btn-tex\) !important/.test(decls), '图层读 --edge-btn-tex（官方原字节，由 build-texture.js 钉 sha）'],
-    [/background-size:\s*auto 100% !important/.test(decls), '满高（auto 100%，上下无空隙），宽随内禀比例 320:72 向左延展'],
-    [/background-position:\s*right center !important/.test(decls) && /background-repeat:\s*no-repeat !important/.test(decls), '右缘贴合（right center）+ 单带 no-repeat'],
+    [/background-size:\s*auto calc\(100% \+ 2px\) !important/.test(decls), '上下各外溢 1px（calc(100%+2px)，被按钮裁掉），宽随内禀比例 320:72 向左延展'],
+    [/background-position:\s*right -1px center !important/.test(decls) && /background-repeat:\s*no-repeat !important/.test(decls), '右缘外溢 1px（right -1px，盖住任何取整发丝缝）+ 单带 no-repeat'],
     [/background-origin:\s*border-box !important/.test(decls), '几何按 border-box（新会话按钮自带 .5px 边框，padding-box 会在右/上/下留发丝缝）'],
     [!/cover|100% 100%/.test(decls), '不用 cover/100%（那会把比例拉变形；「不铺满」由 320:72 比例自然给出）'],
-    [src.includes('body { --edge-btn-tex: url("data:image/png;base64,') && src.includes('body { --edge-btn-tex-inv: url("data:image/png;base64,'), '两个数据 URI 都在生成区（原图 + 调色板反相派生）'],
+    [/data:image\/svg\+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgNzIi/.test(btnTexUri), '按钮材质 = SVG 包装（base64 头 = <svg … viewBox="0 0 320 72">，内含官方 PNG 原字节）'],
+    [fs.readFileSync(path.join(__dirname, 'scripts', 'build-texture.js'), 'utf8').includes('stop-opacity')
+      && fs.readFileSync(path.join(__dirname, 'scripts', 'build-texture.js'), 'utf8').includes('const wrapFadeSvg'),
+      '左侧渐隐遮罩钉在构建脚本（x≤95 全隐 → x=165 全显，消除官方墨迹 x≈103 硬起笔的生硬左界）'],
+    [src.includes('body { --edge-btn-tex-inv: url("data:image/svg+xml;base64,'), '反相派生同样走 SVG 包装（原图 + 渐隐在同一管线，不会漂移）'],
     [/body\[data-ds-dark-theme\] \[data-question-key\] button\[class\*='_outline'\][^{]*\{[^}]*background-image:\s*var\(--edge-btn-tex-inv\) !important/.test(s3), '暗色跳过换反相墨 --edge-btn-tex-inv（官方 invert(1) 的数据版）'],
   ]
   for (const [ok, what] of materialChecks) {
