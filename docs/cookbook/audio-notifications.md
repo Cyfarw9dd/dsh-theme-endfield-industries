@@ -96,7 +96,7 @@ node scripts/build-sounds.js --check  # 校验生成物与定义一致
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | `GET` | `/theme-endfield/audio/state` | 槽位快照、解析到的文件、计数、诊断环形日志 |
-| `GET`/`POST` | `/theme-endfield/audio/preview?slot=<id>` | 试听：**强制播放**（跳过防抖），但仍尊重槽位开关 |
+| `GET`/`POST` | `/theme-endfield/audio/preview?slot=<id>` | 预览（设置页各槽位的「预览」按钮）：**强制播放**（跳过防抖），但仍尊重槽位开关 |
 | `POST` | `/theme-endfield/audio/attention` | 页面报告"看到确认框了"：**不强制**，尊重开关/音量/防抖 |
 
 ## 7. 平台与性能
