@@ -42,7 +42,7 @@ README.md, docs, lib, sounds, assets, LICENSE`，外加 npm 始终包含的 `pac
    也就是说：**任一被扫掠目录里放一个名为 `schemastery` / `@deepseek-ai/schemastery` 的
    包，其顶层代码会在宿主进程里执行**。这是有意的降级（找不到 `Config` 等于所有设置刷新
    即丢），但它是信任边界而不是误报，扫描器不会替你判断。
-3. **一条回环 HTTP 路由**（`index.js:846-944`，`/theme-endfield/audio`）。供设置页做试听
+3. **一条回环 HTTP 路由**（`index.js:846-944`，`/theme-endfield/audio`）。供设置页做预览
    与诊断，`POST` 分支会以 `force: true` 绕过限速直接放声。该 handler **自身不做 Origin /
    会话校验**，依赖宿主 webServer 的鉴权与前缀归属；`readJson` 有 64 KB 截断但没有超时。
 

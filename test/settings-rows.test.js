@@ -318,6 +318,48 @@ const thunderPreview = thunderRowBtns.find((b) => /预览/.test(textOf(b)))
 if (thunderPreview && thunderPreview.props.disabled === true) pass('雷霆大字 预览 disabled while off')
 else fail('雷霆大字 预览 should be disabled while the feature is off')
 
+/* --- 高度对齐：动作按钮与同排的下拉触发器同高（宽度可不同） ---
+   触发器高度从真实样式表读（.endfield-select-trigger 的 height），不在此
+   复述数值：将来触发器改高度而按钮没跟上时，这条会红而不是默默失配。 */
+{
+  const hm = src.match(/\.endfield-select-trigger\s*\{[^}]*?height:\s*([^;\s]+)/)
+  if (!hm) fail('样式表里找不到 .endfield-select-trigger 的 height 声明')
+  else {
+    const triggerH = hm[1]
+    /* btnStyleFor 是这些按钮唯一的样式来源；带 style.height 的 button 恰好
+       就是它们（下拉触发器的高度在样式表里，不在内联 style 上）。 */
+    const actionBtns = nodes.filter((n) => n.type === 'button' && n.props.style && n.props.style.height !== undefined)
+    if (actionBtns.length >= 8) pass('面板渲染出 ' + actionBtns.length + ' 个动作按钮（预览×6 + 刷新 + 开机行预览）')
+    else fail('动作按钮应有 8 个（含音频四槽位），只找到 ' + actionBtns.length)
+    const wrongH = actionBtns.filter((b) => b.props.style.height !== triggerH)
+    const wrongBox = actionBtns.filter((b) => b.props.style.boxSizing !== 'border-box')
+    if (wrongH.length === 0) pass('动作按钮与下拉触发器同高（' + triggerH + '，含被禁用的）')
+    else fail(wrongH.length + ' 个按钮高度为 ' + wrongH[0].props.style.height + '，与触发器 ' + triggerH + ' 不齐：' + textOf(wrongH[0]))
+    if (wrongBox.length === 0) pass('动作按钮声明 box-sizing:border-box（border 计入 32px）')
+    else fail(wrongBox.length + ' 个按钮缺 box-sizing:border-box，边框会让实高多 2px：' + textOf(wrongBox[0]))
+    /* 用户报告的那一个：雷霆大字行的预览按钮，与它旁边的开/关下拉同排。 */
+    if (thunderPreview && thunderPreview.props.style && thunderPreview.props.style.height === triggerH) {
+      pass('雷霆大字行 预览 按钮与旁边下拉触发器等高')
+    } else fail('雷霆大字行的 预览 按钮高度应等于触发器的 ' + triggerH)
+  }
+}
+
+/* --- 统一文案：音频各槽位的动作按钮与加载动画/雷霆大字行同为「预览」 ---
+   「试听 · 开始」曾是第三种拼法；统一后整页只允许一个动作词，槽位由行名
+   说明。 */
+if (!all.includes('试听')) pass('面板不再出现「试听」文案（统一为「预览」）')
+else fail('面板仍含「试听」——音频动作按钮应统一为「预览」')
+{
+  const slotBtns = ['audio-start', 'audio-done', 'audio-attention', 'audio-fail'].map((k) => {
+    const r = rows.find((x) => x.props.key === k)
+    return r ? walk(r).find((n) => n.type === 'button' && String(n.props.key || '').indexOf('audio-test-') === 0) : null
+  })
+  if (slotBtns.every((b) => b && textOf(b) === '预览')) pass('音频四槽位按钮统一为「预览」（行名即槽位名，无后缀）')
+  else fail('音频槽位按钮文案应恰为「预览」: ' + JSON.stringify(slotBtns.map((b) => (b ? textOf(b) : '(missing)'))))
+  if (slotBtns.every((b) => b && b.props.onClick !== undefined)) pass('槽位按钮仍接真实播放路径（onClick 保留）')
+  else fail('统一文案时弄丢了 onClick——按钮会点了没反应')
+}
+
 /* --- 按钮动效: a dropdown like every other value row (2026-10 统一) ---
    The stored literals are 'signal' (on — historic default literal, unchanged)
    and 'off'; legacy scheme names must READ as on. */

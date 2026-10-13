@@ -5396,7 +5396,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       notifyApproveHint: '操作授权与方案审阅时弹出常驻卡片，处理完自动消失',
       thunderAnimHintReduced: '系统已开启「减少动态效果」，当前直接显示',
       /* 音频通知：播放发生在宿主进程（lib/audio.js），所以这里的每一行都在
-         说明「什么时候响」而不是「怎么响」；试听按钮走宿主真实播放链路。 */
+         说明「什么时候响」而不是「怎么响」；各槽位的「预览」按钮走宿主真实
+         播放链路（与加载动画/雷霆大字行的预览同一个词，不再单用「试听」）。 */
       groupAudio: '音频',
       audioRow: '音频通知',
       audioHintOn: '由宿主进程播放，页面最小化或切到别的应用时同样能听到',
@@ -5412,8 +5413,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       audioSlotStart: '开始',
       audioSlotDone: '结束',
       audioSlotBoot: '开机',
-      audioSlotAttention: '待回应',
-      audioSlotFail: '出错',
       audioSlotQuestion: '提问',
       audioSlotApproval: '审批',
       audioSlotUi: '界面',
@@ -5435,11 +5434,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       audioHumanOnlyHintOff: '任何用户来源消息都算（调试用，后台唤醒可能误响）',
       audioDiagRow: '诊断日志',
       audioDiagHint: '在宿主控制台与 /theme-endfield/audio/state 记录每次事件判定',
-      audioTest: '试听',
-      audioTestPlaying: '播放中…',
       audioTestOk: '已交由宿主播放',
       audioTestFail: '宿主未播放',
-      audioTestOff: '请先开启音频通知',
       audioNeedOn: '请先开启音频通知',
       audioRefresh: '刷新状态',
     }
@@ -5524,8 +5520,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       audioSlotStart: 'Start',
       audioSlotDone: 'Done',
       audioSlotBoot: 'Boot',
-      audioSlotAttention: 'Attention',
-      audioSlotFail: 'Error',
       audioSlotQuestion: 'Questions',
       audioSlotApproval: 'Approvals',
       audioSlotUi: 'Seen',
@@ -5547,11 +5541,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       audioHumanOnlyHintOff: 'Any user-source message counts (debugging; background wakeups may misfire)',
       audioDiagRow: 'Diagnostics',
       audioDiagHint: 'Logs every event verdict to the host console and /theme-endfield/audio/state',
-      audioTest: 'Preview',
-      audioTestPlaying: 'Playing…',
       audioTestOk: 'Handed to the host',
       audioTestFail: 'The host did not play it',
-      audioTestOff: 'Turn audio notifications on first',
       audioNeedOn: 'Turn audio notifications on first',
       audioRefresh: 'Refresh state',
     }
@@ -5744,8 +5735,14 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                 : (on ? 'var(--edge-accent)' : 'var(--edge-btn-muted)'),
               border: '1px solid var(--dsw-alias-border-l2)',
               borderRadius: mode === 'round' ? '999px' : '0',
-              padding: '4px 14px',
-              fontSize: '12px',
+              /* These buttons share their row with .endfield-select-trigger
+                 (height: 32px), so they declare the SAME height from the same
+                 source instead of growing out of padding: heights line up,
+                 widths stay content-driven. 13px matches the trigger's text. */
+              height: '32px',
+              boxSizing: 'border-box',
+              padding: '0 14px',
+              fontSize: '13px',
               // A disabled control has to look disabled, not merely ignore clicks.
               cursor: disabled ? 'not-allowed' : 'pointer',
               opacity: disabled ? 0.45 : 1,
@@ -5930,7 +5927,10 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
             else setPreviewNote(t('audioTestFail') + (result && result.why ? '：' + result.why : ''))
           }
           const playPreview = (slot) => { previewSlot(slot).then(showPreviewNote) }
-          const audioTestButton = (slot, labelKey) => R.createElement('button', {
+          /* One spelling for every action button in the panel: 「预览」, the same
+             word the loader/thunder rows use. The row label already names the
+             slot, so a per-slot suffix would only repeat it. */
+          const audioTestButton = (slot) => R.createElement('button', {
             key: 'audio-test-' + slot,
             type: 'button',
             onClick: () => playPreview(slot),
@@ -5940,7 +5940,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
             // silently.
             disabled: !audioOn,
             title: audioOn ? '' : t('audioNeedOn'),
-          }, t('audioTest') + ' · ' + t(labelKey))
+          }, t('preview'))
           const toggleAudio = () => {
             const next = !audioOn
             prefsSet(AUDIO_ENABLED_KEY, next ? '1' : '0')
@@ -6452,7 +6452,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                   R.createElement('span', { style: hintStyle }, t('audioStartHint'))
                 ),
                 R.createElement('span', { style: { display: 'flex', gap: '8px', flex: '0 0 auto', alignItems: 'center' } },
-                  audioTestButton('turn-start', 'audioSlotStart'),
+                  audioTestButton('turn-start'),
                   endfieldSelect({
                     value: audioStart ? '1' : '0', ariaLabel: t('audioStartRow'),
                     options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
@@ -6468,7 +6468,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                   R.createElement('span', { style: hintStyle }, t('audioDoneHint'))
                 ),
                 R.createElement('span', { style: { display: 'flex', gap: '8px', flex: '0 0 auto', alignItems: 'center' } },
-                  audioTestButton('turn-done', 'audioSlotDone'),
+                  audioTestButton('turn-done'),
                   endfieldSelect({
                     value: audioDone ? '1' : '0', ariaLabel: t('audioDoneRow'),
                     options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
@@ -6502,7 +6502,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                   R.createElement('span', { style: hintStyle }, t('audioAttentionHint'))
                 ),
                 R.createElement('span', { style: { display: 'flex', gap: '8px', flex: '0 0 auto' } },
-                  audioTestButton('attention', 'audioSlotAttention')
+                  audioTestButton('attention')
                 )
               ]),
               row('audio-fail', false, [
@@ -6511,7 +6511,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                   R.createElement('span', { style: hintStyle }, t('audioReservedNeed'))
                 ),
                 R.createElement('span', { style: { display: 'flex', gap: '8px', flex: '0 0 auto' } },
-                  audioTestButton('turn-fail', 'audioSlotFail')
+                  audioTestButton('turn-fail')
                 )
               ]),
               row('audio-source', false, [
