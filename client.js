@@ -4506,6 +4506,12 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         background-image: var(--edge-btn-tex) !important;
         background-repeat: no-repeat !important;
         background-position: right center !important;
+        /* background-origin defaults to the PADDING box: the sidebar's
+           new-session button carries a .5px border, which left a hairline
+           gap on the right/top/bottom (the band was sized to the inner
+           edge). Reference the BORDER box so the ink reaches the true
+           edge, painting under the border strip. */
+        background-origin: border-box !important;
         background-size: auto 100% !important;
       }
       /* 跳过 sits on the card surface itself: near-black ink would vanish on
