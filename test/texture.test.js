@@ -106,7 +106,11 @@ else fail('index.js FIELD_DEFAULTS has no texture default — the switch would r
   } else {
     fail('纹理又挂到了 _frame/_sidebarCol 上——那是整窗平铺；官方做法是按内容区域锚定')
   }
-  const overlayRule = section.slice(section.indexOf('::before'), section.indexOf('::before') + 700)
+  /* Find the overlay pseudo in RULES, not prose: the section's comments (and
+     the generated asset notes inside it) legitimately mention pseudo layers,
+     so the first raw '::before' substring can be documentation, not CSS. */
+  const sectionNoComments = section.replace(/\/\*[\s\S]*?\*\//g, '')
+  const overlayRule = sectionNoComments.slice(sectionNoComments.indexOf('::before'), sectionNoComments.indexOf('::before') + 700)
   if (/z-index:\s*-1/.test(overlayRule)) {
     pass('叠加层在内容之下（z-index:-1 + isolation）——装饰不盖文字')
   } else {

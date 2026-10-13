@@ -25,6 +25,26 @@
  *   Taken because the repository owner pointed at that dropdown as THE
  *   reference for the settings panel's control (2026-10).
  *
+ *   Same CDN, the official base button's own material image (official
+ *   Button_button ::before background), downloaded 2026-10-13:
+ *
+ *     endfield-button-texture.png  0a2fc215c49899a1ef0c1047dedbd4c9460e742e1c9ae0acd87a9e1db9a7fc5b
+ *
+ *   official filename: button-texture.63d91da2.png (320x72, 8-bit colormap
+ *   with tRNS). Measured: near-black ink (~#090909) at alpha 4-11%, 63% ink
+ *   coverage, per-row mean alpha rising 14.4 -> 21.1 top to bottom — the
+ *   layered flowing-line "contour" material. Taken because the repository
+ *   owner asked for it on the 新会话/发送/提交/跳过 buttons ("图案复刻官方")
+ *   after this texture was measured live on the official site (2026-10-13).
+ *
+ *   DERIVED VARIANT (not a second download): the official light-button branch
+ *   repaints the same image with filter: invert(1). An element
+ *   background-image layer cannot carry a filter, so the dark-scheme twin is
+ *   DERIVED HERE at build time: the PNG is a colormap image, so inverting the
+ *   ink is exactly inverting the PLTE entries (255-R/G/B per entry; tRNS and
+ *   IDAT untouched — the indices are the same). Only that one chunk (plus its
+ *   CRC) is rewritten; everything else stays byte-for-byte.
+ *
  *   The local download-source policy defaults to official channels only; these
  *   ARE official (the game's own site, its own CDN hosts no third-party code),
  *   and taking them was explicitly instructed by the repository owner
@@ -36,7 +56,8 @@
  * BYTE-FOR-BYTE (no re-encoding, no quantization, no downscaling) — the point of
  * "沿用官方" is that what ships is exactly what the site ships, not a
  * re-compression of it. Sizes: 17,084 B and 37,025 B -> ~72KB base64 total; the
- * dropdown arrow adds 874 B.
+ * dropdown arrow adds 874 B; the button material adds 4,530 B raw plus its
+ * palette-inverted twin (same length, PLTE-flipped).
  *
  * Markers, same splice contract as build-emblem.js:
  *   node scripts/build-texture.js          # rewrite the marked region in client.js
@@ -83,7 +104,55 @@ const ASSETS = [
     kind: 'png',
     note: '97x96 round chevron of the official filter dropdown',
   },
+  {
+    file: 'endfield-button-texture.png',
+    sha256: '0a2fc215c49899a1ef0c1047dedbd4c9460e742e1c9ae0acd87a9e1db9a7fc5b',
+    prop: '--edge-btn-tex',
+    kind: 'png',
+    note: '320x72 flowing-line material of the official base Button (pseudo layer)',
+  },
 ]
+
+/* crc32 for rewriting the one chunk the derived variant touches. */
+const crc32 = (buf) => {
+  let table = crc32.table
+  if (!table) {
+    table = crc32.table = []
+    for (let n = 0; n < 256; n++) {
+      let c = n
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+      table[n] = c >>> 0
+    }
+  }
+  let c = 0xffffffff
+  for (const b of buf) c = table[(c ^ b) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+/* Palette-inverted twin of the button material: the official light branch is
+   filter: invert(1); as pure data that is PLTE entries -> 255-R/G/B with the
+   alpha table and the compressed indices untouched (colormap PNG). Every other
+   byte of every other chunk is copied verbatim. */
+const invertPalettePng = (buf) => {
+  let off = 8
+  while (off < buf.length) {
+    const len = buf.readUInt32BE(off)
+    const type = buf.toString('ascii', off + 4, off + 8)
+    if (type === 'PLTE') {
+      const next = Buffer.from(buf)
+      for (let i = 0; i < len; i += 3) {
+        const p = off + 8 + i
+        next[p] = 255 - next[p]
+        next[p + 1] = 255 - next[p + 1]
+        next[p + 2] = 255 - next[p + 2]
+      }
+      next.writeUInt32BE(crc32(next.subarray(off + 4, off + 8 + len)), off + 8 + len)
+      return next
+    }
+    off += 12 + len
+  }
+  throw new Error('endfield-button-texture.png has no PLTE chunk — the invert derivation expects a colormap image')
+}
 
 /* Same minimize pass as build-emblem.js: drop the prolog/comments, rebuild the
    root with only the default namespace + viewBox, collapse whitespace. */
@@ -119,6 +188,19 @@ const main = () => {
       prop: a.prop,
       uri,
       line: `${a.file} (${a.note}) — ${raw.length}B raw, ${Math.round(uri.length / 1024)}KB base64, sha256 ${a.sha256.slice(0, 16)}…`,
+    })
+  }
+  /* Derived dark twin (see header): rebuilt from the same committed bytes with
+     only the PLTE chunk flipped, so the official image and its inverse can
+     never drift apart. */
+  {
+    const raw = fs.readFileSync(path.join(ROOT, 'assets', 'endfield-button-texture.png'))
+    const inv = invertPalettePng(raw)
+    const uri = `data:image/png;base64,` + inv.toString('base64')
+    parts.push({
+      prop: '--edge-btn-tex-inv',
+      uri,
+      line: `endfield-button-texture.png (derived: PLTE-inverted twin of --edge-btn-tex — the data form of the official invert(1) light branch) — ${inv.length}B raw, ${Math.round(uri.length / 1024)}KB base64`,
     })
   }
   const block = BEGIN + '\n' +

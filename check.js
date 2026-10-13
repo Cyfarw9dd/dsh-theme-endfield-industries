@@ -374,6 +374,56 @@ if (src.includes("turnStatus")) {
   }
 }
 
+/* --- 6. official button material (等高线流线) wired to the four hosts ---
+   The bytes are pinned by scripts/build-texture.js --check (sha256); this
+   section pins the WIRING: every requested host carries the layer, the band
+   keeps the official 320:72 ratio WITHOUT covering the button (56% width +
+   auto height, never cover/100%), and the dark outline host swaps to the
+   palette-inverted twin. All four hosts are also in selector-guard's hook
+   list. */
+{
+  const s3 = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
+  const matRule = /(\[class\$='_newSession'\],[^{]*)\{([^}]*)\}/.exec(s3)
+  const hosts = [
+    ["[class$='_newSession'],", '新会话'],
+    ["button[class*='_primary'],", '发送/停止'],
+    ["[data-question-key] button[class*='_primary'],", '提问卡 · 提交'],
+    ["[data-question-key] button[class*='_outline'],", '提问卡 · 跳过'],
+  ]
+  for (const [needle, label] of hosts) {
+    if (matRule && matRule[1].includes(needle)) pass('等高线材质挂载 · ' + label)
+    else fail('等高线材质缺主机：' + label + '（选择器 ' + needle + ' 应在材质规则里）')
+  }
+  /* 悬停/聚焦态必须逐个重述：主题自己的 background 简写 !important（新会话
+     悬停、_primary 悬停）会把 image 层重置为 none，漏一个状态就掉一层。 */
+  {
+    const sel = matRule ? matRule[1] : ''
+    const states = [
+      ["[class$='_newSession']:hover", '新会话悬停'],
+      ["[class$='_newSession']:focus-visible", '新会话聚焦'],
+      ["[data-question-key] button[class*='_outline']:hover:not(:disabled)", '跳过悬停'],
+    ]
+    const hoverVariants = (sel.match(/:hover:not\(:disabled\)/g) || []).length
+    const stateOk = states.every(([n]) => sel.includes(n)) && hoverVariants >= 3
+    if (stateOk) pass('等高线材质 · 悬停/聚焦态逐个重述（防主题简写清层，×' + hoverVariants + '）')
+    else fail('等高线材质有状态漏重述：' + states.filter(([n]) => !sel.includes(n)).map(([, l]) => l).join('、')
+      + '（hover 变体 ' + hoverVariants + '<3）——悬停时图层会被 background 简写清掉')
+  }
+  const decls = matRule ? matRule[2] : ''
+  const materialChecks = [
+    [/background-image:\s*var\(--edge-btn-tex\) !important/.test(decls), '图层读 --edge-btn-tex（官方原字节，由 build-texture.js 钉 sha）'],
+    [/background-size:\s*56% auto !important/.test(decls), '带宽 56% + 高 auto（auto 保官方 320:72 内禀比例）'],
+    [/background-position:\s*50% 50% !important/.test(decls) && /background-repeat:\s*no-repeat !important/.test(decls), '居中单带，no-repeat（不铺满按钮）'],
+    [!/cover|100% 100%/.test(decls), '不用 cover/100%（官方 ::before 才铺满；这里按所有者要求只占局部）'],
+    [src.includes('body { --edge-btn-tex: url("data:image/png;base64,') && src.includes('body { --edge-btn-tex-inv: url("data:image/png;base64,'), '两个数据 URI 都在生成区（原图 + 调色板反相派生）'],
+    [/body\[data-ds-dark-theme\] \[data-question-key\] button\[class\*='_outline'\][^{]*\{[^}]*background-image:\s*var\(--edge-btn-tex-inv\) !important/.test(s3), '暗色跳过换反相墨 --edge-btn-tex-inv（官方 invert(1) 的数据版）'],
+  ]
+  for (const [ok, what] of materialChecks) {
+    if (ok) pass('等高线材质 · ' + what)
+    else fail('等高线材质失守：' + what)
+  }
+}
+
 console.log('')
 if (failures) {
   console.error(`${failures} check(s) failed`)
