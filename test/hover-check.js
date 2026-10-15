@@ -240,6 +240,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSel">对话</button>
       <button class="wSkVaW_tab" id="tabIdle">轨迹</button>
     </div>
+    <!-- Reversed activeness: exercises the OTHER divider rule (first tab idle
+         while its next sibling is active draws the RIGHT gutter via :has(+…)). -->
+    <div class="wSkVaW_tabs" style="margin-top:24px">
+      <button class="wSkVaW_tab" id="tabIdleFirst">对话</button>
+      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSelSecond">轨迹</button>
+    </div>
   </div>
   <script>window.__ModuleLoader__={load:(m)=>{window.__MOD__=m}}</script>
   <script src="./client.js"></script>
@@ -461,6 +467,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const selRest = await evaluate("window.__pseudo__('tabSel','::before','opacity')")
     if (selWash === 'rgba(0, 0, 0, 0.09)' && selRest === '1') pass('选中标签常态 = 官方 #e5e5e5 档常亮  [' + selWash + ' @' + selRest + ']')
     else fail('选中标签洗面不对（应 rgba(0,0,0,0.09) @1）  [' + selWash + ' @' + selRest + ']')
+    /* the official active choreography: constant 22px side padding, text slide,
+       circular arrow as a ::before background layer, 2px bevel */
+    const selPad = await evaluate("getComputedStyle(document.getElementById('tabSel')).paddingLeft")
+    if (selPad === '22px') pass('页签结构 = 官方恒定水平 padding（0 22px 9px）  [' + selPad + ']')
+    else fail('页签水平 padding 不对（应 22px）  [' + selPad + ']')
+    const selIndent = await evaluate("getComputedStyle(document.getElementById('tabSel')).textIndent")
+    if (selIndent === '-13px') pass('激活文字滑移 = 官方 −1.75rem 按 0.46 折算  [' + selIndent + ']')
+    else fail('激活滑移不对（应 -13px）  [' + selIndent + ']')
+    const selArrow = await evaluate("window.__pseudo__('tabSel','::before','backgroundImage')")
+    if (/data:image\/svg\+xml/.test(selArrow) && /%23f5f5f0/.test(selArrow)) pass('激活 = 官方圆形箭头图层（纸白圆 ⌀16）')
+    else fail('激活箭头图层缺失  [' + String(selArrow).slice(0, 60) + ']')
+    const selRadius = await evaluate("window.__pseudo__('tabSel','::before','borderRadius')")
+    if (selRadius === '2px') pass('洗面倒角 = 官方 4px 按 0.46 折算  [' + selRadius + ']')
+    else fail('洗面倒角不对（应 2px）  [' + selRadius + ']')
+    /* the official #d9d9d9 gutter divider: drawn by whichever neighbour is idle */
+    const divIdle = await evaluate("window.__pseudo__('tabIdle','::after','backgroundColor')")
+    const divIdleLeft = await evaluate("window.__pseudo__('tabIdle','::after','left')")
+    const divIdleW = await evaluate("window.__pseudo__('tabIdle','::after','width')")
+    if (divIdle === 'rgb(216, 217, 213)' && divIdleLeft === '-18.75px' && divIdleW === '1.5px') pass('竖分隔线 = 官方 #d9d9d9 档（左沟，闲置侧绘制）  [' + divIdle + ' @' + divIdleLeft + ']')
+    else fail('左沟分隔线不对  [' + divIdle + ' @' + divIdleLeft + ' w=' + divIdleW + ']')
+    const divFirst = await evaluate("window.__pseudo__('tabIdleFirst','::after','right')")
+    const divFirstBg = await evaluate("window.__pseudo__('tabIdleFirst','::after','backgroundColor')")
+    if (divFirst === '-18.75px' && divFirstBg === 'rgb(216, 217, 213)') pass('竖分隔线右沟分支（首签闲置 + :has(+) 命中）  [' + divFirst + ']')
+    else fail('右沟分隔线不对（:has(+) 失效？）  [right=' + divFirst + ' bg=' + divFirstBg + ']')
+    const activeAfter = await evaluate("window.__pseudo__('tabSel','::after','backgroundColor')")
+    if (/^rgba\(0, 0, 0, 0\)$/.test(activeAfter)) pass('激活页签 ::after 不画分隔线（底线清除占用）  [' + activeAfter + ']')
+    else fail('激活页签 ::after 不应有画笔  [' + activeAfter + ']')
     /* real pointer onto the SELECTED tab: the compound class must get the wash too,
        and it must STAY at the active step (official keeps #e5e5e5 on hover) */
     const rect = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabSel'))"))
