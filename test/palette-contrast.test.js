@@ -465,6 +465,67 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10c. hover tooltip: the floating paper chip ----------
+   The app's Tooltip primitive bubbles ([role='tooltip'], e.g. the sidebar 归档
+   hint) ship near-black (#2c2c2e/#43454a) with white text — a dead-black chip on
+   the paper theme. The theme moves them into its floating-surface family: overlay
+   paper fill + ink text + hairline ring + the official panel shadow. The fill and
+   keycap fill live in TWO layers (overrideTokens for the real app, which writes
+   alias tokens as body inline styles, plus stylesheet body fallback blocks); this
+   section reads BOTH out of client.js, proves they agree, and measures every
+   text/fill pair plus the decorative floors (ring edge, keycap separation). */
+{
+  const jsToken = (name) => {
+    const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
+    return m ? { light: m[1], dark: m[2] } : null
+  }
+  const cssVals = (name) => [...src.matchAll(new RegExp(name + ':\\s*(#[0-9a-f]{6})', 'gi'))].map((m) => m[1].toLowerCase())
+  const bubble = jsToken('--dsw-alias-tooltip-bg')
+  const key = jsToken('--dsw-alias-tooltip-key-bg')
+  const text = jsToken('--dsw-alias-label-primary')
+  const ring = { light: (jsToken('--dsw-alias-border-l2') || {}).light, dark: (jsToken('--dsw-alias-border-l1') || {}).dark }
+  const surfaces = { light: [(jsToken('--dsw-alias-bg-base') || {}).light, (jsToken('--dsw-alias-bg-layer-1') || {}).light],
+                     dark: [(jsToken('--dsw-alias-bg-base') || {}).dark, (jsToken('--dsw-alias-bg-layer-1') || {}).dark] }
+  if (!bubble || !key || !text || !ring.light || !ring.dark || surfaces.light.some((v) => !v) || surfaces.dark.some((v) => !v)) {
+    fail('提示气泡 · overrideTokens 层读不齐（bubble/key/text/ring/surface）')
+  } else {
+    /* the stylesheet fallback blocks must carry the same values as the token
+       layer, in source order light-then-dark — otherwise the two layers drift. */
+    const fbBg = cssVals('--dsw-alias-tooltip-bg')
+    const fbKey = cssVals('--dsw-alias-tooltip-key-bg')
+    if (fbBg.length === 2 && fbBg[0] === bubble.light.toLowerCase() && fbBg[1] === bubble.dark.toLowerCase()) {
+      pass('提示气泡 · 兜底块气泡底与令牌层一致：' + fbBg.join(' / '))
+    } else fail('提示气泡 · 兜底块气泡底漂移：' + JSON.stringify(fbBg) + ' ≠ ' + bubble.light + '/' + bubble.dark)
+    if (fbKey.length === 2 && fbKey[0] === key.light.toLowerCase() && fbKey[1] === key.dark.toLowerCase()) {
+      pass('提示气泡 · 兜底块键帽底与令牌层一致：' + fbKey.join(' / '))
+    } else fail('提示气泡 · 兜底块键帽底漂移：' + JSON.stringify(fbKey) + ' ≠ ' + key.light + '/' + key.dark)
+    for (const mode of ['light', 'dark']) {
+      const label = mode === 'light' ? '亮色' : '暗色'
+      const r1 = ratio(hex(text[mode]), hex(bubble[mode]))
+      if (r1 >= 4.5) pass('提示气泡 · ' + label + '气泡字/气泡底：' + text[mode] + ' on ' + bubble[mode] + ' = ' + r1.toFixed(2) + ':1 (AA)')
+      else fail('提示气泡 · ' + label + '气泡字只有 ' + r1.toFixed(2) + ':1')
+      const r2 = ratio(hex(text[mode]), hex(key[mode]))
+      if (r2 >= 4.5) pass('提示气泡 · ' + label + '键帽字/键帽底：' + text[mode] + ' on ' + key[mode] + ' = ' + r2.toFixed(2) + ':1 (AA)')
+      else fail('提示气泡 · ' + label + '键帽字只有 ' + r2.toFixed(2) + ':1')
+      const r3 = ratio(hex(key[mode]), hex(bubble[mode]))
+      if (r3 >= 1.06) pass('提示气泡 · ' + label + '键帽底/气泡底：' + r3.toFixed(2) + ':1 (装饰下限 1.06)')
+      else fail('提示气泡 · ' + label + '键帽在气泡上读不出来：' + r3.toFixed(2) + ':1')
+      const r4 = ratio(hex(ring[mode]), hex(bubble[mode]))
+      if (r4 >= 1.06) pass('提示气泡 · ' + label + '描边/气泡底：' + r4.toFixed(2) + ':1 (装饰下限 1.06)')
+      else fail('提示气泡 · ' + label + '描边在气泡上读不出来：' + r4.toFixed(2) + ':1')
+      /* the keycap's own inset hairline is border-l2 in BOTH modes */
+      const r6 = ratio(hex((jsToken('--dsw-alias-border-l2') || {})[mode]), hex(key[mode]))
+      if (r6 >= 1.06) pass('提示气泡 · ' + label + '键帽描边/键帽底：' + r6.toFixed(2) + ':1 (装饰下限 1.06)')
+      else fail('提示气泡 · ' + label + '键帽描边读不出来：' + r6.toFixed(2) + ':1')
+      surfaces[mode].forEach((s, i) => {
+        const r5 = ratio(hex(ring[mode]), hex(s))
+        if (r5 >= 1.06) pass('提示气泡 · ' + label + '描边/浮面' + (i + 1) + '：' + r5.toFixed(2) + ':1 (分离下限 1.06)')
+        else fail('提示气泡 · ' + label + '气泡在浮面' + (i + 1) + ' 上分不开：' + r5.toFixed(2) + ':1')
+      })
+    }
+  }
+}
+
 /* ---------- 11. three palettes must actually differ ---------- */
 {
   const accents = [varIn(palettes['谷地黄'], '--edge-accent'), varIn(palettes['武陵青'], '--edge-accent'), varIn(grayBlock, '--edge-accent')]
