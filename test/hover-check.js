@@ -425,33 +425,45 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
         }
       }
     }
-    /* ---- 对话/轨迹 tabs: the /news scrim treatment, pinned permanently ----
+    /* ---- 对话/轨迹 tabs: the official /news SubpageTab wash, pinned permanently ----
        The first version of the tab rules silently matched nothing: the selected
        tab's class string ends in '_tabActive', so [class$='_tab'] never hit it
        and the ink underline survived pixel-perfect (a delegated review caught it
        by element.matches). These assertions keep that regression from coming
        back: rules must MATCH (via computed pseudos), the underline must be
-       cleared on the COMPOUND class order, and the hover scrim must flip. */
+       cleared on the COMPOUND class order, the hover WASH (official #f3f3f3
+       step -> rgba(0,0,0,.04) composited on paper) must flip, and the ACTIVE
+       tab carries the deeper official wash (#e5e5e5 step -> rgba(0,0,0,.09))
+       at rest — and keeps it while hovered (official keeps #e5e5e5). */
     await evaluate("window.__setScheme__('light')"); await evaluate("window.__setPalette__('gray')")
     await sleep(200)
     const afterSel = await evaluate("window.__pseudo__('tabSel','::after','backgroundColor')")
     if (/^rgba\(0, 0, 0, 0\)$/.test(afterSel)) pass('选中标签原生底线已清除（复合类序命中）  [' + afterSel + ']')
     else fail('选中标签底线仍在——:is() 双后缀失效  [' + afterSel + ']')
+    const washIdle = await evaluate("window.__pseudo__('tabIdle','::before','backgroundColor')")
+    if (washIdle === 'rgba(0, 0, 0, 0.04)') pass('悬停洗面 = 官方 #f3f3f3 档（纸面 rgba .04）  [' + washIdle + ']')
+    else fail('悬停洗面色漂移（应 rgba(0,0,0,0.04)，黑遮罩回归？）  [' + washIdle + ']')
     const beforeIdleRest = await evaluate("window.__pseudo__('tabIdle','::before','opacity')")
-    if (beforeIdleRest === '0') pass('标签遮罩常态 opacity=0  [' + beforeIdleRest + ']')
-    else fail('标签遮罩常态应不可见  [opacity=' + beforeIdleRest + ']')
-    /* real pointer onto the SELECTED tab: the compound class must get the scrim too */
+    if (beforeIdleRest === '0') pass('未选标签常态 opacity=0（洗面不亮）  [' + beforeIdleRest + ']')
+    else fail('未选标签常态洗面不应可见  [opacity=' + beforeIdleRest + ']')
+    const selWash = await evaluate("window.__pseudo__('tabSel','::before','backgroundColor')")
+    const selRest = await evaluate("window.__pseudo__('tabSel','::before','opacity')")
+    if (selWash === 'rgba(0, 0, 0, 0.09)' && selRest === '1') pass('选中标签常态 = 官方 #e5e5e5 档常亮  [' + selWash + ' @' + selRest + ']')
+    else fail('选中标签洗面不对（应 rgba(0,0,0,0.09) @1）  [' + selWash + ' @' + selRest + ']')
+    /* real pointer onto the SELECTED tab: the compound class must get the wash too,
+       and it must STAY at the active step (official keeps #e5e5e5 on hover) */
     const rect = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabSel'))"))
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: Math.round(rect.x + rect.w / 2), y: Math.round(rect.y + rect.h / 2), buttons: 0 })
     await sleep(260)
     const beforeSelHover = await evaluate("window.__pseudo__('tabSel','::before','opacity')")
-    if (beforeSelHover === '1') pass('选中标签悬停遮罩点亮（复合类序同样命中）  [opacity=' + beforeSelHover + ']')
-    else fail('选中标签悬停无反馈——:is() 失效或遮罩规则被删  [opacity=' + beforeSelHover + ']')
+    const selHoverWash = await evaluate("window.__pseudo__('tabSel','::before','backgroundColor')")
+    if (beforeSelHover === '1' && selHoverWash === 'rgba(0, 0, 0, 0.09)') pass('选中标签悬停仍为激活档（命中且不倒挂）  [' + selHoverWash + ']')
+    else fail('选中标签悬停反馈不对  [' + selHoverWash + ' @' + beforeSelHover + ']')
     await parkPointer()
     await evaluate("window.__setScheme__('dark')"); await sleep(200)
     const darkDisplay = await evaluate("window.__pseudo__('tabIdle','::before','display')")
-    if (darkDisplay === 'none') pass('暗色标签无遮罩（display=none，文字提亮承担悬停）')
-    else fail('暗色遮罩未禁用  [display=' + darkDisplay + ']')
+    if (darkDisplay === 'none') pass('暗色标签无洗面（display=none，文字提亮承担悬停）')
+    else fail('暗色洗面未禁用  [display=' + darkDisplay + ']')
 
     cdp.close()
   } finally {

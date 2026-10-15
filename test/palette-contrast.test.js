@@ -526,6 +526,51 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10d. 对话/轨迹 tabs: the official /news SubpageTab wash steps ----------
+   The tabs' hover used to copy the /news IMAGE-CARD scrim (rgba(0,0,0,.25)),
+   which composites to 1.81:1 on the paper — a black slab. The official tab
+   component (SubpageTab, c1b6a925ef3d04ee.css, first-hand quotes in the motion
+   research appendix E) uses LIGHT washes instead: hover #f3f3f3 and active
+   #e5e5e5 over its white page. Those official steps are 1.08:1 / 1.21:1; the
+   theme reproduces the STEPS on its own paper via rgba alphas. This section
+   reads the alphas out of the real rules, composites them over bg-base, and
+   proves both steps land on the official ratios — plus ink text stays AA on
+   the deeper active wash. */
+{
+  const official = (fg, bg) => ratio(hex(fg), hex(bg))
+  const offHover = official('#f3f3f3', '#ffffff')
+  const offActive = official('#e5e5e5', '#ffffff')
+  /* rule bodies, not indexOf windows: the same ::before selector also appears
+     inside the reduced-transparency block as a bare display:none. */
+  const bodiesOf = (selPat) => [...src.matchAll(new RegExp(selPat + '\\s*\\{([^}]*)\\}', 'g'))].map((m) => m[1])
+  const alphaIn = (body) => { const m = /rgba\(0, 0, 0, 0\.(\d+)\)/.exec(body); return m === null ? null : Number('0.' + m[1]) }
+  const hoverA = bodiesOf("\\[class\\$='_centerCol'\\] \\[class\\$='_tabs'\\] :is\\(\\[class\\$='_tab'\\],\\[class\\$='_tabActive'\\]\\)::before").map(alphaIn).find((v) => v !== null)
+  const activeA = bodiesOf("\\[class\\$='_centerCol'\\] \\[class\\$='_tabs'\\] \\[class\\$='_tabActive'\\]::before").map(alphaIn).find((v) => v !== null)
+  const paperM = new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
+  const paper = paperM ? paperM[1] : null
+  if (hoverA === undefined || activeA === undefined || paper === null) {
+    fail('页签洗面 · 规则或纸底令牌读不到（hover alpha=' + hoverA + '，active alpha=' + activeA + '）')
+  } else {
+    const comp = (a) => over([0, 0, 0], hex(paper), a)
+    const rHover = ratio(comp(hoverA), hex(paper))
+    const rActive = ratio(comp(activeA), hex(paper))
+    /* hover step must sit on the official 1.08 within a tight band */
+    if (Math.abs(rHover - offHover) <= 0.06) pass('页签洗面 · 悬停档 = 官方 #f3f3f3 步（' + rHover.toFixed(3) + ':1 vs 官方 ' + offHover.toFixed(3) + ':1，alpha .' + String(hoverA).slice(2) + '）')
+    else fail('页签悬停档偏离官方步：' + rHover.toFixed(3) + ':1（官方 ' + offHover.toFixed(3) + ':1）')
+    if (Math.abs(rActive - offActive) <= 0.06) pass('页签洗面 · 激活档 = 官方 #e5e5e5 步（' + rActive.toFixed(3) + ':1 vs 官方 ' + offActive.toFixed(3) + ':1，alpha .' + String(activeA).slice(2) + '）')
+    else fail('页签激活档偏离官方步：' + rActive.toFixed(3) + ':1（官方 ' + offActive.toFixed(3) + ':1）')
+    /* hierarchy must not invert: active >= hover, and neither may return to slab strength */
+    if (rActive > rHover) pass('页签洗面 · 层级不倒挂（激活 ' + rActive.toFixed(3) + ' > 悬停 ' + rHover.toFixed(3) + '）')
+    else fail('页签洗面层级倒挂：悬停比激活还深')
+    if (rActive < 1.6) pass('页签洗面 · 两档都在装饰区间内（激活 ' + rActive.toFixed(2) + ':1 < 1.6，黑方片不回归）')
+    else fail('页签洗面过深，黑方片回归：' + rActive.toFixed(2) + ':1')
+    /* ink text on the deeper active wash stays AA */
+    const inkOnWash = ratio(hex('#101110'), comp(activeA))
+    if (inkOnWash >= 4.5) pass('页签洗面 · 墨字/激活洗面：' + inkOnWash.toFixed(2) + ':1 (AA)')
+    else fail('页签墨字在激活洗面上只有 ' + inkOnWash.toFixed(2) + ':1')
+  }
+}
+
 /* ---------- 11. three palettes must actually differ ---------- */
 {
   const accents = [varIn(palettes['谷地黄'], '--edge-accent'), varIn(palettes['武陵青'], '--edge-accent'), varIn(grayBlock, '--edge-accent')]
