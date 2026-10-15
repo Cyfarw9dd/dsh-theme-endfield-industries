@@ -27,7 +27,7 @@
 | 纸底（应用背景、侧栏） | `--dsw-alias-bg-base` | `#e8e8e2` | `#101110` |
 | 面板 / 气泡 | `--dsw-alias-bg-layer-1` | `#f2f2ec` | `#181a18` |
 | 沉底块 | `--dsw-alias-bg-layer-2` | `#dcddd6` | `#1e201d` |
-| 浮层（菜单、弹层） | `--dsw-alias-bg-overlay` | `#f2f2ec` | `#1c1e1c` |
+| 浮层（菜单、弹层、提示气泡） | `--dsw-alias-bg-overlay` | `#f2f2ec` | `#1c1e1c` |
 | 细线 | `--dsw-alias-border-l1` | `#d8d9d5` | `#343633` |
 | 重线 | `--dsw-alias-border-l2` | `#b6b8b3` | `#4a4d49` |
 | 正文 | `--dsw-alias-label-primary` | `#101110` | `#f5f5f0` |
@@ -195,6 +195,20 @@ DSH 自带 DeepSeek 品牌蓝。主题把这些令牌整组重映射，否则会
 行为照应用菜单：Escape 与点击面板外收起（监听器开时挂、收时摘，target.closest 对自己的根判定）；选中即写值并收起；重复点选当前项不写（与原生 select 的 change 语义一致）。入场动画只动 opacity + transform（perf-motion 的静态守卫扫到本段，允许清单不变），prefers-reduced-motion 下关闭菜单动画与所有过渡（保留 180° 的状态翻转本身）。主题关闭时样式表卸载、铭牌与圆形箭头图无从显示，触发器退回「值 + 山形箭头」并用应用令牌内联兜底（与 btnStyleFor 的 !themed 分支同策略），settings-off 的按钮对比度探针因此继续成立。形制由 `check.js` 第 5 节钉住（铭牌色、圆形箭头图、斜纹选中层、紫绿信号条、开洞）。
 
 已知边界：菜单在行内绝对定位（不 portal）。设置页的行不裁剪溢出，正常显示，且 absolute 让菜单随页面滚动跟随触发器；若日后某个宿主把设置页放进 overflow 容器，需要把菜单 portal 到 body（应用自己的菜单正是为此 portal + fixed 的）。
+
+### 浮动提示气泡：并入浮层家族
+
+工具栏/侧栏（归档等）按钮的悬停提示是应用的 Tooltip 原语（`[role='tooltip']`），上游是**近黑底白字**（`--dsw-alias-tooltip-bg` → `neutral-bluish-850/750`），纸墨界面里就是一块死黑。官网**没有** tooltip 语法（动效调研 §四：78 条 hover 全在控件本体上，无浮层提示），所以这里是主题推导：把上面菜单的浮层家族直接套上去——
+
+| 部位 | 上游 | 本主题落点 |
+| --- | --- | --- |
+| 气泡底 | `#2c2c2e` / `#43454a` 近黑 | 浮层纸面（overlay 同值 `#f2f2ec` / `#1c1e1c`），走 overrideTokens——应用把 alias 令牌写成 body 行内样式，样式表规则压不过 |
+| 气泡字 | `--dsw-static-neutral-bluish-00`（白，静态令牌不能全局动） | 样式表规则按元素换成墨/纸（`--dsw-alias-label-primary`）；不改底只改字会是 1.06:1，两处必须成对改 |
+| 描边 | 无 | 0.5px 重线 **ring shadow**（亮 `border-l2` / 暗 `border-l1`，同暗色下拉面板手法）——bubble 的 3px/7px padding 按无框设计，border 会挤内容 |
+| 阴影 | 无 | `0 0 10px rgba(0,0,0,.25)`（官方 `Dropdown_panel` 的 `1.25rem` 按 1rem=8px 缩放，同设置下拉） |
+| 快捷键键帽 | `color-mix(tooltip-bg, white 18%)` | 沉底块（`#dcddd6` / `#2c2e2a`）+ inset hairline——底变纸后混白与底不可分 |
+
+对比度断言见 [test/palette-contrast.test.js](../test/palette-contrast.test.js) 10c 段（气泡字 16.84/15.34:1、键帽 13.84/12.54:1、描边与键帽装饰下限），计算样式实测（两配色 × 两模式 × 底/字/描边/键帽/直角/对比度）见 [test/tooltip.test.js](../test/tooltip.test.js)。圆角随全局直角化（`[role='tooltip']` 本就在直角化清单里）；圆角开关/theme-round 模式下恢复上游圆角，颜色不变。
 
 ### 交互动效：合并设计
 

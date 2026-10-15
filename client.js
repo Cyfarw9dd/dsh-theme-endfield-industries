@@ -2456,6 +2456,21 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         light: '#f2f2ec',
         dark: '#1c1e1c',
       },
+      /* 浮动提示气泡（Tooltip 原语，[role='tooltip']，侧栏归档/工具栏按钮的
+         hover 提示）。上游默认近黑底白字（tooltip-bg → neutral-bluish 850/750
+         ≈ #2c2c2e/#43454a），压在纸墨界面上就是一块死黑。对齐上面的浮层家族
+         ——底取 overlay 同值；文字/描边/阴影在样式表的 [role='tooltip'] 规则里
+         （bubble 的 color 是类规则里的 --dsw-static-neutral-bluish-00，令牌
+         管不到）。key-bg 上游是 color-mix(tooltip-bg, white 18%)：底换成纸面
+         后混白与底不可分，改沉底块（layer-3 同值）。 */
+      '--dsw-alias-tooltip-bg': {
+        light: '#f2f2ec',
+        dark: '#1c1e1c',
+      },
+      '--dsw-alias-tooltip-key-bg': {
+        light: '#dcddd6',
+        dark: '#2c2e2a',
+      },
       '--dsw-alias-border-l1': {
         light: '#d8d9d5',
         dark: '#343633',
@@ -3800,6 +3815,29 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       body:not(.theme-endfield-round) [class*='Scrollbar'] {
         border-radius: 0 !important;
       }
+      /* ---------- 浮动提示气泡（Tooltip 原语）的墨字、描边与阴影 ----------
+         底色/键帽底在令牌层（overrideTokens：应用把 alias 令牌写成 body 的
+         行内样式，样式表规则压不过，必须注册层）。这里补令牌管不到的三件：
+         · 文字色：bubble 的 color 是类规则里的 --dsw-static-neutral-bluish-00
+           （白）——底从近黑换成纸面后白字不可见，必须跟着换成墨/纸；
+         · 描边用 ring shadow 不用 border：bubble 的 padding 3px 7px 按无框
+           设计，加 border 会挤内容（与暗色下拉面板的 0 0 0 1px 环同一手法）；
+         · 键帽 inset hairline 同理，零布局代价。
+         官网没有 tooltip 语法（动效调研 §四：78 条 hover 全在控件本体上，
+         无浮层提示），所以这不是复刻，是把主题浮层家族套上去；阴影取官方
+         Dropdown_panel 的 0 0 1.25rem rgba(0,0,0,.25) 按 1rem=8px 缩放
+         （与「设置面板统一下拉」同款）。特异性 body 前缀 (0,1,1) 高于
+         bubble 的哈希类 (0,1,0)，不受注入顺序影响。 */
+      body [role='tooltip'] {
+        color: var(--dsw-alias-label-primary);
+        box-shadow: 0 0 10px rgba(0, 0, 0, .25), 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
+      body[data-ds-dark-theme] [role='tooltip'] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5), 0 0 0 0.5px var(--dsw-alias-border-l1);
+      }
+      body [role='tooltip'] kbd {
+        box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
       * {
         scrollbar-width: thin;
         scrollbar-color: var(--edge-line) transparent;
@@ -4267,7 +4305,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         --dsw-alias-button-ghost-active-border: #b6b8b3;
         --dsw-alias-button-primary-hover: #2a2b28;
         --dsw-alias-button-contrast-fill: #3a3c38;
-        --dsw-alias-tooltip-bg: #2a2b28;
+        /* 浮层提示气泡（正常路径在 overrideTokens，这里是无 presenter 环境的兜底） */
+        --dsw-alias-tooltip-bg: #f2f2ec;
+        --dsw-alias-tooltip-key-bg: #dcddd6;
         --dsw-specific-input-major: #f2f2ec;
         --dsw-specific-selector: #e8e8e2;
         --dsw-specific-tip: #e8e8e2;
@@ -4298,7 +4338,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         --dsw-alias-button-ghost-active-border: #5f6460;
         --dsw-alias-button-primary-hover: var(--edge-accent-deep);
         --dsw-alias-button-contrast-fill: #f5f5f0;
-        --dsw-alias-tooltip-bg: #2a2b28;
+        /* 浮层提示气泡（同上，兜底层） */
+        --dsw-alias-tooltip-bg: #1c1e1c;
+        --dsw-alias-tooltip-key-bg: #2c2e2a;
         --dsw-specific-input-major: #202220;
         --dsw-specific-selector: #2c2e2a;
         --dsw-specific-tip: #2c2e2a;
