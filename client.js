@@ -4029,16 +4029,39 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          ≈ 0.46（文字 28px/13px）折算：padding 22px、滑移 −13px、箭头 ⌀16px、
          分隔线 1.5×18px、倒角 2px（官方 4px/60px 盒）。布局验算（gap 36）：
          相邻盘子边缘隔 12px，分隔线居中两侧各 ≈6px，箭头与文字净距 27px。
-         text-indent 是静态声明（无过渡）：切换页签本来就是整页重排，文字
-         「咔」地跳位与官方的硬切气质一致；padding 全页签恒定，无跳版。 */
+         padding 全页签恒定，无跳版。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
         padding: 0 22px 9px;
+        /* 点击切换动效（2026-10-15 用户指定，官方三路并行渐变里可迁移的两路）：
+           文字色 + 滑移各 .2s ease（官方时长/缓动对）。洗面与箭头已经由
+           ::before 的 opacity 过渡承担，分隔线交叉淡入由 ::after 承担。
+           text-indent 是布局属性——原则上只动合成器属性，这里是**所有者
+           指定的已登记例外**（测量记录见 engineering-notes「页签切换动画的
+           布局代价」）：重排范围是页签一行两个小按钮，切换风暴（8.3 次/秒
+           持续 4 秒）下 Layout 7.9 ms/s ≈ 每帧 0.13ms、每次切换总布局 ≈0.95ms
+           摊在 200ms 的 12 帧上；基线（无过渡）1.2 ms/s。动画只在类翻转时
+           发生、指针扫过不触发，自然切换频率（秒级一次）摊薄后 <0.1 ms/s。
+           !important 压过全局 button{transition:none}。 */
+        transition: color .2s ease, text-indent .2s ease !important;
       }
       [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] {
         text-indent: -13px;
       }
+      /* 分隔线底座：每个页签的 ::after 都预建线盒（1.5×18、border-l1），
+         常态 opacity 0——app 原生选中底线（.tabActive::after 的 accent 底
+         与 left:0/right:0/bottom:-1px/height:2px 几何）被这里的几何+底色
+         整体改写取代（旧「background:0 0 清底线」规则已并入本条）。预建
+         盒子后，切换只是同一条沟两侧宿主的交叉淡入淡出，零「创造几何」
+         代价（与角标/指示线同一门派）。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
-        background: 0 0;
+        content: '';
+        position: absolute;
+        top: 0;
+        width: 1.5px;
+        height: 18px;
+        background: var(--dsw-alias-border-l1);
+        opacity: 0;
+        transition: opacity .2s ease;
       }
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         content: '';
@@ -4075,31 +4098,33 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         opacity: 1;
       }
       /* 官方竖分隔线（#d9d9d9 × 0.1875/2.5rem → 1.5×18px，缩放后），沟中心
-         居于相邻盘子之间。绘制归属（官方是独立 DOM 元素，这里只能借 ::after）：
-         · 非首个、非激活的页签：画自己的左沟线；
-         · 首个页签闲置且紧邻的下一个是激活页签（:has(+…)）：它的左沟线无人
-           画（邻居的 ::after 是激活态、被底线清除规则占用），由它自己画右沟线。
-         恰好覆盖两页签的全部组合；若上游未来放第三个页签，最坏情形是激活
-         页签左邻缺一条线（登记为已知边界）。app 的 ::after 原生是选中底线
-         （left:0/right:0/bottom:-1px/height:2px），这里逐项改写。 */
-      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after,
-      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        width: 1.5px;
-        height: 18px;
-        background: var(--dsw-alias-border-l1);
-      }
+         居于相邻盘子之间。绘制归属（官方是独立 DOM 元素，这里借 ::after）：
+         · 非首个、非激活的页签：点亮自己的左沟线；
+         · 首个页签闲置且紧邻的下一个是激活页签（:has(+…)）：它的左沟线
+           无人画（激活侧 ::after 保持熄灭），由它自己点亮右沟线。
+         恰好覆盖两页签的全部组合；若上游未来放第三个页签，最坏情形是
+         激活页签左邻缺一条线（登记为已知边界）。分支只写定位与
+         opacity——线盒在底座已预建，切换零几何创建、只做交叉淡入。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after {
         left: -18.75px;
         right: auto;
-        bottom: auto;
+        opacity: 1;
       }
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
         left: auto;
         right: -18.75px;
-        bottom: auto;
+        opacity: 1;
+      }
+      /* 减效降级：切换动画全部关闭（含 text-indent 滑移与两条伪元素的淡入），
+         只保留瞬时状态翻转——本主题自加（官网无此降级，已登记分歧）。 */
+      @media (prefers-reduced-motion: reduce) {
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
+          transition: none !important;
+        }
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before,
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
+          transition: none;
+        }
       }
       /* 暗色无洗面/箭头：近黑底的等档白洗落在噪声地板（评审实测），文字提亮
          承担悬停；分隔线保留（结构元素，border-l1 暗档 #343633 对墨底 1.55:1，
