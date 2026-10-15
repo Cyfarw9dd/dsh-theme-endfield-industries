@@ -606,3 +606,24 @@ fO69Vq_addButton / _3nPmjq_addButton    （旧 `:not()` 排除的两个）
 ### 无头环境的 rAF 不能用来采样性能
 
 headless 会挂起 / 合并 rAF，导致无论怎么设虚拟时钟都只采到 **n=1**，而没有分布支撑的数字不算测量。`contour-perf.test.js` 因此按函数名把算法源码从 `client.js` 里**原样切出**后在紧循环里计时，并丢弃前两次采样（冷启动含 JIT 预热，否则会把启动成本报成稳态成本）。
+
+### 页签切换动画的布局代价（2026-10-15 实测，登记例外）
+
+「只动合成器属性」是本主题的注册硬规则，页签切换的文字滑移是**所有者指定的例外**：
+官方 SubpageTab 的滑移作用在文字 span 的 `transform` 上，而本应用的页签文字是
+**裸文本节点**（无法 transform），唯一的滑移手段是 `text-indent`——一个布局属性。
+例外成立的依据是测量（`.scratch` 一次性脚本，方法同 hover-check 夹具：真实上游
+页签 CSS + 真实 client.js，120ms 一次类翻转 × 4 秒切换风暴，CDP
+`Performance.getMetrics` 前后差）：
+
+| 配置 | Layout | RecalcStyle | LayoutCount |
+| --- | ---: | ---: | ---: |
+| 带过渡（color + text-indent .2s） | 7.89 ms/s | 25.04 ms/s | 60.5 次/s |
+| 基线（过渡剥离，切换瞬时跳变） | 1.18 ms/s | 5.03 ms/s | 8.3 次/s |
+
+读法：风暴是 8.3 次切换/秒的持续负载（自然使用是秒级一次）；7.89 ms/s 折算
+**每帧约 0.13ms 布局**（帧预算 16.7ms 的 0.8%）、**每次切换总布局 ≈0.95ms**
+摊在 200ms 的约 12 帧上。动画只在类翻转时跑：指针扫过（perf-motion 的悬停
+预算场景）完全不触发，静态守卫扫描的动效段也不含此规则。同一风暴里洗面/箭头/
+分隔线的 opacity 过渡零布局代价（基线与带过渡两版的 RecalcStyle 差值即
+text-indent 的逐帧样式重算）。`prefers-reduced-motion` 下整组过渡关闭。
