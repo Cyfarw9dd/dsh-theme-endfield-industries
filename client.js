@@ -4027,9 +4027,16 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         content: '';
         position: absolute;
-        left: 0;
-        right: 0;
-        top: 0;
+        /* 几何外扩：应用页签按钮没有水平内边距（padding: 0 0 9px），inset:0 的
+           洗面会紧贴文字（用户实测「刚刚把文字罩下来」）；官方 SubpageTab 靠
+           0 3rem 的水平 padding 让洗面比文字宽出一大圈。这里用负偏移补出
+           呼吸位：左右各 −12px（页签 gap 36px，外扩后相邻洗面仍隔 12px，
+           不粘连）、上 −4px（顶部同样零内边距），bottom 5px 保留（洗面盒
+           止于分划线上方）。溢出部分不裁剪（按钮无 overflow 裁剪）、
+           pointer-events:none 不挡交互。 */
+        left: -12px;
+        right: -12px;
+        top: -4px;
         bottom: 5px;
         background-color: rgba(0, 0, 0, 0.04);
         opacity: 0;

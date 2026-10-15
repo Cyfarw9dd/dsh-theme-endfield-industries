@@ -443,6 +443,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const washIdle = await evaluate("window.__pseudo__('tabIdle','::before','backgroundColor')")
     if (washIdle === 'rgba(0, 0, 0, 0.04)') pass('悬停洗面 = 官方 #f3f3f3 档（纸面 rgba .04）  [' + washIdle + ']')
     else fail('悬停洗面色漂移（应 rgba(0,0,0,0.04)，黑遮罩回归？）  [' + washIdle + ']')
+    /* the wash plate must BREATHE around the text: the app's tab buttons have no
+       horizontal padding, so inset:0 hugs the glyphs ("刚刚把文字罩下来", user
+       report). Official SubpageTab gets this from 0 3rem padding; here negative
+       offsets extend the plate ±12px/−4px past the border box. */
+    const idleRect = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabIdle'))"))
+    const washW = parseFloat(await evaluate("window.__pseudo__('tabIdle','::before','width')"))
+    const washTop = await evaluate("window.__pseudo__('tabIdle','::before','top')")
+    if (washW >= idleRect.w + 24 - 0.5) pass('洗面外扩左右各 12px（' + washW.toFixed(1) + 'px ≥ 文字盒 ' + idleRect.w.toFixed(1) + '+24，不贴字）')
+    else fail('洗面退回贴字几何  [洗面 ' + washW.toFixed(1) + 'px vs 盒 ' + idleRect.w.toFixed(1) + 'px]')
+    if (washTop === '-4px') pass('洗面上扩 4px  [' + washTop + ']')
+    else fail('洗面上缘贴字  [top=' + washTop + ']')
     const beforeIdleRest = await evaluate("window.__pseudo__('tabIdle','::before','opacity')")
     if (beforeIdleRest === '0') pass('未选标签常态 opacity=0（洗面不亮）  [' + beforeIdleRest + ']')
     else fail('未选标签常态洗面不应可见  [opacity=' + beforeIdleRest + ']')
