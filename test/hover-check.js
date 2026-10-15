@@ -211,6 +211,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       color:var(--dsw-alias-label-primary);cursor:pointer;border:none;border-radius:999px;
       flex:none;place-items:center;display:grid}
     .RlGAzG_add:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid)}
+    /* ---- composer action chips: verbatim upstream hover consumers ----
+       .uV2eYG_select from InputBar.module.css; .JObwrW_trigger from the
+       plugins chip module (same hover token family). */
+    .uV2eYG_tools{align-items:center;min-width:0;display:flex;gap:12px}
+    .uV2eYG_select{border-radius:var(--dsw-radius-sm);max-width:220px;height:28px;
+      color:var(--dsw-alias-label-secondary);white-space:nowrap;cursor:pointer;appearance:none;
+      background-color:#0000;border:none;outline:none;padding:0 20px 0 8px;font-size:13px;
+      font-weight:500;line-height:20px}
+    .uV2eYG_select:hover:not(:disabled){background-color:var(--dsw-alias-interactive-bg-hover)}
+    .JObwrW_trigger{height:28px;border:none;background:0 0;cursor:pointer;
+      color:var(--dsw-alias-label-secondary);font-size:13px;padding:0 8px}
+    .JObwrW_trigger:hover,.JObwrW_trigger[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+    .plainHover:hover{background:var(--dsw-alias-interactive-bg-hover)}
   </style></head><body>
   <div class="panel"><button class="zGbnIq_secondaryButton" id="edit">编辑</button></div>
   <div class="panel _3nPmjq_addBlock">
@@ -222,6 +235,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     <!-- IconPlusOutlineMedium's geometry: a filled path on currentColor. -->
     <button class="RlGAzG_add" id="composerAdd" aria-label="+"><svg width="14" height="14"
       viewBox="0 0 16 16"><path fill="currentColor" d="M7 3h2v4h4v2H9v4H7V9H3V7h4z"/></svg></button>
+    <!-- The composer action chips (插件/模型选择/…): verbatim upstream hover
+         consumers inside the _tools row the theme's token remap scopes to.
+         chipGuard sits in the seat but OUTSIDE the rows — it must keep the
+         body-level accent wash, proving the remap does not leak. -->
+    <div class="uV2eYG_tools">
+      <select class="uV2eYG_select" id="chipSelect"><option>模型选择</option></select>
+      <button class="JObwrW_trigger" id="chipTrigger">插件</button>
+    </div>
+    <button class="plainHover" id="chipGuard">范围外</button>
   </div>
   <div class="panel pI_x6G_centerCol">
     <!-- The app's real tab rules (ui-conversation), verbatim, including the
@@ -553,6 +575,46 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const darkDisplay = await evaluate("window.__pseudo__('tabIdle','::before','display')")
     if (darkDisplay === 'none') pass('暗色标签无洗面（display=none，文字提亮承担悬停）')
     else fail('暗色洗面未禁用  [display=' + darkDisplay + ']')
+
+    /* ---- composer action chips: hover switches industrial yellow -> scheme gray ----
+       The chips come from eight packages but all consume the
+       --dsw-alias-interactive-bg-* family; the theme remaps the tokens inside the
+       _tools/_modes/_standardControls rows to the 划词灰 pair. Real pointer, both
+       schemes, expectations read from the live --edge-select-* tokens. Run under
+       谷地黄 (the palette where the yellow was reported; on the default gray
+       palette accent == select-fill and the test could not tell remap from leak).
+       The guard button (seat, outside the rows) must keep the accent wash. */
+    await evaluate("window.__setPalette__('valley')")
+    for (const scheme of ['light', 'dark']) {
+      await evaluate("window.__setScheme__('" + scheme + "')"); await sleep(150)
+      const wantFill = await evaluate("getComputedStyle(document.body).getPropertyValue('--edge-select-fill').trim()")
+      const wantInk = await evaluate("getComputedStyle(document.body).getPropertyValue('--edge-select-ink').trim()")
+      const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return 'rgb(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ')' }
+      for (const id of ['chipSelect', 'chipTrigger']) {
+        const r = JSON.parse(await evaluate("JSON.stringify(window.__rect__('" + id + "'))"))
+        await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2), buttons: 0 })
+        await sleep(180)
+        const bg = await evaluate("window.__style__('" + id + "').color ? getComputedStyle(document.getElementById('" + id + "')).backgroundColor : ''")
+        const fg = await evaluate("getComputedStyle(document.getElementById('" + id + "')).color")
+        const tag = '操作条chips · ' + scheme + ' · ' + id
+        if (bg === hex2rgb(wantFill)) pass(tag + ' 悬停底=划词灰  [' + bg + ']')
+        else fail(tag + ' 悬停底不对（工业黄回归？）  [' + bg + ' 期望 ' + hex2rgb(wantFill) + ']')
+        if (fg === hex2rgb(wantInk)) pass(tag + ' 悬停字=配对墨/白  [' + fg + ']')
+        else fail(tag + ' 悬停字未配对  [' + fg + ' 期望 ' + hex2rgb(wantInk) + ']')
+        await parkPointer(); await sleep(120)
+      }
+      if (scheme === 'light') {
+        const r = JSON.parse(await evaluate("JSON.stringify(window.__rect__('chipGuard'))"))
+        await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2), buttons: 0 })
+        await sleep(180)
+        const guardBg = await evaluate("getComputedStyle(document.getElementById('chipGuard')).backgroundColor")
+        const accentRgb = await evaluate("getComputedStyle(document.body).getPropertyValue('--edge-accent-rgb').trim()")
+        if (accentRgb && guardBg.indexOf(accentRgb) >= 0) pass('操作条chips · 作用域不外溢（行外仍强调色 α 洗）  [' + guardBg + ' 含 ' + accentRgb + ']')
+        else fail('行外元素也被换灰（作用域外溢）  [' + guardBg + ' 不含 ' + accentRgb + ']')
+        await parkPointer(); await sleep(120)
+      }
+    }
+    await evaluate("window.__setPalette__('gray')")
 
     cdp.close()
   } finally {

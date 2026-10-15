@@ -402,6 +402,25 @@ for (const [name, block] of Object.entries(palettes)) {
   } else {
     fail('划词灰 · 添加按钮悬停规则缺失')
   }
+  /* 第四个应用（2026-10-15）：输入卡操作条 chips（插件/自动化任务/设置/
+     工作区内修改/模型选择/智能体团队/标准模式/后台任务）的悬停/按下。
+     两路都要引用同一对令牌：容器内令牌重映射（--dsw-alias-interactive-bg-*
+     → select-fill）与 _trigger 收灰规则（盖过全局 _trigger 实心强调）。 */
+  const remapIdx = src.indexOf("--dsw-alias-interactive-bg-hover: var(--edge-select-fill)")
+  if (remapIdx >= 0) {
+    const remapBody = src.slice(Math.max(0, remapIdx - 400), remapIdx + 400)
+    const count = (remapBody.match(/var\(--edge-select-fill\)/g) || []).length
+    if (count >= 4) pass('划词灰 · 操作条 chips 令牌重映射 ≥4 项全指向 --edge-select-fill（hover/solid/accent/active）')
+    else fail('操作条 chips 重映射不完整（' + count + '/4 项）')
+  } else fail('划词灰 · 操作条 chips 重映射规则缺失')
+  const trigIdx = src.indexOf("[class$='_trigger'][aria-expanded='true'],\n      :is([data-composer-seat]")
+  const trigAlt = src.indexOf(") [class$='_trigger']:hover:not(:disabled)")
+  if (trigIdx >= 0 || trigAlt >= 0) {
+    const trigBody = src.slice(trigIdx >= 0 ? trigIdx : trigAlt, (trigIdx >= 0 ? trigIdx : trigAlt) + 700)
+    if (trigBody.includes('var(--edge-select-fill') && trigBody.includes('var(--edge-select-ink')) {
+      pass('划词灰 · chips 的 _trigger 收灰规则引用 --edge-select-* 令牌（盖过全局实心强调）')
+    } else fail('chips _trigger 收灰规则未引用选择令牌')
+  } else fail('划词灰 · chips _trigger 收灰规则缺失')
   /* the dark full-inversion rule must carve BOTH surfaces out, or it would
      repaint them solid accent in dark with !important and win the cascade. */
   const darkRule = src.indexOf("[class*='selected' i]:not([class*='unselected' i])")
