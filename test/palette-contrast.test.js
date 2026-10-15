@@ -568,6 +568,28 @@ for (const [name, block] of Object.entries(palettes)) {
     const inkOnWash = ratio(hex('#101110'), comp(activeA))
     if (inkOnWash >= 4.5) pass('页签洗面 · 墨字/激活洗面：' + inkOnWash.toFixed(2) + ':1 (AA)')
     else fail('页签墨字在激活洗面上只有 ' + inkOnWash.toFixed(2) + ':1')
+    /* the official active choreography: circular arrow chip + #d9d9d9 gutter
+       divider. Values read out of the shipped rule (the SVG data URI carries
+       the chip colours literally; the divider reads the border-l1 token). */
+    const circleM = /fill='%23([0-9a-f]{6})'/i.exec(src)
+    const chevM = /stroke='%23([0-9a-f]{6})'/i.exec(src)
+    const bl1 = { light: hoverA === undefined ? null : (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1], dark: (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1] }
+    if (circleM && chevM && bl1.light && bl1.dark) {
+      const circle = '#' + circleM[1], chev = '#' + chevM[1]
+      const rCircle = ratio(hex(circle), comp(activeA))
+      if (rCircle >= 1.06 && rCircle <= 1.6) pass('页签箭头 · 圆片/激活洗面：' + circle + ' = ' + rCircle.toFixed(2) + ':1（官方 #fafafa/#e5e5e5 ' + official('#fafafa', '#e5e5e5').toFixed(2) + ':1，装饰区间）')
+      else fail('页签箭头圆片对比度出区间：' + rCircle.toFixed(2) + ':1')
+      const rChev = ratio(hex(chev), hex(circle))
+      if (rChev >= 1.6) pass('页签箭头 · 山形/圆片：' + chev + ' = ' + rChev.toFixed(2) + ':1（官方 #999/#fafafa ' + official('#999999', '#fafafa').toFixed(2) + ':1）')
+      else fail('页签箭头山形不可读：' + rChev.toFixed(2) + ':1')
+      const darkBase = (new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+      for (const [mode, v, base] of [['亮', bl1.light, paper], ['暗', bl1.dark, darkBase]]) {
+        if (!v || !base) { fail('页签分隔线 · ' + mode + '色底色读不到'); continue }
+        const rDiv = ratio(hex(v), hex(base))
+        if (rDiv >= 1.06 && rDiv <= 1.6) pass('页签分隔线 · ' + mode + '色：' + v + ' on ' + base + ' = ' + rDiv.toFixed(2) + ':1（官方 #d9d9d9/白 ' + official('#d9d9d9', '#ffffff').toFixed(2) + ':1，装饰区间）')
+        else fail('页签分隔线 ' + mode + '色出区间：' + rDiv.toFixed(2) + ':1')
+      }
+    } else fail('页签箭头/分隔线 · 源里读不到色值（data URI 或 border-l1 令牌）')
   }
 }
 

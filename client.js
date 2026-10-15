@@ -4000,9 +4000,12 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
            一档浅灰面，对官方白底实测 1.11:1；
          · .active{background-color:#e5e5e5}——激活 = 再深一档，1.26:1；悬停
            激活标签时保持激活档不变浅（active 规则同特异性置后）；
-         · 激活另配文字左移 + 圆形箭头淡入 + 页签间 #d9d9d9 竖线——**不取**：
-           本应用页签是紧凑文字页签（13px 行内），放不下 2.3rem 箭头与左移；
-           4px 圆角归全局直角化（已登记分歧）。
+         · 激活编排：文字左移 −1.75rem + 圆形箭头（⌀2.3rem、#fafafa 底、
+           #999 图标）淡入 + 页签间 #d9d9d9 竖分隔线（0.1875×2.5rem，
+           首尾隐藏）。**全取**（2026-10-15 用户指定，前两版曾以「紧凑页签
+           放不下」为由省略——正确解法不是省略，而是把官方的**结构**
+           （恒定水平 padding + 激活滑移）一并搬过来，见下方映射注释）；
+           4px 圆角按 0.46 缩放为 2px（伪元素不受全局直角化约束）。
 
          落地映射——档位按**合成对比度**对齐官方，不照抄 hex（官方底是白，
          主题底是纸 #e8e8e2）：
@@ -4021,23 +4024,35 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
            评审实测白 12% 仅 1.39:1 判不可见）；暗色悬停信号仍是既有
            「文字提亮一档」（17.3:1），display:none 连盒子都不画。轨迹页自己
            的 detailTab（大写 T 结尾）不受影响。 */
+      /* 官方结构映射：SubpageTab 每个页签自带 0 3rem 水平 padding（盘子恒宽、
+         文字居中），激活时文字左移 −1.75rem 腾出箭头位。按官方/主题体量比
+         ≈ 0.46（文字 28px/13px）折算：padding 22px、滑移 −13px、箭头 ⌀16px、
+         分隔线 1.5×18px、倒角 2px（官方 4px/60px 盒）。布局验算（gap 36）：
+         相邻盘子边缘隔 12px，分隔线居中两侧各 ≈6px，箭头与文字净距 27px。
+         text-indent 是静态声明（无过渡）：切换页签本来就是整页重排，文字
+         「咔」地跳位与官方的硬切气质一致；padding 全页签恒定，无跳版。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
+        padding: 0 22px 9px;
+      }
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] {
+        text-indent: -13px;
+      }
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
         background: 0 0;
       }
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         content: '';
         position: absolute;
-        /* 几何外扩：应用页签按钮没有水平内边距（padding: 0 0 9px），inset:0 的
-           洗面会紧贴文字（用户实测「刚刚把文字罩下来」）；官方 SubpageTab 靠
-           0 3rem 的水平 padding 让洗面比文字宽出一大圈。这里用负偏移补出
-           呼吸位：左右各 −12px（页签 gap 36px，外扩后相邻洗面仍隔 12px，
-           不粘连）、上 −4px（顶部同样零内边距），bottom 5px 保留（洗面盒
-           止于分划线上方）。溢出部分不裁剪（按钮无 overflow 裁剪）、
-           pointer-events:none 不挡交互。 */
+        /* 几何外扩：应用页签原生零水平内边距，上一版 inset:0 的洗面「刚刚把
+           文字罩下来」（用户实测）；现在 padding 22px 已给盘内呼吸位，负偏移
+           −12px 再把盘子边缘衬出字外（官方盘沿永远在字外），上 −4px，bottom
+           5px 止于分划线上方。倒角 2px：官方 4px/60px 盒按 0.46 缩放——伪元素
+           不在全局直角化清单（[class] 只命中元素），可安全使用。 */
         left: -12px;
         right: -12px;
         top: -4px;
         bottom: 5px;
+        border-radius: 2px;
         background-color: rgba(0, 0, 0, 0.04);
         opacity: 0;
         transition: opacity .2s ease;
@@ -4046,12 +4061,49 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):hover::before {
         opacity: 1;
       }
-      /* 激活 = 官方深一档洗面，常态常亮；与基础规则同特异性、置后 → 底色归它 */
+      /* 激活 = 深一档洗面常亮 + 官方圆形箭头（⌀16px，纸白圆 + 灰山形箭头，
+         官方 arrow ⌀2.3rem/#fafafa/#999 按 0.46 折算）。箭头作为 ::before 的
+         背景图层挂在 right 3px：随盘子一起由 opacity 渐显（class 翻转触发
+         ::before 的过渡），无需第三个伪元素。悬停规则只写 opacity、激活
+         规则只写底色与图层——不同属性，无特异性之争。 */
       [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive']::before {
         background-color: rgba(0, 0, 0, 0.09);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23f5f5f0'/%3E%3Cpath d='M6.2 4.4l3.6 3.6-3.6 3.6' fill='none' stroke='%239a9d98' stroke-width='1.6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 3px center;
+        background-size: 16px 16px;
         opacity: 1;
       }
-      /* 暗色无洗面：近黑底的等档白洗落在噪声地板（评审实测），文字提亮承担悬停 */
+      /* 官方竖分隔线（#d9d9d9 × 0.1875/2.5rem → 1.5×18px，缩放后），沟中心
+         居于相邻盘子之间。绘制归属（官方是独立 DOM 元素，这里只能借 ::after）：
+         · 非首个、非激活的页签：画自己的左沟线；
+         · 首个页签闲置且紧邻的下一个是激活页签（:has(+…)）：它的左沟线无人
+           画（邻居的 ::after 是激活态、被底线清除规则占用），由它自己画右沟线。
+         恰好覆盖两页签的全部组合；若上游未来放第三个页签，最坏情形是激活
+         页签左邻缺一条线（登记为已知边界）。app 的 ::after 原生是选中底线
+         （left:0/right:0/bottom:-1px/height:2px），这里逐项改写。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after,
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        width: 1.5px;
+        height: 18px;
+        background: var(--dsw-alias-border-l1);
+      }
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after {
+        left: -18.75px;
+        right: auto;
+        bottom: auto;
+      }
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
+        left: auto;
+        right: -18.75px;
+        bottom: auto;
+      }
+      /* 暗色无洗面/箭头：近黑底的等档白洗落在噪声地板（评审实测），文字提亮
+         承担悬停；分隔线保留（结构元素，border-l1 暗档 #343633 对墨底 1.55:1，
+         装饰区间内）。text-indent 暗色保留——无箭头时它是激活态的轻量位移信号。 */
       body[data-ds-dark-theme] [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         display: none;
       }
