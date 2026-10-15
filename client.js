@@ -4601,6 +4601,46 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         color: var(--edge-select-ink, #101110) !important;
         background: var(--edge-select-fill, #d9d9d9) !important;
       }
+      /* 操作条 chips（插件 / 自动化任务 / 设置 / 工作区内修改 / 模型选择 /
+         智能体团队 / 标准模式 / 后台任务）。各功能包自己的 CSS 模块（哈希
+         类名、分属八个包），但悬停/按下底色**全部**消费
+         --dsw-alias-interactive-bg-* 一族——本主题在 body 上把它映射成强调
+         黄 α 洗，于是整排悬停都是工业黄。用户指定（2026-10-15）：这排 chips
+         改工业灰，与上面的 + 同一对划词灰。
+         实现走**容器内令牌重映射**而非逐 chip 枚举：chips 全部住在输入卡的
+         _tools / _modes / _standardControls 三行（语义后缀；发送键在
+         _trailing，不入列），重映射对整族一次生效——与 + 的「scoping fixes
+         the whole family」同一门派。各 chip 弹出的菜单都 portal 到 body、
+         不在作用域内，菜单行悬停不受影响；自定义属性向下继承，容器声明
+         盖过 body 层的同名令牌。按下（-active）一并换灰，否则点按瞬间会
+         闪一下黄。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) {
+        --dsw-alias-interactive-bg-hover: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-hover-solid: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-hover-accent: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-active: var(--edge-select-fill);
+      }
+      /* 配对字色：chips 自身的悬停字色是 label-secondary/tertiary 一档，
+         暗色下压在 #6a6a6a 上只有约 1.7:1——悬停/按下/聚焦时强制换划词灰
+         的配对墨/白（亮 #101110、暗 #ffffff，随模式翻转），不枚举 chip 类名，
+         按行内可交互元素兜底。图标描边走 currentColor，一并换色。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):hover:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):active:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):focus-visible {
+        color: var(--edge-select-ink, #101110) !important;
+      }
+      /* 还有第二路黄：下面「会话头部动作」的全局 [class$='_trigger'] 悬停规则
+         （实心强调 + !important）没有作用域，把输入卡里所有 *_trigger chips
+         （插件/团队/任务这类带弹出菜单的）也刷成了实心黄——令牌重映射管
+         不到它。这里用更高特异性（(0,7,0) > (0,3,0)）在同三行内把
+         _trigger 收回划词灰对，展开态（aria-expanded，菜单开着时 chip 常亮）
+         一并归灰。头部那些真正的 _trigger 不在本作用域，保持原样。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger']:hover:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger'][aria-expanded='true'],
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger']:focus-visible {
+        color: var(--edge-select-ink, #101110) !important;
+        background: var(--edge-select-fill, #d9d9d9) !important;
+      }
       /* Dark: hardcoded #fff icon on yellow info-fill -> black icon; hover deeper yellow.
          Scoped to the composer (the seat band in a live conversation, the hero
          wrapper on the empty state) and to <button>: '_primary' as a bare suffix is
