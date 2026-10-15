@@ -3988,29 +3988,39 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          串以 _tab 结尾，选中标签不满足（评审 element.matches 实测三条规则全部
          落空，原生墨条逐像素存活）。必须 :is([class$='_tab'],[class$='_tabActive'])
          两种后缀都列，与类序无关。
-         历经四版选中表达——纯墨条
-         （截断分划线）、三色线（24px 里读不出三段、相位断缝，定量评审否决）、
-         短划上移（用户仍觉不好看）——最终照官方 /news 页的悬停语言重做：
+         历经五版：纯墨条（截断分划线）、三色线（24px 读不出三段）、短划上移、
+         官方 /news **图片卡**的黑色遮罩（rgba(0,0,0,.25)，纸面合成 1.81:1，
+         用户实测就是一块黑灰方片——那是图片的语言，不是页签的）。
+         2026-10-15 重取数：/news 的页签组件是 SubpageTab（bundle
+         c1b6a925ef3d04ee.css，一手原文见动效调研附录 E），配方是**浅灰水面**：
 
-         · **去掉底线**（tab:after 置空）：分划线整行连续，选中/悬停不再与它
-           发生几何关系；
-         · **悬停 = 官方遮罩渐显（仅亮色）**：/news 的 imageWrapper 配方原样
-           照搬——::before 常态预建、rgba(0,0,0,.25) 遮罩、opacity 0、
-           transition: opacity .2s ease（官网时长/ease 对）、悬停只切 opacity。
-           官方有 @media(any-hover:hover) 守卫，本主题**有意不设**——这是仓库
-           已登记的分歧（官网 28 处守卫全部不设）：无头测试环境无法仿真
-           any-hover（setEmulatedMedia 不覆盖，matchMedia 恒 false），设了守卫
-           悬停行为就无法被像素测试钉住；触屏粘滞悬停作为已知代价接受。
-           bottom:5px（而非官方 inset:0）是有意的失真：实测它让遮罩盒止于
-           分划线上方，不盖整行三色线。
-           **暗色不用遮罩**：白 12% 对墨面只有 1.39:1（评审实测，调到 18% 也
-           才 1.71:1）——结构性不可见；暗色的悬停信号由既有的「文字提亮一档」
-           规则承担（17.3:1），这正是主题自己的暗色悬停语法。
-           伪元素自持 transition——应用的 button{transition:none} 管不到它；
-         · **选中 = 纯文字层级**：亮色沿用应用原生的强调文字色；暗色下原生
-           选中文字（gray 调色板 3.49:1）反而比未选中（5.62:1）暗——评审实测
-           指出的既有缺陷，这里强制提为 label-primary。轨迹页自己的
-           detailTab（大写 T 结尾）不受影响。 */
+         · .SubpageTab_tab：border-radius 4px + transition:background-color .2s ease
+           （transition 在基础规则，状态只写值——官网语法）；
+         · @media(any-hover:hover){ :hover{background-color:#f3f3f3} }——悬停 =
+           一档浅灰面，对官方白底实测 1.11:1；
+         · .active{background-color:#e5e5e5}——激活 = 再深一档，1.26:1；悬停
+           激活标签时保持激活档不变浅（active 规则同特异性置后）；
+         · 激活另配文字左移 + 圆形箭头淡入 + 页签间 #d9d9d9 竖线——**不取**：
+           本应用页签是紧凑文字页签（13px 行内），放不下 2.3rem 箭头与左移；
+           4px 圆角归全局直角化（已登记分歧）。
+
+         落地映射——档位按**合成对比度**对齐官方，不照抄 hex（官方底是白，
+         主题底是纸 #e8e8e2）：
+         · 悬停 rgba(0,0,0,.04)：纸面合成 1.09:1 ≈ 官方 1.11（WCAG 实测）；
+         · 激活 rgba(0,0,0,.09)：合成 1.22:1 ≈ 官方 1.26，**常态常亮**——
+           悬停档必须弱于激活档，层级才不倒挂；
+         · 墨字在两档洗面上 13.5 / 12.3:1（AA 无虞，实测见 palette 10d 段）；
+         · 实现沿用预建 ::before + 只切 opacity（悬停不创造几何，layout 0.00；
+           opacity 过渡挂在伪元素自身——应用的 button{transition:none} 管不到
+           它），bottom:5px 的失真保留（洗面盒止于分划线上方）；
+         · 悬停规则只写 opacity、激活规则只写底色+opacity——两条不同属性，
+           无特异性之争，悬停激活标签时保持激活底色（同官方行为）；
+         · 官网 any-hover 守卫仍不设（已登记分歧：无头环境仿真不了 any-hover，
+           触屏粘滞悬停作为已知代价）；
+         · **暗色不洗面**：近黑底上等档需要 ~10% 白洗，落在噪声地板（前轮
+           评审实测白 12% 仅 1.39:1 判不可见）；暗色悬停信号仍是既有
+           「文字提亮一档」（17.3:1），display:none 连盒子都不画。轨迹页自己
+           的 detailTab（大写 T 结尾）不受影响。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
         background: 0 0;
       }
@@ -4021,7 +4031,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         right: 0;
         top: 0;
         bottom: 5px;
-        background-color: rgba(0, 0, 0, 0.25);
+        background-color: rgba(0, 0, 0, 0.04);
         opacity: 0;
         transition: opacity .2s ease;
         pointer-events: none;
@@ -4029,8 +4039,12 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):hover::before {
         opacity: 1;
       }
-      /* 暗色无遮罩：白 12% 对墨面 1.39:1 结构性不可见（评审实测），黑 25% 更弱；
-         暗色的悬停信号 = 既有「文字提亮一档」规则。display:none 连盒子都不画。 */
+      /* 激活 = 官方深一档洗面，常态常亮；与基础规则同特异性、置后 → 底色归它 */
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive']::before {
+        background-color: rgba(0, 0, 0, 0.09);
+        opacity: 1;
+      }
+      /* 暗色无洗面：近黑底的等档白洗落在噪声地板（评审实测），文字提亮承担悬停 */
       body[data-ds-dark-theme] [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         display: none;
       }

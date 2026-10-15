@@ -749,3 +749,60 @@ switchItem:hover    { border-color:#fffa00; border-width:2px }
 > 取用方式：这三张图**以官方原始字节内嵌**进 `client.js` 的 data URI（构建脚本
 > `scripts/build-texture.js`，sha256 固化，`--check` 防漂移）。矢量与位图均未再加工；
 > 未下载任何角色立绘或其他位图素材。
+
+---
+
+# 附录 E：/news 页签组件 SubpageTab（2026-10-15 补测）
+
+> 回答一个问题：**官网页签（tab）的悬停/激活语言到底是什么**。起因：主题曾把
+> /news **图片卡**（imageWrapper）的黑色遮罩配方当成「/news 页签悬停语言」搬过来
+> （rgba(0,0,0,.25)，主题纸面上合成 1.81:1，用户实测是「一块黑灰方片」）——那是
+> 图片的语言。页签自己的组件是 SubpageTab，本节为一手原文。
+
+**取数**：`https://endfield.hypergryph.com/news`（HTML 215,454 B）静态链接 9 个 CSS
+bundle（official-v4 已于 10-01 调研后重新哈希，本节按当日清单全部取回，共 382,157 B
+正文）。SubpageTab 集中在一个 bundle：
+
+- `https://web.hycdn.cn/endfield/official-v4/_next/static/css/c1b6a925ef3d04ee.css`
+
+### E1. 完整配方（原文，rem 保留）
+
+```css
+.SubpageTab_tab{position:relative;padding:0 3rem;height:100%;display:flex;
+  align-items:center;border-radius:4px;transition:background-color .2s ease;cursor:pointer}
+@media(any-hover:hover){
+  .SubpageTab_tab:hover{background-color:#f3f3f3}}
+.SubpageTab_tab.SubpageTab_active{background-color:#e5e5e5}
+.SubpageTab_tab.SubpageTab_active .SubpageTab_text{transform:translate3d(-1.75rem,0,0)}
+.SubpageTab_tab.SubpageTab_active .SubpageTab_arrow{opacity:1}
+.SubpageTab_tab .SubpageTab_text{font-size:1.75rem;font-family:SansMedium;line-height:1;
+  color:#191919;white-space:nowrap;transition:transform .2s ease}
+.SubpageTab_tab .SubpageTab_arrow{position:absolute;right:.625rem;width:2.3125rem;
+  height:2.3125rem;border-radius:50%;opacity:0;background-color:#fafafa;
+  transition:opacity .2s ease}
+.SubpageTab_tab .SubpageTab_arrow .SubpageTab_arrowIcon{…;color:#999}
+.SubpageTab_divider{width:.1875rem;height:2.5rem;background-color:#d9d9d9;margin:0 .625rem}
+```
+
+### E2. 读法
+
+1. **悬停 = 一档浅灰面**（`#f3f3f3`），**激活 = 再深一档**（`#e5e5e5`）——都是
+   `background-color` 换色（正文 §4.3 的官方主流手法），`transition` 挂在基础规则、
+   状态只写值，`.2s ease` 两档齐全。
+2. **对比度档位（WCAG 实测）**：`#f3f3f3` 对官方白底 **1.11:1**，`#e5e5e5`
+   **1.26:1**——官方页签反馈的「存在感」量级就是 1.1–1.3:1，不是图片遮罩那种 2:1。
+3. **激活悬停不变浅**：`hover` 与 `active` 同特异性，`active` 在源码序后——悬停
+   激活项时保持 `#e5e5e5`。
+4. **激活的完整编排**还有三件：文字左移（−1.75rem，给右侧箭头腾位）、圆形箭头
+   （⌀2.3rem、`#fafafa` 底、`#999` 图标、opacity 淡入）、页签间 `#d9d9d9` 竖分隔线。
+5. 页签文字恒为 `#191919`（SansMedium）——**状态由底面表达，不靠文字换色**。
+
+### E3. 本主题的落点（映射表见 design-language.md）
+
+按**合成对比度**对齐官方档位（官方底是白、主题底是纸 `#e8e8e2`，照抄 hex 会失档）：
+悬停 `rgba(0,0,0,.04)` → 纸面 1.09:1；激活 `rgba(0,0,0,.09)` → 1.22:1，常态常亮；
+文字左移/圆形箭头/竖分隔线**不取**（本应用页签是 13px 紧凑文字页签，放不下 2.3rem
+箭头）；4px 圆角归全局直角化（已登记分歧）。近黑底上的等档白洗落在噪声地板
+（白 12% 实测 1.39:1 判不可见），暗色仍走主题自己的「文字提亮一档」。
+
+> 仅读取 CSS 文本，未下载任何图片/字体；素材政策与正文一致。
