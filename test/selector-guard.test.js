@@ -70,6 +70,7 @@ const hooks = [
   // stylesheet hooks
   ["[class$='_root']:has(> [data-endfield-watermark])", 'watermark host isolation'],
   ["[class$='_sidebarCol'] [class*='_sessionRow']", 'sidebar workspace rows'],
+  ["[class$='_sidebarCol'] [class*='_panelRow']", 'sidebar panel rows 插件/自动化任务（划词灰对）'],
   ["[class$='_sidebarCol'] [class*='_folder']", 'light-mode sidebar ink'],
   ["[class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg)", 'agent-preset header chip'],
   ["[class*='_colorMessages']", 'token meter messages segment'],

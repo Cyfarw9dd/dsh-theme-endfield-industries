@@ -4297,6 +4297,20 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class$='_newSessionLabel'] {
         color: var(--edge-accent-ink, #000) !important;
       }
+      /* ---------- 侧栏面板行（插件 / 自动化任务）：淡黄 wash → 划词灰 ----------
+         Owner trial (2026-10-16): these panel entries showed a pale-yellow
+         wash (their active/hover state reads --dsw-alias-interactive-bg-hover,
+         which this theme maps to a 16% accent wash) right below a solid-
+         yellow 设置 trigger — an inconsistent half-signal. Official grammar
+         says hover/selected is grayscale (research §三), so use the 划词灰
+         pair (light #d9d9d9 ink-on-gray / dark #6a6a6a white-on-gray), the
+         same pair the menu current-items use. Scoped to the sidebar column;
+         the label keeps label-primary, which is the designed ink for both
+         fills (16.8:1 / 5.4:1). */
+      [class$='_sidebarCol'] [class*='_panelRow']:hover,
+      [class$='_sidebarCol'] [class*='_panelRow'][class*='_panelActive'] {
+        background: var(--edge-select-fill) !important;
+      }
       /* ---------- Badge hover: signal-yellow inversion (reference .kpi:hover) ---------- */
       [class*='badge' i]:hover,
       [class*='badge' i]:hover *,
