@@ -1,94 +1,98 @@
 # dsh-theme-endfield
 
-参考《明日方舟：终末地》官网风格的 DSH Web 主题插件（非官方同人作品）。
+English (current) · [简体中文](README.zh-CN.md)
 
-奶油纸底、墨黑文字、全直角工业编辑风；默认配色**终末地灰**沿用官网的灰阶交互语法，另提供谷地黄、武陵青两套强调色。Client 侧（`client.js`）通过主题令牌和一张全局样式表覆盖界面；Host 侧（`index.js`）只负责设置持久化与可选的音频通知（派生系统播放器子进程），两者都不修改应用代码。
+A DSH Web theme plugin modeled on the official Arknights: Endfield website (an unofficial fan work).
 
-## 安装
+Cream paper background, ink-black text, zero-radius industrial editorial look. The default palette, **Endfield Gray**, follows the official site's gray-scale interaction grammar; Valley Yellow and Wuling Teal accents are also available. The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
+
+## Install
 
 ```bash
 dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield
 ```
 
-重启或重新加载 `web` profile 后生效。**更新插件文件时注意**：Client 半（`client.js`）由 Host 按请求从磁盘读取，浏览器刷新即可生效；Host 半（`index.js`）只在 profile 启动时 import 一次，**必须整进程重启 DSH** 才会重新加载（`dsh-hmr` 的 watch 默认忽略 `**/node_modules`，软链安装的仓库文件不在其观察范围内）。只刷新页面时，运行的仍是启动时那份 Host 代码。卸载：
+Restart or reload the `web` profile to activate. **When updating plugin files**: the client half (`client.js`) is read from disk per request, so a browser refresh is enough; the host half (`index.js`) is imported once at profile startup, so **the whole DSH process must be restarted** to reload it (`dsh-hmr`'s watch ignores `**/node_modules` by default, and linked-installed repo files are outside its scope). If you only refresh the page, you are still running the host code from startup. Uninstall:
 
 ```bash
 dsh plugin --profile web rm dsh-theme-endfield
 ```
 
-## 功能
+## Features
 
-在 **设置 › 终末地主题设置** 中调整（27 个字段，全部文案跟随 DSH 语言设置中/英即时切换）：
+Adjust in **Settings › Endfield Theme Settings** (27 fields; all labels follow the DSH language setting, zh/en, switching live):
 
-- **01 主题**：总开关（关闭即回到应用原生外观，无需刷新，且关闭后设置页仍保持可读）；三态配色（默认终末地灰）；直角/圆角；磨砂玻璃（默认关）；按钮动效（默认开，合并设计：主 CTA 箭头滑入 + 会话/搜索行四角工程角标）；工业底纹（关闭/轻/完整，默认**完整**＝官网 `/operator` 那套：工程网格 + 45° 斜纹 + 两级波纹与顶部光晕，只锚定主内容列）；
-- **02 背景**：`ENDFIELD` 大字水印（默认开，仅新建会话页，不拦截交互、防浏览器误翻译）及保持显示；新建会话页品牌标识（联名「终末地标识 3」贴在标题「探索未至之境」正上方，两个 alpha 掩码实现，明暗两套均画素材原色）；
-- **03 动画**：启动加载动画（默认关，整屏黑底 + 左缘 10px 进度轨、刻度/百分比随填充端下移，带硬性保险丝与 reduce 降级）；
-- **04 娱乐**：雷霆大字（默认关，任务开始/结束时居中白字 3 秒，点击任意处立即关闭且该次点击照常抵达）及入场动画（独立的子开关）；
-- **05 通知**：工业风通知卡片（默认开）——任务完成回执 6 秒自动消失，提问/索权常驻卡片处理后自动消失，音效跟随音频通知开关；
-- **06 音频**：可选音频通知（**总开关默认关**）——启动音、任务开始/结束音、需要回应提示、出错预留槽位；音量、同槽位最小间隔、自定义音效目录、诊断日志可调。**由宿主进程播放**而非浏览器，页面最小化时同样能听到。详见 [docs/cookbook/audio-notifications.md](docs/cookbook/audio-notifications.md)。
+- **01 Theme**: master switch (off = native app look, no refresh needed, and the settings page stays readable while off); three-state palette (Endfield Gray by default); square/rounded corners; frosted glass (off by default); button motion (on by default, merged design: arrow slide-in on primary CTAs + 12px engineering corner brackets on session/search rows); industrial texture (off/light/full, **full** by default = the official `/operator` set: engineering grid + 45° hatching + two levels of waves and a top glow, anchored to the main content column only);
+- **02 Background**: the big `ENDFIELD` wordmark watermark (on by default, new-session page only, never intercepts interaction, protected against browser mistranslation) and a keep-showing toggle; the brand mark on the new-session page (the collab "Endfield Mark 3" above the headline, built as two alpha masks, painted in the asset's own colors in both light and dark);
+- **03 Animation**: boot loader animation (off by default; full-screen black + 10px progress rail on the left edge, ticks/percent travel with the fill head, with a hard failsafe timer and reduced-motion fallback);
+- **04 Fun**: Thunder big text (off by default; centered white text for 3s on turn start/end, click anywhere to dismiss immediately while the click still reaches its target) and its entrance animation (an independent sub-switch);
+- **05 Notifications**: industrial-style notification cards (on by default) — task-done receipts auto-dismiss after 6s; question/approval cards persist until handled; sounds follow the audio-notification switch;
+- **06 Audio**: optional audio notifications (**master switch off by default**) — boot chime, turn start/end, needs-your-attention, plus a reserved error slot; volume, per-slot debounce interval, custom sound directory and a diagnostic log are adjustable. **Played by the host process**, not the browser, so you hear them even when the page is minimized. See [docs/cookbook/audio-notifications.md](docs/cookbook/audio-notifications.md).
 
-另有若干**自动生效**、无需开关的修正：官网基础按钮的等高线材质复刻到新会话/发送/提问卡按钮；对话页签按官方 SubpageTab 语言重排（悬停灰洗面、选中常亮、`.2s` 切换编排）；输入卡操作条 chips 悬停收工业灰；浮动提示气泡并入纸面浮层家族；会话头部预设徽章恢复强调色；设置 › 模型行操作、附件轮播箭头等多处对比度修复。完整清单见 [docs/features.md § 其他自动生效的修正](docs/features.md)。
+Several fixes are **automatic** and switchless: the official button contour material replicated on new-session/send/question-card buttons; conversation tabs restyled per the official SubpageTab language (gray wash on hover, steady highlight when active, `.2s` switching choreography); composer action chips hover in industrial gray; tooltips folded into the paper floating-surface family; the header preset badge restored to the accent color; contrast fixes for Settings › Models row actions, attachment carousel arrows, and more. The full list is in [docs/features.md § 其他自动生效的修正](docs/features.md).
 
-设置面板里每一个「有值」的行都用同一套统一下拉控件，形制照抄官网 `/operator` 筛选下拉（深色铭牌 + 官方圆形箭头，选中行斜纹灰底与左缘紫/绿信号条）。
+Every value-bearing row in the settings panel uses one unified dropdown control, its form copied from the official `/operator` filter dropdown (dark plaque + official round arrow, selected row on hatched gray with a purple/green signal bar on the left edge).
 
-### 设置持久化
+### Settings persistence
 
-所有设置由 DSH 自己的设置服务持久化，与页面 origin/端口无关：在 **DSH 0.1.7-rc.1** 上，Host `index.js` 导出一份字段全部 `.volatile()` 的 schemastery `Config`（命名空间 = 本插件 profile entry id `theme-endfield`），浏览器 `client.js` 通过 `ctx.configForms` 读写并订阅，值随 `<profile>/cordis.patch.yml` 落盘；在**旧版 DSH** 上则回落到 `ctx.settings.register('dsh-theme-endfield', schema)` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）。两代都与页面 origin 无关，因此 DSH web 与 DSH Desktop 都能正确保存并在重启/换端口后恢复，不再使用会被 Desktop 随机端口清空的 `localStorage`。详见 [docs/features.md](docs/features.md) 与 [docs/engineering-notes.md](docs/engineering-notes.md)；0.1.7 升级后旧设置需要在设置页重设一次（`settings.yaml` 已被 DSH 废弃，见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)）。
+All settings are persisted by DSH's own settings service, independent of page origin/port: on **DSH 0.1.7-rc.1**, the host `index.js` exports a schemastery `Config` with every field `.volatile()` (namespace = this plugin's profile entry id `theme-endfield`), and the browser `client.js` reads/writes/subscribes through `ctx.configForms`, with values landing in `<profile>/cordis.patch.yml`; on **older DSH** it falls back to `ctx.settings.register('dsh-theme-endfield', schema)` + `ctx.settingsScope` (`<dshHome>/settings.yaml`). Both generations are origin-independent, so DSH web and DSH Desktop both save correctly and survive restarts/port changes — the old `localStorage` (wiped by Desktop's random ports) is no longer used. See [docs/features.md](docs/features.md) and [docs/engineering-notes.md](docs/engineering-notes.md). After upgrading to 0.1.7, old settings must be re-entered once in the settings page (`settings.yaml` was deprecated by DSH; see [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)).
 
-**如果开关总是「刷新后复位」**：先看 Host 侧有没有这份 `Config`（`Config.listConfigs` 对该 entry 报 `absent` 就是没有）。没有 Config 时 DSH 不投影任何表单，Host `apply()` 会打一行 warn 并在 profile 目录留下报告文件 `theme-endfield-diagnostic.json`（`Config` 构建成功时会自动删除它；报告里的 `schemaMode` / `loaded` / `loadError` 会写明走了哪条解析路径、以及某个副本是否「解析得到却加载失败」）——排查与判据见 [docs/testing.md](docs/testing.md#设置页)。另外注意：**改 Host 半（`index.js`）必须整进程重启 DSH**，刷新页面只重载 `client.js`。
+**If switches keep resetting after refresh**: first check whether the host side has that `Config` (`Config.listConfigs` reporting `absent` for the entry means it doesn't). Without a Config, DSH projects no form at all; the host `apply()` logs a warning and leaves a report file `theme-endfield-diagnostic.json` in the profile directory (auto-deleted when the Config builds successfully; the report's `schemaMode` / `loaded` / `loadError` fields say which resolution path was taken and whether a copy "resolved but failed to load") — triage and criteria in [docs/testing.md](docs/testing.md#设置页). Also note: **host-half (`index.js`) changes require a full DSH restart**; refreshing the page only reloads `client.js`.
 
-## 文档
+## Documentation
 
-| 文档 | 层 | 内容 |
+All docs are written in Chinese.
+
+| Doc | Layer | Contents |
 | --- | --- | --- |
-| [docs/AGENTS.md](docs/AGENTS.md) | 治理 | 文档分层规则与贡献流程 |
-| [docs/design-principles.md](docs/design-principles.md) | 治理 | 设计原则：装饰只做必要的一处、不进入核心工作区、动效必须付得起 |
-| [docs/architecture.md](docs/architecture.md) | 主题 | 双半结构、样式表组织、验证链 |
-| [docs/compatibility.md](docs/compatibility.md) | 主题 | 向后兼容与稳定性：上游依赖风险分级、版本适配清单 |
-| [docs/glossary.md](docs/glossary.md) | 主题 | 术语与令牌速查 |
-| [docs/credits.md](docs/credits.md) | 主题 | 素材归属：逐项来源、sha256 与采用登记 |
-| [docs/design-language.md](docs/design-language.md) | 主题 | 色板、令牌映射与对比度规则 |
-| [docs/endfield-ui-research.md](docs/endfield-ui-research.md) | 主题 | 官网 UI 设计语言调研：色彩频次、交互语法证据、徽标素材盘点 |
-| [docs/features.md](docs/features.md) | 主题 | 功能行为、默认值、存储键与边界情况 |
-| [docs/testing.md](docs/testing.md) | 主题 | 校验脚本与测试套件说明 |
-| [docs/engineering-notes.md](docs/engineering-notes.md) | 主题 | 工程深水笔记：实现决策与实测数据 |
-| [docs/development.md](docs/development.md) | 主题 | 开发与发布工作流 |
-| [docs/git.md](docs/git.md) | 主题 | Git 提交策略与 Conventional Commits 规范 |
-| [docs/cookbook/](docs/cookbook/) | 手册 | 功能专题：[音频通知](docs/cookbook/audio-notifications.md) · [磨砂玻璃](docs/cookbook/glass.md) · [DSH 版本追踪](docs/cookbook/dsh-version-tracking.md) |
-| [docs/notes/](docs/notes/) | 记录 | 一次性存档（[PR 说明](docs/notes/PR-description.md)、[官网动效调研](docs/notes/endfield-motion-research.md)） |
+| [docs/AGENTS.md](docs/AGENTS.md) | Governance | Doc layering rules and contribution flow |
+| [docs/design-principles.md](docs/design-principles.md) | Governance | Design principles: one necessary decoration only, stay out of the core workspace, motion must pay its way |
+| [docs/architecture.md](docs/architecture.md) | Theme | Two-half structure, stylesheet organization, verification chain |
+| [docs/compatibility.md](docs/compatibility.md) | Theme | Backwards compatibility and stability: upstream risk grading, version matrix |
+| [docs/glossary.md](docs/glossary.md) | Theme | Glossary and token quick reference |
+| [docs/credits.md](docs/credits.md) | Theme | Asset credits: per-item sources, sha256 and adoption registry |
+| [docs/design-language.md](docs/design-language.md) | Theme | Palette, token mapping and contrast rules |
+| [docs/endfield-ui-research.md](docs/endfield-ui-research.md) | Theme | Official-site UI research: color frequencies, interaction-grammar evidence, logo asset inventory |
+| [docs/features.md](docs/features.md) | Theme | Feature behavior, defaults, storage keys and edge cases |
+| [docs/testing.md](docs/testing.md) | Theme | Verification scripts and test-suite notes |
+| [docs/engineering-notes.md](docs/engineering-notes.md) | Theme | Deep engineering notes: implementation decisions and measured data |
+| [docs/development.md](docs/development.md) | Theme | Development and release workflow |
+| [docs/git.md](docs/git.md) | Theme | Git commit strategy and Conventional Commits conventions |
+| [docs/cookbook/](docs/cookbook/) | Cookbook | How-to topics: [audio notifications](docs/cookbook/audio-notifications.md) · [frosted glass](docs/cookbook/glass.md) · [DSH version tracking](docs/cookbook/dsh-version-tracking.md) |
+| [docs/notes/](docs/notes/) | Archive | One-off records ([PR description](docs/notes/PR-description.md), [official motion research](docs/notes/endfield-motion-research.md)) |
 
-## 开发与验证
+## Development & verification
 
 ```bash
-node check.js        # 秒级静态校验：模板字符串/CSS 不变量、生成物钉值、client.js 可编译
-node selftest.js     # 反向验证 check.js 真能抓到那些问题
-npm test             # 上述 + 配色/设置页/渲染/动效性能等全套
+node check.js        # fast static checks: template-string/CSS invariants, generated-asset pins, client.js compiles
+node selftest.js     # reverse-verifies that check.js actually catches those problems
+npm test             # all of the above + palette/settings/rendering/motion-performance suites
 ```
 
-`npm test` 覆盖样式不变量、配色对比度、设置页（两代 transport）、真实浏览器渲染、动画可访问性与性能预算（layout/帧间隔/主线程）。部分测试需要本机安装 Chrome 或 Edge。跑测试请用 Node 22+（浏览器 fixture 依赖全局 `WebSocket`/`fetch`，版本不足会在测试处明确报错；插件本身的运行没有这个要求）。测试原则：**从真实 `client.js` 里读值，不复述数值；每条断言都做过变异验证**——方法论见 [docs/testing.md](docs/testing.md)。
+`npm test` covers style invariants, palette contrast, the settings page (both transport generations), real-browser rendering, animation accessibility and performance budgets (layout/frame intervals/main thread). Some tests require Chrome or Edge installed locally. Run tests with Node 22+ (browser fixtures depend on global `WebSocket`/`fetch`; older versions fail loudly at that point — running the plugin itself has no such requirement). Testing principles: **read values from the real `client.js`, never restate numbers; every assertion has been mutation-tested** — methodology in [docs/testing.md](docs/testing.md).
 
-## 项目结构
+## Project layout
 
 ```text
-client.js          Client 侧主题实现（样式表是其中一个 JS 模板字符串）
-index.js           Host 侧：导出 volatile Config，声明设置命名空间与音频运行时
-lib/               音频通知：slots.js（槽位定义）、tone.js（WAV 合成）、audio.js（播放运行时）
-sounds/            生成的通知音（npm run sound:build 重新生成，--check 防漂移）
-assets/            素材源：水印徽标矢量源、新建会话页标识原图与掩码、官方背景纹理/下拉箭头/按钮材质
-scripts/           构建脚本：build-sounds / build-emblem / build-logo / build-texture（均带 --check）
-cordis.patch.yml   Bundle 注入配置（本插件行的 profile entry id 即设置命名空间）
-check.js           样式表静态校验
-selftest.js        校验器自检
-test/              渲染、设置、配色与性能测试
-docs/              设计、功能、工程与测试文档
+client.js          client-side theme implementation (the stylesheet is one JS template literal inside)
+index.js           host side: exports the volatile Config, declares the settings namespace and audio runtime
+lib/               audio notifications: slots.js (slot defs), tone.js (WAV synthesis), audio.js (playback runtime)
+sounds/            generated notification sounds (npm run sound:build regenerates; --check guards drift)
+assets/            asset sources: watermark emblem vector, new-session mark original + masks, official textures/arrow/button material
+scripts/           build scripts: build-sounds / build-emblem / build-logo / build-texture (all with --check)
+cordis.patch.yml   bundle injection config (this plugin row's profile entry id is the settings namespace)
+check.js           static stylesheet checks
+selftest.js        checker self-test
+test/              rendering, settings, palette and performance tests
+docs/              design, feature, engineering and testing docs (Chinese)
 ```
 
-生成物两件套（`sounds/`、掩码/纹理内嵌区）**只改源与脚本，不手改产物**，各构建脚本的 `--check` 会拦漂移。
+Generated artifacts (`sounds/`, the mask/texture embed regions) are **regenerated from sources and scripts only, never hand-edited**; each build script's `--check` catches drift.
 
-## 素材归属与免责声明
+## Asset credits & disclaimer
 
-本插件是**非官方同人作品**，与鹰角网络（Hypergryph）不存在任何隶属、赞助或背书关系。《明日方舟：终末地》的名称、标识、官网视觉与相关美术素材版权归鹰角网络所有；本项目对其的使用仅限学习、展示与非商业用途，不在 MIT 许可证覆盖范围内。逐项来源、sha256 与采用依据见 [docs/credits.md](docs/credits.md)；若权利方认为任何素材使用不当，请通过 Issue 联系，我们会立即删除或替换。
+This plugin is an **unofficial fan work** with no affiliation, sponsorship or endorsement from Hypergryph. The Arknights: Endfield name, marks, official-site visuals and related art assets are copyrighted by Hypergryph; use here is for learning, demonstration and non-commercial purposes only and is not covered by the MIT license. Per-item sources, sha256 hashes and adoption rationale are in [docs/credits.md](docs/credits.md). If any rights holder finds any asset used inappropriately, please open an issue and we will remove or replace it immediately.
 
-## 许可证
+## License
 
-MIT，仅覆盖本项目的原创代码；第三方素材的归属见[素材归属与免责声明](#素材归属与免责声明)与 [docs/credits.md](docs/credits.md)。
+MIT, covering this project's original code only; third-party asset attribution in [Asset credits & disclaimer](#asset-credits--disclaimer) and [docs/credits.md](docs/credits.md).

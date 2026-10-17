@@ -65,6 +65,7 @@
     "client.js",
     "cordis.patch.yml",
     "README.md",
+    "README.zh-CN.md",
     "docs",
     "lib",
     "sounds",
