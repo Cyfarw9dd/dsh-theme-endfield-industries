@@ -3,7 +3,7 @@
 # This file is the `dsh.bundle.patch` layer of the package: when installed
 # through the official CLI —
 #
-#   dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield
+#   dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries
 #
 # — the command reconciles `dsh.profile.bundles` against installed packages
 # and, seeing this declaration, appends `dsh-theme-endfield` to the bundle

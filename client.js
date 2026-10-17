@@ -19,7 +19,7 @@
  * 各开关行为见 docs/features.md，实现决策与实测数据见 docs/engineering-notes.md。
  *
  * 由 dsh-client-modules 以 /plugins/theme-endfield/client.js 形式加载；
- * 通过 `dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield` 安装挂载。
+ * 通过 `dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries` 安装挂载。
  */
 window.__ModuleLoader__.load({
 	id: "dsh-theme-endfield",

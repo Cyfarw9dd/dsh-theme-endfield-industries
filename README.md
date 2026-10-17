@@ -9,7 +9,7 @@ Cream paper background, ink-black text, zero-radius industrial editorial look. T
 ## Install
 
 ```bash
-dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield
+dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries
 ```
 
 Restart or reload the `web` profile to activate. **When updating plugin files**: the client half (`client.js`) is read from disk per request, so a browser refresh is enough; the host half (`index.js`) is imported once at profile startup, so **the whole DSH process must be restarted** to reload it (`dsh-hmr`'s watch ignores `**/node_modules` by default, and linked-installed repo files are outside its scope). If you only refresh the page, you are still running the host code from startup. Uninstall:
