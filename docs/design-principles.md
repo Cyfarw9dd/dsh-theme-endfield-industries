@@ -84,7 +84,7 @@
 | 动效超预算、动了非合成器属性 | `test/perf-motion.test.js`（静态守卫 + 预算） |
 | 颜色自造、与依据不符 | `test/palette-contrast.test.js`；品牌素材见 `test/hero-logo.test.js`（与源文件比对） |
 | 生成物手改漂移 | `scripts/build-*.js --check`（已接入 `npm run check` / `npm test`） |
-| 素材来源不明 | `scripts/build-*.js` 头注 + README「素材归属」双重登记（人工） |
+| 素材来源不明 | `scripts/build-*.js` 头注 + [credits.md](credits.md) 双重登记（人工） |
 
 ---
 

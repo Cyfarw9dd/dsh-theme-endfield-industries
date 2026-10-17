@@ -10,7 +10,7 @@
  *     3e2af120ec6c86d2132448e7fbd4264b50e7258276c1beabb2bf3fa666200025
  *   The repository declares MIT, but the underlying artwork is Hypergryph
  *   brand art — same fan-use status as every other brand-derived asset here
- *   (see README 素材归属). Adoption of this third-party source was explicitly
+ *   (see docs/credits.md（素材归属）). Adoption of this third-party source was explicitly
  *   approved by the repository owner (the local download-source policy exempts
  *   this one file by name).
  *

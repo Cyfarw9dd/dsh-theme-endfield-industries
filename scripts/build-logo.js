@@ -12,7 +12,7 @@
  *   1024x458 RGBA PNG, sha256 ee4fcfbd547e50202550d12bdd27934c608f3c8455d1242020b3e431c70dc966).
  *   The untouched bytes are kept at assets/hero-logo-3-summer.png. The artwork is
  *   Hypergryph brand art — the same fan-use status as every other brand asset in
- *   this repository (see README 素材归属); adopting it here was ordered by the
+ *   this repository (see docs/credits.md（素材归属）); adopting it here was ordered by the
  *   repository owner.
  *
  * WHY TWO MASKS AND NOT THE COLOURED SVG ITSELF.

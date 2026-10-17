@@ -56,7 +56,7 @@
  *   The local download-source policy defaults to official channels only; these
  *   ARE official (the game's own site, its own CDN hosts no third-party code),
  *   and taking them was explicitly instructed by the repository owner
- *   ("沿用官方"). Registered in README 素材归属 as well.
+ *   ("沿用官方"). Registered in docs/credits.md（素材归属） as well.
  *
  * WHAT THIS SCRIPT DOES. The SVG is editor-clean already (163 bytes: one <path>
  * with a 2px stroke), but it still goes through the same minimize pass the
@@ -210,7 +210,7 @@ const main = () => {
     if (sha !== a.sha256) {
       throw new Error(`${a.file} sha256 drifted\n  expected ${a.sha256}\n  actual   ${sha}\n`
         + '  The upstream file changed (or the local copy did). Verify the new bytes against the\n'
-        + '  official CDN URL before updating this pin — see README 素材归属.')
+        + '  official CDN URL before updating this pin — see docs/credits.md（素材归属）.')
     }
     const payload = a.kind === 'svg' ? Buffer.from(minimizeSvg(raw.toString('utf8')), 'utf8') : raw
     const mime = a.kind === 'svg' ? 'image/svg+xml' : 'image/png'

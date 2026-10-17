@@ -10,7 +10,7 @@ DSH Web 主题插件（《明日方舟：终末地》工业编辑风）。改任
 
 ## 硬规则
 
-1. **素材来源**：只从官方渠道下载。第三方来源必须用户显式批准，并在 `scripts/build-*.js` 头注 + README「素材归属」双重登记（先例：矢量徽标来自 Yue-plus/endfield_icons）
+1. **素材来源**：只从官方渠道下载。第三方来源必须用户显式批准，并在 `scripts/build-*.js` 头注 + [docs/credits.md](docs/credits.md) 双重登记（先例：矢量徽标来自 Yue-plus/endfield_icons）
 2. **提交**：完整逻辑变更过验证后即可提交，不主动 push；Conventional Commits，作者用仓库本地 git config，信息经 `-F` 文件写入——细则见 [docs/git.md](docs/git.md)
 3. **颜色是量出来的**：新色值必须对实际底面算对比度并写进 `test/palette-contrast.test.js`；选中/光标是**不随调色板的固定灰**（官网语法，依据见 docs/endfield-ui-research.md）
 4. **测试从真实文件读值，不复述数值**；每条断言做过变异验证（selftest.js 方法论）
