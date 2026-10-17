@@ -9,7 +9,7 @@
 ## 安装
 
 ```bash
-dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield
+dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries
 ```
 
 重启或重新加载 `web` profile 后生效。**更新插件文件时注意**：Client 半（`client.js`）由 Host 按请求从磁盘读取，浏览器刷新即可生效；Host 半（`index.js`）只在 profile 启动时 import 一次，**必须整进程重启 DSH** 才会重新加载（`dsh-hmr` 的 watch 默认忽略 `**/node_modules`，软链安装的仓库文件不在其观察范围内）。只刷新页面时，运行的仍是启动时那份 Host 代码。卸载：

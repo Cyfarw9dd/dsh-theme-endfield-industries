@@ -5,7 +5,7 @@
  * This module is the cordis plugin the loader mounts when the package is
  * installed through the official CLI:
  *
- *   dsh plugin --profile web add github:ymh0000123/dsh-theme-endfield
+ *   dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries
  *
  * The `dsh.bundle.patch` layer (cordis.patch.yml) inserts this package's row;
  * the loader requires this main entry and uses its `name` + `apply` exports.
