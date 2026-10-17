@@ -30,6 +30,6 @@
 1. `node check.js` 必须绿；样式/行为改动加跑 `CHROME_PATH=<chrome> npm test`
 2. 生成物（音效、徽标掩码）只改源与脚本，`--check` 防漂移
 3. 素材来源政策：只从官方渠道下载；第三方来源需显式批准并在
-   `scripts/build-*.js` 头注与 README「素材归属」双重登记
+   `scripts/build-*.js` 头注与 [credits.md](credits.md)「素材归属」双重登记
 4. 完整逻辑变更过验证后即可提交（**不主动 push**）；提交遵循 Conventional Commits，
    细则见 [git.md](git.md)；作者身份用仓库本地 git config

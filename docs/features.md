@@ -80,7 +80,7 @@
 
 三档下拉：**关闭**（纯色）/ **轻**（工程网格 + 45° 斜纹）/ **完整**（再加两级官方波纹与顶部光晕）。**默认完整**，即官网 `/operator` 页面那套背景。纹理**只锚定在主内容列**——网格在上半段渐隐、斜纹是底部一条带、波纹钉右上与中下部，侧栏与外框保持干净（官方就是这么把底纹和内容结合的，不是整窗平铺）。
 
-素材是官方站点自己的发布产物，以原始字节内嵌；分层、参数与"装饰强度"约束见 [design-language.md § 背景纹理](design-language.md#背景纹理官网-operator-那一套)，来源与 sha256 见 [scripts/build-texture.js](../scripts/build-texture.js) 与 README「素材归属」。
+素材是官方站点自己的发布产物，以原始字节内嵌；分层、参数与"装饰强度"约束见 [design-language.md § 背景纹理](design-language.md#背景纹理官网-operator-那一套)，来源与 sha256 见 [scripts/build-texture.js](../scripts/build-texture.js) 与 [credits.md](credits.md)。
 
 纹理用两个 `z-index:-1` 的叠加伪元素（网格/斜纹）+ 若干背景图层（波纹/光晕）实现：**不新增 DOM 节点、不改任何布局属性、不含动画**，且始终画在正文之下。`prefers-reduced-transparency: reduce` 与 `prefers-contrast: more` 下整段关闭。验证：`node test/texture.test.js`。
 

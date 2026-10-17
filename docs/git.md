@@ -38,7 +38,7 @@ scope 可省（本仓库体量小，仅在有明确半区时用：`client` / `ho
 
 - body 写**动机与证据**，不复述 diff；有测量数据就放数据（对比度、字节数、像素数）
 - 破坏性变更：footer 加 `BREAKING CHANGE: <说明>`
-- 采用第三方来源素材：footer 注明批准事实，并与 `scripts/build-*.js` 头注、README 素材归属三处一致
+- 采用第三方来源素材：footer 注明批准事实，并与 `scripts/build-*.js` 头注、[credits.md](credits.md) 三处一致
 
 ## 操作细节
 

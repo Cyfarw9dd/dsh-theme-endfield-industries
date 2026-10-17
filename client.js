@@ -2882,7 +2882,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
 
          三个素材是官方站点自己的发布产物，由仓库所有者指示「沿用官方」，以**原始
          字节**内嵌为 data URI（scripts/build-texture.js；URL 与 sha256 见其头注与
-         README 素材归属）。PNG 不做任何再压缩或量化。
+         docs/credits.md（素材归属））。PNG 不做任何再压缩或量化。
 
          **纹理不铺满窗口**——官网每一层都锚定在内容区的一个部位，而不是整窗平铺：
            · 网格（decoFlag）用 clip-path 水平裁到中央内容列，mask 从上往下、
