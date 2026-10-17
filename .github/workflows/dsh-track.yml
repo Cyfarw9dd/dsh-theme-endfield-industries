@@ -200,9 +200,9 @@ jobs:
             {
               echo "chore(release): v$DSH_VERSION — validated against @deepseek-ai/dsh $DSH_VERSION"
               echo ''
-              echo "- 契约漂移探针 + 完整测试套件全绿（$CHANNEL 通道发现）"
-              echo "- dist-tags 快照: $DIST_TAGS"
-              echo "- 验证运行: $RUN_URL"
+              echo "- Contract drift probe + full test suite all green (found via the $CHANNEL channel)"
+              echo "- dist-tags snapshot: $DIST_TAGS"
+              echo "- Validation run: $RUN_URL"
             } > commit-msg.txt
             git add -A
             git commit -F commit-msg.txt
@@ -243,15 +243,15 @@ jobs:
             exit 0
           fi
           {
-            echo "## 主题 v$DSH_VERSION — 验证于 @deepseek-ai/dsh $DSH_VERSION"
+            echo "## Theme v$DSH_VERSION — validated against @deepseek-ai/dsh $DSH_VERSION"
             echo ''
-            echo '- 契约漂移探针：主题 client.js 提取的全部上游契约在新版 bundle 中逐项核验通过'
-            echo '- 完整测试套件：全绿'
-            echo "- 发现通道: \`$CHANNEL\` · dist-tags 快照: \`${DIST_TAGS}\`"
-            echo "- 验证运行: $RUN_URL"
+            echo '- Contract drift probe: every upstream contract extracted from the theme client.js verified item by item against the new bundle'
+            echo '- Full test suite: all green'
+            echo "- Found via: \`$CHANNEL\` · dist-tags snapshot: \`${DIST_TAGS}\`"
+            echo "- Validation run: $RUN_URL"
             echo ''
-            echo '> 发版同号约定：本主题的版本号即它验证过的 DSH 版本；'
-            echo '> 主题自身改动随下一个 DSH 版本一并带出。'
+            echo '> Version-mirroring convention: this theme'"'"'s version number is the DSH version it was validated against;'
+            echo '> the theme'"'"'s own changes ride along with the next validated DSH release.'
           } > release-notes.md
           gh release create "v$DSH_VERSION" --title "v$DSH_VERSION" --notes-file release-notes.md
 
@@ -264,7 +264,7 @@ jobs:
           ids="$(gh issue list --state open --json number,body --jq ".[] | select(.body | startswith(\"$MARKER\")) | .number")"
           if [ -z "$ids" ]; then echo '没有开着的追踪 issue。'; exit 0; fi
           for id in $ids; do
-            gh issue close "$id" --comment "v$DSH_VERSION 验证全绿并已发版，追踪关闭。"
+            gh issue close "$id" --comment "v$DSH_VERSION validated all green and released; tracking closed."
             echo "已关闭 issue #$id"
           done
 
@@ -292,7 +292,7 @@ jobs:
         run: |
           MARKER='<!-- dsh-drift -->'
           gh label create dsh-drift --color D93F0B \
-            --description 'DSH 新版本破坏了主题契约，待适配' 2>/dev/null || true
+            --description 'A new DSH release broke the theme contracts; adaptation pending' 2>/dev/null || true
 
           # 失败步骤的日志（探针/套件输出都在里面），截尾防超长。
           gh run view "$GITHUB_RUN_ID" --log-failed > failed-full.log 2>/dev/null || true
@@ -300,29 +300,29 @@ jobs:
 
           {
             echo "$MARKER"
-            echo "## DSH \`$DSH_VERSION\` 契约验证失败"
+            echo "## DSH \`$DSH_VERSION\` contract validation failed"
             echo ''
-            echo "- 发现通道: \`$CHANNEL\` · dist-tags: \`${DIST_TAGS}\`"
-            echo "- 验证运行: $RUN_URL（本 issue 由工作流覆盖更新，修复后自动关闭）"
+            echo "- Found via: \`$CHANNEL\` · dist-tags: \`${DIST_TAGS}\`"
+            echo "- Validation run: $RUN_URL (this issue is overwritten by the workflow and closes automatically once fixed)"
             echo ''
-            echo '探针或测试套件的失败输出（截尾）：'
+            echo 'Failed probe/test-suite output (truncated):'
             echo ''
             echo '```text'
-            cat failed.log 2>/dev/null || echo '(取日志失败——点上面的运行链接看)'
+            cat failed.log 2>/dev/null || echo '(failed to fetch logs — open the run link above)'
             echo '```'
             echo ''
-            echo '<sub>处置指引见 docs/compatibility.md 的新版本流程；'
-            echo '已退役钩子豁免清单在 .github/scripts/dsh-drift-probe.js 顶部。</sub>'
+            echo '<sub>Handling guide: docs/compatibility.md (new-version procedure);'
+            echo 'retired-hook exemption list: top of .github/scripts/dsh-drift-probe.js.</sub>'
           } > issue-body.md
 
           ids="$(gh issue list --state open --json number,body --jq ".[] | select(.body | startswith(\"$MARKER\")) | .number")"
           id="$(printf '%s\n' "$ids" | head -n 1)"
           if [ -n "$id" ]; then
             gh issue edit "$id" --body-file issue-body.md >/dev/null
-            gh issue comment "$id" --body "重跑于 $RUN_URL" >/dev/null
+            gh issue comment "$id" --body "Re-run at $RUN_URL" >/dev/null
             echo "已更新 issue #$id"
           else
-            gh issue create --title "DSH $DSH_VERSION 契约验证失败，主题待适配" \
+            gh issue create --title "DSH $DSH_VERSION contract validation failed; theme adaptation pending" \
               --label dsh-drift --body-file issue-body.md >/dev/null
             echo '已创建追踪 issue'
           fi
