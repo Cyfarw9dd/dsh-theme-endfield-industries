@@ -52,8 +52,10 @@ node .github/scripts/dsh-drift-probe.js <某份 node_modules/@deepseek-ai>
 
 - **不发版**：记录文件不更新，下一次运行（最多 6 小时后）自动重试同一版本——
   主题修复后无需人工干预即自动补发
-- **自动开 issue**：带 `<!-- dsh-drift -->` 标记的单一追踪 issue，覆盖更新不堆楼，
-  附失败步骤日志与运行链接；发版成功后自动关闭
+- **报警，不开 issue**（2026-10-18 所有者指定；仓库 Issues 功能处于关闭状态）：
+  report 任务以红色结束并打 `::error` 注解（任务页红条 + GitHub 失败通知都带它，
+  定时任务的失败通知发给最后编辑过 workflow 文件的用户），失败日志截尾收进
+  该步骤的 Summary
 - 处置指引按 [../compatibility.md](../compatibility.md) 的新版本流程
 
 ## 首次部署清单
