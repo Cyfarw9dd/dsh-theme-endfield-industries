@@ -460,6 +460,19 @@ if (src.includes("turnStatus")) {
       '暗色成员卡悬停 = 沉底块抬一档（layer-3）'],
     [/body \[data-team-panel\] \[class\$='_member'\]\s*\{[^}]*transition:\s*background-color \.2s ease/.test(s4),
       '悬停过渡只动颜色，且挂在基础规则上（官网语法）'],
+    [/body\[data-endfield-texture='subtle'\] \[data-team-panel\]::after/.test(s4)
+      && /body\[data-endfield-texture='standard'\] \[data-team-panel\]::after/.test(s4)
+      && !/body\[data-endfield-texture\] \[data-team-panel\]::after\s*\{[^}]*background-image/.test(s4),
+      '底部斜纹带按值挂 subtle/standard 两档（off 与属性残留不画）'],
+    [/(\[data-team-panel\]::after\s*\{[^}]*\})/.test(s4) && (() => {
+        const b = (s4.match(/\[data-team-panel\]::after\s*\{([^}]*)\}/) || [])[1] || ''
+        return b.includes('13.9512529279%') && b.includes('var(--edge-tex-hatch-color)')
+          && b.includes('z-index: -1') && b.includes('pointer-events: none')
+          && b.includes('background-size: .75rem .75rem')
+      })(),
+      '斜纹带 = 官方 shallowBg 配方（停靠/周期照抄，纹理令牌上色，压在内容之下）'],
+    [/@media \(prefers-reduced-transparency: reduce\), \(prefers-contrast: more\)\s*\{[^}]*\[data-team-panel\]::after\s*\{[^}]*display:\s*none/.test(s4),
+      '斜纹带在减透明/高对比下降级关闭（与列底纹同路径）'],
   ]
   for (const [ok, what] of boardChecks) {
     if (ok) pass('智能体团队看板 · ' + what)
