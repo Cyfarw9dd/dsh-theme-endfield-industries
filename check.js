@@ -433,6 +433,40 @@ if (src.includes("turnStatus")) {
   }
 }
 
+/* --- 7. agent-team expanded board keeps its Endfield form ---
+   The board's upstream CSS-module classes are hash-prefixed (VoX2oq_*), so
+   every hook here must stay hash-free: the panel is anchored by its stable
+   data-team-panel attribute and the inner locals by semantic suffixes. This
+   section pins the four things the token layer cannot give: the floating-
+   family ring, the official decoLine under the section titles, tabular
+   numerals, and the gray-step member hover (never a black scrim). */
+{
+  const s4 = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
+  const boardChecks = [
+    [/body \[data-team-panel\]\s*\{[^}]*box-shadow:\s*0 0 10px rgba\(0, 0, 0, \.25\), 0 0 0 0\.5px var\(--dsw-alias-border-l2\)/.test(s4)
+      && /body\[data-ds-dark-theme\] \[data-team-panel\]\s*\{[^}]*0 0 0 0\.5px var\(--dsw-alias-border-l1\)/.test(s4),
+      '面板描边 = 浮层家族（0.5px ring + 官方下拉软阴影，暗色换细线档）'],
+    [/body \[data-team-panel\] h3\s*\{[^}]*position:\s*relative/.test(s4)
+      && /body \[data-team-panel\] h3::after\s*\{[^}]*#ff00f0 16\.6667%,#fffa00 0,#fffa00 33\.4259%,#00ffa2 0/.test(s4),
+      '分组标题 = 官方三色信号线（紫:黄:绿 1:1:4 比例停靠）'],
+    [/body \[data-team-panel\] h3::after\s*\{[^}]*pointer-events:\s*none/.test(s4),
+      '信号线不拦截交互（装饰不入核心工作区）'],
+    [/body \[data-team-panel\] \[class\$='_count'\][^{]*\{[^}]*font-variant-numeric:\s*tabular-nums/.test(s4)
+      && /body \[data-team-panel\] \[class\$='_taskState'\][^{]*\{[^}]*font-variant-numeric:\s*tabular-nums/.test(s4),
+      '计数/任务读数等宽（tnum）'],
+    [/body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):hover[^{]*\{[^}]*rgba\(0, 0, 0, 0\.04\)/.test(s4),
+      '成员卡悬停 = 官网灰阶洗面（rgba .04，非黑遮罩）'],
+    [/body\[data-ds-dark-theme\] \[data-team-panel\] \[class\$='_member'\][^{]*\{[^}]*var\(--dsw-alias-bg-layer-3/.test(s4),
+      '暗色成员卡悬停 = 沉底块抬一档（layer-3）'],
+    [/body \[data-team-panel\] \[class\$='_member'\]\s*\{[^}]*transition:\s*background-color \.2s ease/.test(s4),
+      '悬停过渡只动颜色，且挂在基础规则上（官网语法）'],
+  ]
+  for (const [ok, what] of boardChecks) {
+    if (ok) pass('智能体团队看板 · ' + what)
+    else fail('智能体团队看板失守：' + what)
+  }
+}
+
 console.log('')
 if (failures) {
   console.error(`${failures} check(s) failed`)

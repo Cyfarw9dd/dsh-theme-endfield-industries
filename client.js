@@ -4377,6 +4377,81 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          stock size/hit area (height, 180px cap and ellipsis included) and only its
          colours change. Everything that made it grow is gone — do not reintroduce
          flex/max-width/display overrides without looking at it on the real page. */
+      /* ---------- 智能体团队展开看板（agent-team board） ----------
+          上游 dsh-experimental-client-ui-agent-team 的 CSS 模块类带哈希
+          （VoX2oq_*），按本仓库规则一律不碰：锚点只用该包自带的稳定
+          data 属性——根/触发器 data-team-action、portal 到 body 的面板
+          data-team-panel；面板内部的成员卡/任务卡/计数用语义后缀
+          （[class$='_member'] 等）匹配，重哈希不影响。
+          面板底面（--dsw-specific-menu）已被令牌层换成不透明纸面
+          （--dsw-menu-surface-fill 覆写），直角由全局 [class] 规则自动
+          处理，触发器悬停已被全局 [class$='_trigger'] 实心强调规则覆盖
+          ——这里只补令牌管不到的四件。 */
+
+      /* 1. 浮层家族对齐：上游 elevation-stroke 是 1px alpha 细线，在纸面
+             上几乎不可见。换成主题浮层统一配方（与设置下拉、tooltip 同款）：
+             0.5px 重线 ring + 官方 Dropdown_panel 软阴影（1.25rem→10px）。
+             特异性 body 前缀 (0,1,1) 高于面板哈希类 (0,1,0)，不依赖注入
+             顺序。 */
+      body [data-team-panel] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .25), 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
+      body[data-ds-dark-theme] [data-team-panel] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5), 0 0 0 0.5px var(--dsw-alias-border-l1);
+      }
+
+      /* 2. 分组标题（成员 / 任务）挂官方三色信号线 decoLine：与设置页
+             分组标题、交付物卡底边同一条 linear-gradient（紫:黄:绿 =
+             1:1:4 的官方比例停靠，见 design-language「背景纹理」一节）。
+             h3 本身 display:flex，与设置页分组标题同理不能当 flex 子项，
+             绝对定位到标题底部整宽；h3 自带 8px 下 margin，再加 7px
+             padding 让线离开字形。静态、无动画、pointer-events 关闭，
+             不属于会话列底纹（prefers-reduced-transparency 不需要让位：
+             线本身不透明，不是纹理层）。 */
+      body [data-team-panel] h3 {
+        position: relative;
+        padding-bottom: 7px;
+      }
+      body [data-team-panel] h3::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        pointer-events: none;
+        background-image: linear-gradient(90deg,#ff00f0 16.6667%,#fffa00 0,#fffa00 33.4259%,#00ffa2 0);
+      }
+
+      /* 3. 数字等宽（设计语言第 3 条）：成员数/任务数计数、任务卡 meta
+             （任务 id、阻塞关系）与状态行都是会跳动的数字文本。 */
+      body [data-team-panel] [class$='_count'],
+      body [data-team-panel] [class$='_meta'],
+      body [data-team-panel] [class$='_taskState'] {
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* 4. 成员卡悬停 = 官网灰阶洗面（SubpageTab 家族，非黑遮罩）：
+             亮色 rgba(0,0,0,.04) 在沉底块 #dcddd6 上合成 1.09:1，正好
+             官方 #f3f3f3 悬停步；暗色近黑底上白洗落在噪声地板（文档化
+             结论），改走「沉底块抬一档」——layer-3 (#2c2e2a) 对 layer-2
+             (#1e201d) 1.20:1，与官方激活步同档。底色渐变挂在基础规则上
+             （官网语法：transition 不写在状态规则里）；上游 stock 悬停
+             只换 box-shadow 描边色，本规则特异性 (0,4,1) 压过哈希类的
+             (0,3,0)，只接管 background 一件，描边照旧。当前会话卡
+             （_memberCurrent）是 disabled，:not(:disabled) 天然排除。 */
+      body [data-team-panel] [class$='_member'] {
+        transition: background-color .2s ease;
+      }
+      body [data-team-panel] [class$='_member']:not(:disabled):hover,
+      body [data-team-panel] [class$='_member']:not(:disabled):focus-visible {
+        background: rgba(0, 0, 0, 0.04);
+      }
+      body[data-ds-dark-theme] [data-team-panel] [class$='_member']:not(:disabled):hover,
+      body[data-ds-dark-theme] [data-team-panel] [class$='_member']:not(:disabled):focus-visible {
+        background: var(--dsw-alias-bg-layer-3, #2c2e2a);
+      }
+
       /* ================= dark compaction notice + residual blues ================= */
       /* Dark mode: warm label grays (compaction notice title/summary/sep used bluish defaults) */
       body[data-ds-dark-theme] {

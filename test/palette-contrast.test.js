@@ -612,6 +612,46 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10e. agent-team board: member hover wash steps ----------
+   The board's member cards sit on bg-layer-2 (沉底块). Their hover must be
+   the official gray STEP, not the /news image-card black scrim that the tabs
+   section (10d) documents: light composites rgba(0,0,0,.04) over layer-2 and
+   must land on the official #f3f3f3 step (1.08:1 over white); dark cannot
+   wash white over near-black (noise floor, documented), so it lifts the card
+   one layer (layer-3 over layer-2). Both steps must stay in the decorative
+   band (<1.6) and the label-primary ink must stay AA on the washed surface.
+   Values are read out of the real rules and token blocks, never restated. */
+{
+  const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '')
+  const flat = noComments.replace(/\n\s*/g, ' ')
+  const lightBody = /body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):hover, body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):focus-visible \{([^}]*)\}/.exec(flat)
+  const washM = lightBody && /rgba\(0, 0, 0, 0\.(\d+)\)/.exec(lightBody[1])
+  const tok = (name, mode) => (new RegExp("'" + name + "'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+  const l2 = { light: tok('--dsw-alias-bg-layer-2', 'light'), dark: tok('--dsw-alias-bg-layer-2', 'dark') }
+  const l3dark = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-bg-layer-3: (#[0-9a-f]{6})/.exec(flat) || [])[1]
+  const inkLight = tok('--dsw-alias-label-primary', 'light')
+  const inkDark = tok('--dsw-alias-label-primary', 'dark')
+  if (!washM || !l2.light || !l2.dark || !l3dark || !inkLight || !inkDark) {
+    fail('看板洗面 · 规则或底色令牌读不到（wash=' + (washM && washM[1]) + '，layer2=' + l2.light + '/' + l2.dark + '，layer3dark=' + l3dark + '）')
+  } else {
+    const a = Number('0.' + washM[1])
+    const offHover = ratio(hex('#f3f3f3'), hex('#ffffff'))
+    const washLight = over([0, 0, 0], hex(l2.light), a)
+    const rLight = ratio(washLight, hex(l2.light))
+    if (Math.abs(rLight - offHover) <= 0.06) pass('看板洗面 · 亮色 = 官方 #f3f3f3 悬停步（' + rLight.toFixed(3) + ':1，alpha .' + washM[1] + ' on ' + l2.light + '）')
+    else fail('看板亮色悬停档偏离官方步：' + rLight.toFixed(3) + ':1（官方 ' + offHover.toFixed(3) + ':1）')
+    const rDark = ratio(hex(l3dark), hex(l2.dark))
+    if (rDark > rLight * 0.9 && rDark < 1.6) pass('看板洗面 · 暗色 = 沉底块抬一档（' + l3dark + ' on ' + l2.dark + ' = ' + rDark.toFixed(3) + ':1，装饰区间）')
+    else fail('看板暗色悬停档出区间：' + rDark.toFixed(3) + ':1')
+    const inkOnLight = ratio(hex(inkLight), washLight)
+    const inkOnDark = ratio(hex(inkDark), hex(l3dark))
+    if (inkOnLight >= 4.5) pass('看板洗面 · 墨字/亮色洗面：' + inkOnLight.toFixed(2) + ':1 (AA)')
+    else fail('看板墨字在亮色洗面上只有 ' + inkOnLight.toFixed(2) + ':1')
+    if (inkOnDark >= 4.5) pass('看板洗面 · 纸字/暗色抬档：' + inkOnDark.toFixed(2) + ':1 (AA)')
+    else fail('看板纸字在暗色抬档上只有 ' + inkOnDark.toFixed(2) + ':1')
+  }
+}
+
 /* ---------- 11. three palettes must actually differ ---------- */
 {
   const accents = [varIn(palettes['谷地黄'], '--edge-accent'), varIn(palettes['武陵青'], '--edge-accent'), varIn(grayBlock, '--edge-accent')]
