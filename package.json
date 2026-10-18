@@ -1,6 +1,6 @@
 {
   "name": "dsh-theme-endfield",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.0-rc.2",
   "description": "DeepSeek Harness web theme: the industrial editorial look of the Arknights: Endfield official site — cream paper, ink text, signal-yellow accents, zero radius. Settings persist through the DSH 0.1.7 volatile Config + configForms transport, with a ctx.settingsScope fallback for older hosts.",
   "keywords": [
     "deepseek-harness",
