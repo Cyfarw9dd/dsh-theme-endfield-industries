@@ -85,6 +85,9 @@ const hooks = [
   ["[class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow']",
     'attachment carousel arrow (composer-scoped)'],
   ["[class*='_dangerButton']", 'danger button ink'],
+  // agent-team board: the panel must be anchored hash-free (its module classes
+  // are VoX2oq_*-style hashed locals), or the whole board style dies on rehash.
+  ["body [data-team-panel] h3::after", 'agent-team board section decoLine'],
 ]
 for (const [needle, label] of hooks) {
   if (src.includes(needle)) pass('hook present: ' + label)
