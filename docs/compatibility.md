@@ -103,6 +103,7 @@
 | 坑 | DSH 版本 | 症状 | 解法 | 防复发 |
 | --- | --- | --- | --- | --- |
 | CSS module 全面 rehash | 0.1.2-rc.1 | 33 个哈希选择器全部失活 | 改用语义后缀匹配 | selector-guard |
+| CSS-modules 改「语义_哈希_序号」整词（如 `_outline_1rv3m_54`） | 0.2.0-rc.2 | 漂移探针把 `[class*='_outline']` 误报失配（尾边界正则不认新形态），阻塞自动发版；主题选择器本身是包含匹配、运行时仍正常命中 | 探针按选择器算符区分语义：`$` 尾边界、`*` 额外接受「语义_哈希」开头形态但拒绝 `_outlineLevel` 粘连词 | 探针负对照（假后缀、仅粘连词两路都必须红） |
 | localStorage 跨 origin 失效 | Desktop | 设置在重启后丢失 | 迁移到 settingsScope → configForms | 双路径 + 回退链 |
 | `:root` 变量解析为空 | — | `--edge-line` 计算 auto | 声明移到 `body`（上游令牌是 body 行内样式） | check.js 结构检查 |
 | `--dsw-font-family` 是公共接口 | — | 第三方挂件字体被覆盖 | 停止重声明；用 `--edge-font` 仅上主题自己的元素 | check.js 禁令 |

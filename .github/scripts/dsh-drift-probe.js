@@ -15,7 +15,10 @@
  *                                 自设的，不算上游契约，自动排除）
  *      提取而非手抄清单：清单永远与真实使用的钩子同步，不会腐化。
  *   2. 在安装树（node_modules/@deepseek-ai）里逐个验证仍然存在。
- *      后缀按「`_x` 后不接标识符字符」的词边界匹配；令牌与锚点按字面匹配。
+ *      匹配语义跟随选择器算符：$（尾匹配）按「`_x` 后不接标识符字符」的词边界，
+ *      *（包含）按纯子串——DSH 0.2.x 的 CSS-modules 把语义段放进了
+ *      `_outline_1rv3m_54` 这类「语义_哈希_序号」整词，尾边界正则会把仍在
+ *      正常工作的包含选择器误报成失配；令牌与锚点按字面匹配。
  *
  * 失配意味着什么：选择器/探测器在新版上静默失配（不报错、不生效），正是
  * selector-guard.test.js 头注里 DSH 0.1.2-rc.1 全量重哈希那次事故的形状。
@@ -69,9 +72,12 @@ const OWN_DATA_ANCHOR = (name) =>
 const src = fs.readFileSync(CLIENT, 'utf8')
 
 /* ---------- 1. 从 client.js 提取契约 ---------- */
-const classSuffixes = new Set()
-for (const m of src.matchAll(/\[class[$*^]\s*=\s*(['"])(_[A-Za-z0-9]+)\1\]/g)) {
-  classSuffixes.add(m[2])
+/* classSuffixes: name -> weakest operator seen ('$' tail / '^' head / '*' contains).
+ * 验证按「最宽松的实际用法」判断存在性：同一个语义段只要有一处是包含选择器，
+ * 就按子串匹配判定（尾匹配选择器若失配会由测试套件的真实渲染用例另行暴露）。 */
+const classSuffixes = new Map()
+for (const m of src.matchAll(/\[class([$*^])\s*=\s*(['"])(_[A-Za-z0-9]+)\2\]/g)) {
+  if (m[1] === '*' || !classSuffixes.has(m[3])) classSuffixes.set(m[3], m[1])
 }
 const tokens = new Set()
 for (const m of src.matchAll(/var\(\s*(--dsw-[A-Za-z0-9-]+)/g)) {
@@ -109,14 +115,22 @@ const walk = (dir) => {
 }
 walk(TREE)
 
-/* 待验证清单：suffix -> { re, kind, where } */
+/* ---------- 待验证清单：suffix -> { re, kind, where } ---------- */
 const pending = new Map()
 const addPending = (kind, name, matcher) => {
   if (RETIRED.has(name)) return // 豁免的仍要校验“还在被使用”，见下文
   pending.set(kind + ':' + name, { kind, name, matcher })
 }
-for (const s of classSuffixes) {
-  addPending('class-suffix', s, new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_-])'))
+for (const [s, op] of classSuffixes) {
+  // 匹配语义跟随选择器算符：
+  //   '$'（尾匹配）：`_x` 后必须是词边界（老 CSS-modules 的 Xxx_x 形态）；
+  //   '*'（包含）：额外接受 DSH 0.2.x 的「语义_哈希_序号」整词形态（_x_1rv3m_54），
+  //     但仍拒绝 _xLevel 这类后接字母的粘连词（_outline ≠ _outlineLevel）；
+  //   '^'（头匹配）：与 '$' 同用后跟边界近似。
+  const esc = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const tailRe = new RegExp(esc + '(?![A-Za-z0-9_-])')
+  const containsRe = new RegExp('(?:' + esc + '(?![A-Za-z0-9_-])|(?<![A-Za-z0-9_-])' + esc + '(?![A-Za-z0-9]))')
+  addPending('class-suffix', s, op === '*' ? containsRe : tailRe)
 }
 for (const t of tokens) addPending('token', t, t)
 for (const a of dataAnchors) addPending('data-anchor', a, a)
@@ -140,11 +154,11 @@ const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 
 const rel = (p) => path.relative(path.resolve(TREE, '..', '..'), p)
 
-for (const s of [...classSuffixes].sort()) {
+for (const [s, op] of [...classSuffixes].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
   const key = 'class-suffix:' + s
   if (hitIn.has(key)) {
     if (RETIRED.has(s)) continue // 豁免但命中了——新包可能恢复了该元素，提示解除豁免
-    pass(`类后缀 ${s}（client.js:${firstLine(s)}）→ ${rel(hitIn.get(key))}`)
+    pass(`类后缀 ${s}（client.js:${firstLine(s)}，${op === '*' ? '包含' : op === '$' ? '尾匹配' : '头匹配'}）→ ${rel(hitIn.get(key))}`)
   } else if (RETIRED.has(s)) {
     pass(`类后缀 ${s} 已豁免（${RETIRED.get(s)}）`)
   } else {
