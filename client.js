@@ -4452,6 +4452,49 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         background: var(--dsw-alias-bg-layer-3, #2c2e2a);
       }
 
+      /* 5. 底部斜纹带：官方 shallowBg 的同款复刻，按看板体量缩一条。
+             会话列那条带是 32.8125rem 高；看板最宽 500px、最高 680px，
+             取 min(9rem, 40%)——高板 144px、矮板（compact 单人态）按
+             40% 封顶。纹路周期（.75rem）与停靠值（13.95…/36.05…%）照
+             官方原文，颜色复用纹理令牌 --edge-tex-hatch-color（亮 5% 墨 /
+             暗 6% 纸白），0° 单遮罩「底边最实、往上渐隐」同官方。
+             画面上它只在卡片之间的空隙与面板底部露出——成员卡/任务卡
+             是不透明沉底块，天然盖住自己身后的纹。
+             叠放：面板自带 z-index:100 已建层叠上下文，::after 取
+             z-index:-1 与上游 ::before（纸面层）同层、按树序画在其上、
+             在全部内容之下；伪元素无占用（bundle 全量查过：面板只有
+             :before）。开关跟随纹理总开关：按值匹配 subtle/standard 两档
+             （off 不画），prefers-reduced-transparency / more contrast 下
+             display:none——与列底纹同一条降级路径。静态、无动画。合成
+             对比度：亮 1.10:1 / 暗 1.16:1（palette-contrast 10f 段实算），
+             与会话列底纹（1.10–1.19:1）同档装饰区间。 */
+      body[data-endfield-texture='subtle'] [data-team-panel]::after,
+      body[data-endfield-texture='standard'] [data-team-panel]::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: calc(100% - min(9rem, 40%));
+        z-index: -1;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(-45deg,
+          transparent 0 13.9512529279%,
+          var(--edge-tex-hatch-color) 13.9512529279% 36.0487470721%,
+          transparent 36.0487470721% 50%,
+          transparent 50% 63.9512529279%,
+          var(--edge-tex-hatch-color) 63.9512529279% 86.0487470721%,
+          transparent 86.0487470721%);
+        background-size: .75rem .75rem;
+        -webkit-mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+        mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+      }
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        body[data-endfield-texture] [data-team-panel]::after {
+          display: none;
+        }
+      }
+
       /* ================= dark compaction notice + residual blues ================= */
       /* Dark mode: warm label grays (compaction notice title/summary/sep used bluish defaults) */
       body[data-ds-dark-theme] {

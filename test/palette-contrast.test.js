@@ -652,6 +652,38 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10f. agent-team board: bottom hatch band over the menu surface ----------
+   The board's shallowBg band reuses the texture tokens (--edge-tex-ink +
+   --edge-tex-hatch-a) but lands on the PANEL surface (--dsw-menu-surface-fill),
+   not on bg-base like the column band. Same rule as every decorative layer:
+   composite the ink at its alpha over the surface it actually paints on and
+   keep it inside the decorative band (1.06–1.6), in step with the column
+   texture (1.10–1.19). Values read from the real declarations. */
+{
+  const noC = src.replace(/\/\*[\s\S]*?\*\//g, '')
+  const flat = noC.replace(/\n\s*/g, ' ')
+  const band = /\[data-team-panel\]::after\s*\{([^}]*)\}/.exec(flat)
+  const tok = (name) => (new RegExp(name + ":\\s*(#[0-9a-f]{6})").exec(noC) || [])[1]
+  const alpha = (name) => (new RegExp(name + ":\\s*(\\d+)%").exec(noC) || [])[1]
+  const menu = (mode) => (new RegExp("'--dsw-menu-surface-fill'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+  const inkLight = tok('--edge-tex-ink'), aLight = alpha('--edge-tex-hatch-a')
+  const inkDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-ink:\s*(#[0-9a-f]{6})/.exec(flat)
+  const aDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-hatch-a:\s*(\d+)%/.exec(flat)
+  if (!band || !band[1].includes('var(--edge-tex-hatch-color)') || !inkLight || !aLight || !inkDarkM || !aDarkM || !menu('light') || !menu('dark')) {
+    fail('看板斜纹 · 规则或纹理令牌读不到')
+  } else {
+    const cases = [
+      ['亮', hex(inkLight), Number(aLight) / 100, menu('light')],
+      ['暗', hex(inkDarkM[1]), Number(aDarkM[1]) / 100, menu('dark')],
+    ]
+    for (const [label, ink, a, surface] of cases) {
+      const r = ratio(over(ink, hex(surface), a), hex(surface))
+      if (r >= 1.06 && r <= 1.6) pass('看板斜纹 · ' + label + '色合成 = ' + r.toFixed(2) + ':1（装饰区间，与会话列底纹同档）')
+      else fail('看板斜纹 ' + label + '色出装饰区间：' + r.toFixed(2) + ':1')
+    }
+  }
+}
+
 /* ---------- 11. three palettes must actually differ ---------- */
 {
   const accents = [varIn(palettes['谷地黄'], '--edge-accent'), varIn(palettes['武陵青'], '--edge-accent'), varIn(grayBlock, '--edge-accent')]
