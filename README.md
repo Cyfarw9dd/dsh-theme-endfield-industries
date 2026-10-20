@@ -6,6 +6,10 @@ A DSH Web theme plugin modeled on the official Arknights: Endfield website (an u
 
 Cream paper background, ink-black text, zero-radius industrial editorial look. The default palette, **Endfield Gray**, follows the official site's gray-scale interaction grammar; Valley Yellow and Wuling Teal accents are also available. The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
 
+## Origin
+
+This project is a heavily customized derivative of [ymh0000123/dsh-theme-endfield](https://github.com/ymh0000123/dsh-theme-endfield), which set the Endfield-website visual direction and the plugin architecture. It now evolves independently as the industries variant; upstream changes are picked up via an `upstream` remote when needed. All credit for the original design and implementation goes to the upstream author, under the MIT License.
+
 ## Install
 
 ```bash
