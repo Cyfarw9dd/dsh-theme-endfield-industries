@@ -37,7 +37,7 @@ scope 可省（本仓库体量小，仅在有明确半区时用：`client` / `ho
 ### body 与 footer 约定
 
 - body 写**动机与证据**，不复述 diff；有测量数据就放数据（对比度、字节数、像素数）
-- 破坏性变更：footer 加 `BREAKING CHANGE: <说明>`
+- 破坏性变更：`!` + footer `BREAKING CHANGE: <说明>`，**只留给接入契约的破坏**——插件加载约定、Host `Config` 结构、对外导出的 API/路径、路由或事件形状这类会让下游代码、旧调用或跨仓库协作出错的变化。**删除本主题自己的可选功能或设置字段不算**：功能没了但没有任何下游依赖它，按 `feat:` / `refactor:` 记，body 里写清「旧键不再被读取/旧开关消失」即可（2026-10 所有者口径；先例：`feat: remove the 雷霆大字 feature`）
 - 采用第三方来源素材：footer 注明批准事实，并与 `scripts/build-*.js` 头注、[credits.md](credits.md) 三处一致
 
 ## 操作细节
