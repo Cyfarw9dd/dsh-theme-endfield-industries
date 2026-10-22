@@ -19,6 +19,20 @@
  * the merge shipped: plain/icon buttons must NOT carry brackets any more, and
  * the sidebar rows must.
  *
+ * The row signal rule is asserted twice on purpose — once on computed styles
+ * (rest transparent, hover accent) and once on PIXELS along the row's left edge,
+ * in the markdown-table shape the feature actually ships into. A real answer's
+ * first column is a project-name LINK, and upstream gives every markdown link a
+ * free 3px hit target (border-left:3px transparent + margin-left:-3px), so the
+ * link's box sits exactly on the row's 3px bar. The hover tint used to paint
+ * border-box, i.e. straight through that transparent border, and ate a link-tall
+ * notch out of the bar — the reported 「图标和黄色高亮竖线之间有缺口」. Computed
+ * styles could never catch it (borderLeftColor was correct all along), so the
+ * guard decodes a screenshot and walks every scan line of the bar. Two mutations
+ * were used to prove it can fail: deleting the tint clip fails the pixel walk
+ * (36/73 scan lines missing at DPR 2), deleting the tint itself fails the
+ * reverse control that keeps 「fix」 from meaning 「remove the feature」.
+ *
  * The same fixture carries the 划词灰 (selection-gray) assertions — the model
  * menu / permission popup current rows and the composer + hover all use the
  * ::selection fill/ink pair, in both schemes and (for the value-level proof)
@@ -227,6 +241,24 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
   .x_add{width:28px;height:28px;border:none;border-radius:999px;cursor:pointer;
     display:inline-grid;place-items:center;background:var(--dsw-specific-selector);color:var(--dsw-alias-label-primary)}
   .x_add:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid)}
+  /* ---- markdown table, upstream shape (ui-chat ._tableScroll / ._markdown) ----
+     The signal rule on a hovered tbody row is a 3px border on the ROW, and the
+     first cell in a real answer is usually a project name LINK. Upstream gives
+     every markdown link a free 3px hit target: border-left:3px solid transparent
+     + margin-left:-3px, i.e. the link's box starts 3px LEFT of its cell's content
+     box — exactly on top of the row's bar. Cells here therefore carry no border
+     and no fill (unlike the generic td shape above), which is what makes the
+     overlap real: with padding-left:0 the link box lands ON the bar. */
+  .x_mdScroll{max-width:100%;overflow-x:auto;background:var(--dsw-alias-bg-base)}
+  .x_mdScroll table{border-collapse:collapse;width:max-content;max-width:max-content;margin:8px 0}
+  .x_mdScroll th,.x_mdScroll td{text-align:start;padding:10px 16px;
+    border:0;border-bottom:.5px solid var(--dsw-alias-border-l2);background:transparent;min-width:100px}
+  .x_mdScroll th:first-child,.x_mdScroll td:first-child{padding-left:0}
+  .x_mdScroll a{color:#1d4ed8;font-weight:500;position:relative;text-decoration:none;
+    border-left:3px solid rgb(255 255 255 / 0);border-right:3px solid rgb(255 255 255 / 0);
+    border-top:2px solid rgb(255 255 255 / 0);border-bottom:2px solid rgb(255 255 255 / 0);
+    margin-left:-3px;margin-right:-3px}
+  .x_mdScroll .x_linkIcon{width:1.1em;height:1.1em;vertical-align:-.25em;margin-right:5px}
 </style>
 <style>${css}</style>
 </head><body ${motion ? `data-endfield-motion="${motion}"` : ''}>
@@ -245,6 +277,16 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     <button class="x_searchResultRow" id="searchRow">搜索结果行</button>
   </div>
   <table id="tbl"><tbody><tr id="trow"><td>表格行</td><td>值</td></tr></tbody></table>
+  <div class="x_mdScroll" id="mdScroll"><table id="mdTbl">
+    <thead><tr><th>项目</th><th>做法</th></tr></thead>
+    <tbody>
+      <tr id="mdRowLink"><td><a id="mdLink" href="https://example.com/pageindex" target="_blank"
+        rel="noopener noreferrer"><svg class="x_linkIcon" width="14" height="14" viewBox="-2 -2 28 28"
+        fill="none" aria-hidden="true"><path d="M14 2a12 12 0 100 24 12 12 0 000-24zm0 4a8 8 0 110 16 8 8 0 010-16z"
+        fill="currentColor"/></svg>PageIndex</a></td><td>树形目录索引</td></tr>
+      <tr id="mdRowPlain"><td>dsh-obsidian-vault</td><td>DSH 插件</td></tr>
+    </tbody>
+  </table></div>
   <div role="menu" id="modelMenu">
     <button class="x_option x_modelOption x_selected" id="modelSel" role="menuitemradio" aria-checked="true">当前模型</button>
     <button class="x_option x_modelOption" id="modelUnsel" role="menuitemradio" aria-checked="false">其它模型</button>
@@ -279,6 +321,26 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     window.__anims__ = (id) => document.getElementById(id).getAnimations().map((a) => ({
       name: a.animationName, playState: a.playState, duration: a.effect && a.effect.getTiming().duration,
     }))
+    window.__bgOf__ = (id) => getComputedStyle(document.getElementById(id)).backgroundColor
+    /* Any computed colour -> the exact RGB it paints with. Chrome serialises
+       color-mix() as 'color(srgb …)', which no regex or literal in this file can
+       compare against a decoded screenshot; painting one pixel and reading it
+       back works for every colour syntax the cascade may produce. */
+    window.__rgbOf__ = (css) => {
+      const c = document.createElement('canvas'); c.width = c.height = 1
+      const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillStyle = css
+      g.fillRect(0, 0, 1, 1)
+      const d = g.getImageData(0, 0, 1, 1).data
+      return [d[0], d[1], d[2]]
+    }
+    /* The link-over-bar geometry the pixel assertion depends on. */
+    window.__mdGeo__ = () => {
+      const r = (el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height } }
+      const row = document.getElementById('mdRowLink'), a = document.getElementById('mdLink')
+      return { row: r(row), td: r(row.firstElementChild), link: r(a),
+        barW: parseFloat(getComputedStyle(row).borderLeftWidth),
+        clip: getComputedStyle(a).backgroundClip, rowBg: getComputedStyle(row).backgroundColor }
+    }
   </script>
 </body></html>`
 
@@ -323,7 +385,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
     '--remote-debugging-port=' + port,
     '--user-data-dir=' + path.join(tmp, 'profile'),
-    '--window-size=900,900',
+    '--window-size=900,1200',
     'file://' + page,
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
 
@@ -342,7 +404,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     cdp = await connectWs(target.webSocketDebuggerUrl)
     await cdp.call('Runtime.enable')
     await cdp.call('Page.enable')
-    await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: 2, mobile: false })
+    await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: 2, mobile: false })
     await sleep(500)
 
     /* The reduced-motion state is emulator-level and persists across the whole
@@ -493,6 +555,82 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       } else {
         fail('信号 · 表格行左缘信号条不符  [' + restT.borderLeftWidth + ' ' + restT.borderLeftColor + ' → ' + hovT.borderLeftWidth + ' ' + hovT.borderLeftColor + ']')
       }
+      /* ---- 信号条必须是整条连续的，即便首列放着上游那种「负 margin 链接」----
+         一个真实回答的表格首列几乎总是「图标 + 项目名」的 markdown 链接，而上游
+         给每个 markdown 链接白嫖了 3px 点击区（border-left:3px 透明 + margin-left
+         :-3px）——链接盒子正好压在行的 3px 信号条上。悬停染色若按默认的
+         border-box 绘制，就会顺着透明边框把信号条涂掉一段，呈现为「图标和黄色
+         竖线之间有缺口」。computed style 抓不到这个缺陷（borderLeftColor 全程
+         正确），所以这里量真实截图的像素：沿行左缘逐条扫描线取样，信号条出现
+         任何一条扫描线缺失即失败。 */
+      const scrollRow = async (id) => {
+        await evaluate("document.getElementById(" + JSON.stringify(id) + ").scrollIntoView({block:'center'})")
+        await sleep(120)
+      }
+      await scrollRow('mdRowLink')
+      await hover('mdRowLink')
+      const geo = JSON.parse(await evaluate('JSON.stringify(window.__mdGeo__())'))
+      const vw = await evaluate('window.innerWidth')
+      /* Collapsed borders are centred on the grid line: the 3px bar spans
+         row.x ± borderW/2, so "the link covers the bar" means link.x is at or
+         left of that outer edge. */
+      const barLeft = geo.row.x - geo.barW / 2
+      const overhang = barLeft - geo.link.x
+      if (overhang >= 0) {
+        pass('表格行信号条 · 夹具还原上游链接盒子（左探到信号条外缘之外 ' + overhang.toFixed(1) + 'px，整条压住）')
+      } else {
+        fail('表格行信号条 · 夹具没复刻上游链接的 -3px 盒子，下面的缺口断言会空转  [link.x=' + geo.link.x
+          + ' barLeft=' + barLeft + ']')
+      }
+      if (geo.clip === 'padding-box') pass('表格行信号条 · 悬停染色裁在 padding-box，不画进链接的透明边框区')
+      else fail('表格行信号条 · 悬停染色会随链接边框带出色块  [background-clip=' + geo.clip + ']')
+
+      const accentPx = JSON.parse(await evaluate('JSON.stringify(window.__rgbOf__(window.__var__("--edge-accent-onpaper")))'))
+      const barScan = async (rowId) => {
+        await scrollRow(rowId)
+        await hover(rowId)
+        const img = await shoot()
+        const row = JSON.parse(await evaluate('JSON.stringify(window.__rect__(' + JSON.stringify(rowId) + '))'))
+        /* 塌陷边框以网格线为中心：3px 信号条落在这个 6 设备像素带的正中。 */
+        const xc = Math.round(row.x * SCALE)
+        const y0 = Math.round(row.y * SCALE) + 2
+        const y1 = Math.round((row.y + row.h) * SCALE) - 2
+        const bad = []
+        for (let y = y0; y <= y1; y++) {
+          let hit = false
+          for (let dx = -1; dx <= 1 && !hit; dx++) {
+            const i = (y * img.w + (xc + dx)) * img.ch
+            hit = nearRgb([img.data[i], img.data[i + 1], img.data[i + 2]], accentPx, 8)
+          }
+          if (!hit) bad.push(y)
+        }
+        return { bad, lines: y1 - y0 + 1, row, xc, imgW: img.w }
+      }
+      const plainScan = await barScan('mdRowPlain')
+      if (plainScan.bad.length === 0) pass('表格行信号条 · 纯文本行整条连续（' + plainScan.lines + ' 条扫描线全中 @x=' + plainScan.xc + '）')
+      else fail('表格行信号条 · 纯文本行也断了，夹具/指针/取样列有问题  [缺口 ' + plainScan.bad.length + '/' + plainScan.lines
+        + ' x=' + plainScan.xc + ' row=' + JSON.stringify(plainScan.row) + ' vw=' + vw + ' img=' + plainScan.imgW + ']')
+      const linkScan = await barScan('mdRowLink')
+      if (linkScan.bad.length === 0) pass('表格行信号条 · 首列是链接/图标的行同样整条连续（无「图标咬掉竖线」缺口）')
+      else fail('表格行信号条 · 链接盒子把信号条啃掉 ' + linkScan.bad.length + ' 条扫描线（y ' + linkScan.bad[0] + '..'
+        + linkScan.bad[linkScan.bad.length - 1] + '/' + linkScan.lines + '）——悬停染色画进了链接的透明左边框')
+
+      /* 反向控制：染色本身必须还在（否则「把整行染色删掉」也能让上面两条变绿）。 */
+      await scrollRow('mdRowPlain')
+      await hover('mdRowPlain')
+      const tintPx = JSON.parse(await evaluate("JSON.stringify(window.__rgbOf__(window.__bgOf__('mdRowPlain')))"))
+      const tintImg = await shoot()
+      const rowRect = JSON.parse(await evaluate("JSON.stringify(window.__rect__('mdRowPlain'))"))
+      /* 首列上方内边距（padding-top 10px）里没有任何文字/图标，只有单元格底色。 */
+      const sampleX = Math.round((rowRect.x + 60) * SCALE)
+      const sampleY = Math.round((rowRect.y + 4) * SCALE)
+      const ti = (sampleY * tintImg.w + sampleX) * tintImg.ch
+      const sampled = [tintImg.data[ti], tintImg.data[ti + 1], tintImg.data[ti + 2]]
+      if (!nearRgb(tintPx, accentPx, 3) && nearRgb(sampled, tintPx, 6)) {
+        pass('表格行信号条 · 悬停行底染色仍在（避开「删掉染色」的假修复）  [rgb(' + sampled.join(',') + ')]')
+      } else {
+        fail('表格行信号条 · 悬停染色缺失或与信号条同色  [tint=' + tintPx.join(',') + ' sample=rgb(' + sampled.join(',') + ') accent=' + accentPx.join(',') + ']')
+      }
       await park()
       /* 侧边栏行**不再**走左缘边条——那是合并前的方案A 行为。 */
       const nsRow = await styleOf('sessionRow')
@@ -566,7 +704,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       /* DPR loop: a decoration that only survives one DPR is a HiDPI bug nothing
          else can see. */
       for (const dpr of [1, 3, 1, 2]) {
-        await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: dpr, mobile: false })
+        await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: dpr, mobile: false })
         await sleep(220)
         await hover('sessionRow')
         const imgHi = await shoot()
@@ -584,7 +722,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
             + ' region=' + topColors(imgHi, boxHi, 4, dpr) + ']')
         }
       }
-      await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: 2, mobile: false })
+      await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: 2, mobile: false })
       await sleep(200)
       await park()
 
