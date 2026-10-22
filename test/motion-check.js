@@ -345,15 +345,18 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
 </body></html>`
 
 ;(async () => {
-  const clientSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
-
-  /* Pull the LIVE stylesheet out of client.js: it is the single template literal
-     handed to insertCss(), and nothing here re-types a byte of it. If this regex
-     ever stops matching, the test fails loudly rather than testing a fiction. */
+  /* Read the SOURCE stylesheet pair, in the order the client entry concatenates
+     them into insertCss() (src/client/index.js: THEME_CSS + '\n' + GENERATED_CSS).
+     The sheet is no longer scraped out of ./client.js: since the tsdown pipeline
+     the artifact carries both files as JSON.stringify'd string constants, so the
+     old single-template-literal scrape cannot match. Freshness of the shipped
+     bytes is a separate gate (scripts/build-client.js --check), which is what
+     lets this test read src/ and still assert on what ships. */
   const cssFromSource = (() => {
-    const m = /insertCss\(`([\s\S]*?)`\)/.exec(clientSrc)
-    if (!m) throw new Error('could not locate the insertCss() stylesheet literal')
-    return m[1]
+    const read = (f) => fs.readFileSync(path.join(ROOT, 'src', 'styles', f), 'utf8')
+    const css = read('theme.css') + '\n' + read('generated.css')
+    if (!css.includes('data-endfield-motion')) throw new Error('src/styles sheet is empty or unreadable')
+    return css
   })()
 
   /* The merged design's own markers — and a guard that the removed schemes are
@@ -363,7 +366,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     console.error('FAIL  the stylesheet under test has no merged motion rules — extraction is wrong or the rules are missing')
     process.exit(1)
   }
-  pass('live stylesheet extracted from client.js (' + cssFromSource.length + ' chars)')
+  pass('stylesheet read from src/styles (theme.css + generated.css, ' + cssFromSource.length + ' chars)')
   if (/endfield-stamp|motion='impact'|motion='meter'|motion='silent'/.test(cssFromSource)) {
     fail('合并 · 已删除的方案（冲压/读数/静默）仍在样式表里留有规则')
   } else {
