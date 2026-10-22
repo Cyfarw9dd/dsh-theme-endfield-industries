@@ -37,13 +37,13 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 
 /* Hooks live in the client JS and the stylesheet sources; the built artifact
    re-quotes double-quoted selectors as \" (JSON escaping), so includes()
    only works against the pre-bundle sources. */
-const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'index.js'), 'utf8')
-  + '\n' + fs.readFileSync(path.join(__dirname, '..', 'src', 'styles', 'theme.css'), 'utf8')
-  + '\n' + fs.readFileSync(path.join(__dirname, '..', 'src', 'styles', 'generated.css'), 'utf8')
+const src = fs.readFileSync(sources.CLIENT_ENTRY, 'utf8') + '\n' + sources.concatCss()
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)

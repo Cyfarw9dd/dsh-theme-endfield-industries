@@ -36,6 +36,11 @@ function stageTree() {
   fs.mkdirSync(path.join(tmpRoot, 'src', 'client'), { recursive: true })
   fs.mkdirSync(path.join(tmpRoot, 'scripts'), { recursive: true })
   fs.copyFileSync(path.join(root, 'check.js'), path.join(tmpRoot, 'check.js'))
+  /* check.js loads scripts/lib/sources.js from ITS directory: the temp tree must
+     carry the manifest too, or every case would fail on a missing module. */
+  fs.mkdirSync(path.join(tmpRoot, 'scripts', 'lib'), { recursive: true })
+  fs.copyFileSync(path.join(root, 'scripts', 'lib', 'sources.js'),
+    path.join(tmpRoot, 'scripts', 'lib', 'sources.js'))
   /* check.js asserts facts about the texture build script's source; that file
      is not a mutation target, but it must exist at the redirected root. */
   fs.copyFileSync(path.join(root, 'scripts', 'build-texture.js'), path.join(tmpRoot, 'scripts', 'build-texture.js'))
@@ -153,6 +158,17 @@ const CASES = [
     expect: /fences missing or out of order/,
   },
   {
+    name: 'the client entry imports the stylesheet layers out of manifest order',
+    /* Order is the CSS cascade contract: swapping the two ?raw imports must be
+       caught, otherwise a future reorder silently repaints the whole theme. */
+    file: 'client-src',
+    mutate: (s) => s
+      .replace("import THEME_CSS from '../styles/theme.css?raw'", '@@A@@')
+      .replace("import GENERATED_CSS from '../styles/generated.css?raw'", "import THEME_CSS from '../styles/theme.css?raw'")
+      .replace('@@A@@', "import GENERATED_CSS from '../styles/generated.css?raw'"),
+    expect: /no longer composes src\/styles in manifest order/,
+  },
+  {
     name: 'the built artifact does not parse',
     file: 'client',
     mutate: (s) => s.replace('(function() {', '(function() { /* broken'),
@@ -187,7 +203,8 @@ try {
     }
     resetTree()
     const target = c.file === 'client' ? tmpClient
-      : path.join(tmpRoot, 'src', c.file === 'theme' ? 'styles/theme.css' : 'styles/generated.css')
+      : c.file === 'client-src' ? path.join(tmpRoot, 'src', 'client', 'index.js')
+        : path.join(tmpRoot, 'src', 'styles', c.file === 'theme' ? 'theme.css' : 'generated.css')
     fs.writeFileSync(target, mutated)
     const r = runCheck()
     if (!r.failed) {

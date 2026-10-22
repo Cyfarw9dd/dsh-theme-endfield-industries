@@ -6,6 +6,7 @@ DSH Web 主题插件（《明日方舟：终末地》工业编辑风）。改任
 
 - **双半架构**：`index.js`（Host/Node，启动加载）+ `client.js`（浏览器，按请求读盘、**刷新生效**）。安装用 link 方式：`dsh plugin --profile web add <本仓库>`
 - **client.js 是构建产物**：源码在 `src/client/index.js`（JS）与 `src/styles/theme.css` + `generated.css`（真 CSS），tsdown 打包成单文件产物（与 @deepseek-ai 自家 client 包同管线）。改完跑 `npm run build`（或 `npm run watch`）再刷新；产物提交入库，`scripts/build-client.js --check` 防漂移。**不手改 client.js**
+- **样式层清单只有一个**：`scripts/lib/sources.js` 的 `STYLE_FILES` 定义层与顺序（顺序 = 级联契约），所有脚本/测试取 `concatCss()`；`check.js` 断言 `src/client/index.js` 的 `?raw` 导入与清单同名同序——加/拆样式层只需改清单 + 入口两处，别在别处另拼路径
 - 生成物三件套（音效 `sounds/`、`generated.css` 的掩码/纹理围栏区、`client.js` 产物）：**只改源与脚本，不手改产物**，各 `--check` 防漂移
 
 ## 硬规则

@@ -48,6 +48,8 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 const os = require('os')
 const http = require('http')
 const zlib = require('zlib')
@@ -353,8 +355,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
      bytes is a separate gate (scripts/build-client.js --check), which is what
      lets this test read src/ and still assert on what ships. */
   const cssFromSource = (() => {
-    const read = (f) => fs.readFileSync(path.join(ROOT, 'src', 'styles', f), 'utf8')
-    const css = read('theme.css') + '\n' + read('generated.css')
+    const css = sources.concatCss()
     if (!css.includes('data-endfield-motion')) throw new Error('src/styles sheet is empty or unreadable')
     return css
   })()

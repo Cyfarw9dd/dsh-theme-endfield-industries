@@ -30,13 +30,14 @@ const src = fs.readFileSync(file, 'utf8')
    source for the same reason (the bundler re-quotes strings). */
 /* selftest.js redirects the source root into a temp copy so its mutations
    never touch the working tree (same trick as the old argv target override). */
-const srcRoot = (process.env && process.env.DSH_CHECK_ROOT) || __dirname
-const cssPath = (n) => path.join(srcRoot, 'src', 'styles', n)
-const cssText = fs.readFileSync(cssPath('theme.css'), 'utf8')
-  + '\n' + fs.readFileSync(cssPath('generated.css'), 'utf8')
+/* Resolved from THIS file's directory (not process.cwd), so selftest.js can
+   redirect the whole tree into a temp copy and check.js loads the copy's own
+   manifest + sources. The manifest is the single definition of how the sheet
+   composes; nothing below re-derives "theme.css then generated.css". */
+const sources = require(path.join(__dirname, 'scripts', 'lib', 'sources.js'))
+const cssText = sources.concatCss()
 const cssLines = cssText.split('\n')
-const clientSrcPath = path.join(srcRoot, 'src', 'client', 'index.js')
-const clientSrc = fs.readFileSync(clientSrcPath, 'utf8')
+const clientSrc = fs.readFileSync(sources.CLIENT_ENTRY, 'utf8')
 const lines = src.split('\n')
 
 let failures = 0
@@ -49,6 +50,32 @@ const pass = (msg) => console.log('ok    ' + msg)
    are obsolete with real .css files; what stays mechanical is that the
    generated fences exist, in order, in generated.css. */
 const body = cssText
+{
+  /* --- 1a. the client entry composes the manifest, in manifest order ---
+     sources.js decides WHICH files and in WHAT order; src/client/index.js must
+     import exactly those with ?raw, in that order, and hand them to the single
+     insertCss() call in the same order. Without this guard the manifest could
+     drift from the entry and silently change the cascade (order is the contract). */
+  const imports = [...clientSrc.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+'\.\.\/styles\/([\w.-]+)\?raw'/g)]
+  const importedNames = imports.map((m) => m[2])
+  const importedIds = imports.map((m) => m[1])
+  /* Pick the composition call, not the `function insertCss(css)` definition:
+     it is the one insertCss(...) whose argument references the imported ids. */
+  const calls = [...clientSrc.matchAll(/insertCss\(\s*([^)]*)\)/g)]
+    .map((m) => m[1])
+    .filter((arg) => importedIds.some((id) => new RegExp('\\b' + id + '\\b').test(arg)))
+  const callArg = calls.length === 1 ? calls[0] : ''
+  const idsInOrder = calls.length === 1 && importedIds.every((id, i) => callArg.indexOf(id) >= 0
+    && (i === 0 || callArg.indexOf(id) > callArg.indexOf(importedIds[i - 1])))
+  const separatorOk = importedIds.length < 2 || /'\\n'/.test(callArg)
+  if (JSON.stringify(importedNames) === JSON.stringify(sources.STYLE_FILES) && idsInOrder && separatorOk) {
+    pass('client entry imports the stylesheet manifest, in order (' + sources.STYLE_FILES.join(' + ') + ')')
+  } else {
+    fail('src/client/index.js no longer composes src/styles in manifest order — expected ['
+      + sources.STYLE_FILES.join(', ') + '] imported ?raw and joined with \'\\n\' into insertCss(); got ['
+      + importedNames.join(', ') + '] → insertCss(' + callArg.trim() + ')')
+  }
+}
 {
   const fences = ['EDGE_TEX_BEGIN', 'EMBLEM_MASK_BEGIN', 'HERO_LOGO_BEGIN']
   let last = -1

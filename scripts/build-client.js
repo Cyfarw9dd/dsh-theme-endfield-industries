@@ -23,8 +23,7 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
-const ARTIFACT = path.join(ROOT, 'client.js')
-const DIST = path.join(ROOT, 'dist', 'client.iife.js')
+const { ARTIFACT, DIST_ARTIFACT: DIST } = require('./lib/sources.js')
 
 function runTsdown(extra = []) {
   const bin = path.join(ROOT, 'node_modules', '.bin', 'tsdown')

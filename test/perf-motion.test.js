@@ -46,6 +46,8 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 const os = require('os')
 const http = require('http')
 const { spawn } = require('child_process')
@@ -71,10 +73,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
    GENERATED_CSS): the build embeds the css as an escaped string literal, so the
    old single-template-literal scrape no longer exists. Freshness of the shipped
    bytes is scripts/build-client.js --check's gate, not this test's. */
-const cssFromSource = (() => {
-  const read = (f) => fs.readFileSync(path.join(ROOT, 'src', 'styles', f), 'utf8')
-  return read('theme.css') + '\n' + read('generated.css')
-})()
+const cssFromSource = sources.concatCss()
 
 /* ---------------- 1. static guard ---------------- */
 const motionSection = (() => {
