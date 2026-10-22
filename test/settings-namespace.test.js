@@ -40,7 +40,7 @@
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const { settingsScopeStub, FIELD_DEFAULTS, KEY_TO_FIELD, fieldName } =
+const { formStub, FIELD_DEFAULTS, KEY_TO_FIELD, fieldName } =
   require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
 const HOST = require(path.join(__dirname, '..', 'index.js'))
 
@@ -230,7 +230,7 @@ function boot(scope) {
     get: (n) => {
       if (n === 'theme') return { overrideTokens: () => () => {} }
       if (n === 'slots') return slots
-      if (n === 'settingsScope') return scope
+      if (n === 'configForms') return scope
       return undefined
     },
     effect: () => {},
@@ -254,7 +254,7 @@ function hostShapedSection(extra = {}) {
     subscribe(l) { listeners.push(l); return () => { const i = listeners.indexOf(l); if (i >= 0) listeners.splice(i, 1) } },
     set(f, v) { wire.push([f, String(v)]); section[f] = String(v); for (const l of listeners.slice()) { try { l() } catch (e) {} } },
   }
-  return { binder: { bind: () => scope }, section, wire, scope }
+  return { service: { get: () => scope }, section, wire, scope }
 }
 
 /** Find the panel row for a UI key and its primary switch button. */
@@ -347,7 +347,7 @@ if (compoundCovered.length === COMPOUND.length) {
 
 {
   const store = hostShapedSection()
-  const { render } = boot(store.binder)
+  const { render } = boot(store.service)
   /* Thunder ON so its child switch is enabled. */
   store.section.thunder = '1'
   let tree = render()
@@ -433,7 +433,7 @@ if (compoundCovered.length === COMPOUND.length) {
     subscribe(l) { listeners.push(l); return () => {} },
     set(f, v) { wire.push([f, String(v)]); section[f] = String(v) },
   }
-  const { render } = boot({ bind: () => scope })
+  const { render } = boot({ get: () => scope })
   const beforeTree = render()
   const textBefore = textOf(beforeTree)
   const animTrigBefore = rowTrigger(beforeTree, 'thunder-anim')
@@ -485,7 +485,7 @@ if (compoundCovered.length === COMPOUND.length) {
     subscribe() { return () => {} },
     set(f, v) { wire.push([f, String(v)]); section[f] = String(v) },
   }
-  const { render } = boot({ bind: () => scope })
+  const { render } = boot({ get: () => scope })
   const trig = rowTrigger(render(), 'thunder-anim')
   if (trig && textOf(trig).includes('开启')) pass('用户显式写入的 thunderAnim=1 覆盖旧拼写里的 0')
   else fail('a user-set declared value lost to a stray legacy key: ' + (trig ? textOf(trig) : '(none)'))
@@ -508,7 +508,7 @@ if (compoundCovered.length === COMPOUND.length) {
     subscribe() { return () => {} },
     set(f, v) { /* the write is accepted but the served section is not updated yet */ global.__noEcho = [f, String(v)] },
   }
-  const { render } = boot({ bind: () => scope })
+  const { render } = boot({ get: () => scope })
   const step = driveRowFlip(() => render(), 'thunder-anim')
   if (step !== 'ok') fail('thunder-anim dropdown could not be driven (no-echo case): ' + step)
   const afterTree = render()
@@ -544,7 +544,7 @@ if (compoundCovered.length === COMPOUND.length) {
       for (const l of listeners.slice()) { try { l() } catch (e) {} }
     },
   }
-  const { render } = boot({ bind: () => scope })
+  const { render } = boot({ get: () => scope })
   /* Every value row is the unified dropdown; the held-edit mechanism it
      exercises is unchanged — the drive is open-the-menu, pick-the-option. */
   const beforeTrig = rowTrigger(render(), 'watermark-persist')

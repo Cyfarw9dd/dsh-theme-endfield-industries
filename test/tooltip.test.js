@@ -116,7 +116,7 @@ const setScheme=(s)=>{
   if(lastTokens) applyTokens(lastTokens)
 }
 const mod=window.__MOD__.factory(()=>null)
-mod.apply({get:(n)=>n==='theme'?{overrideTokens:(_s,t)=>{applyTokens(t);return ()=>{}}}: (n==='settingsScope'?__prefs.binder:undefined),effect:()=>{}})
+mod.apply({get:(n)=>n==='theme'?{overrideTokens:(_s,t)=>{applyTokens(t);return ()=>{}}}: (n==='configForms'?__prefs.forms:undefined),effect:()=>{}})
 
 const EXPECT=${JSON.stringify(EXPECT)}
 const hex2rgb=(h)=>{const n=parseInt(h.slice(1),16);return 'rgb('+((n>>16)&255)+', '+((n>>8)&255)+', '+(n&255)+')'}

@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { settingsScopeStub } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'));
+const { formStub } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'));
 
 const ROOT = path.resolve(__dirname, '..');
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8');
@@ -116,14 +116,14 @@ try {
 /* The shipped master switch is OFF (sound is opt-in), so the page that wants the
    watcher running has to opt in — exactly as a user does in 设置 › 05 音频. The
    off-path is asserted further down by flipping the same field back to '0'. */
-const prefStore = settingsScopeStub({ audioEnabled: '1' })
+const prefStore = formStub({ audioEnabled: '1' })
 const slots = { inject(_n, fn) { fn() }, register() { return () => {} } }
 const mod = loaded.factory(() => null)
 const ctx = {
   get: (n) => {
     if (n === 'theme') return { overrideTokens: () => () => {} }
     if (n === 'slots') return slots
-    if (n === 'settingsScope') return prefStore.binder
+    if (n === 'configForms') return prefStore.service
     return undefined
   },
   effect: () => {},

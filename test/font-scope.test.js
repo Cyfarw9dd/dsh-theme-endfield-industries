@@ -125,7 +125,7 @@ ${BROWSER_SETTINGS_SCOPE_SNIPPET}
   mod.apply({
     get: function (n) {
       if (n === 'theme') return { overrideTokens: function () { return function () {} } }
-      if (n === 'settingsScope') return __prefs.binder
+      if (n === 'configForms') return __prefs.forms
       return undefined
     },
     effect: function (f) { return f() },

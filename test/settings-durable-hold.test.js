@@ -16,7 +16,7 @@
  * The fix holds the edit (keeps it dirty, page-local) while the scope is not
  * durably served, and replays it automatically when the snapshot flips to
  * status:'ready'. This test drives the real client.js apply() through a
- * two-phase fake `ctx.settingsScope` whose snapshot starts 'unavailable' and
+ * two-phase fake `ctx.configForms` whose snapshot starts 'unavailable' and
  * later becomes 'ready', exactly like a Host registration that settles after
  * the mirror's first describe. Mirrors the no-browser harness of
  * settings-rows.test.js.
@@ -111,9 +111,11 @@ function makeTwoPhaseScope() {
       for (const l of listeners.slice()) { try { l() } catch (e) { /* keep going */ } }
     },
   }
-  const binder = { bind() { return scope } }
+  /* The ctx.configForms service: every candidate spelling gets the same
+     single-namespace form (the theme binds the first candidate it finds). */
+  const service = { get() { return scope } }
   return {
-    binder, scope,
+    service, scope,
     get wireWrites() { return wireWrites.slice() },
     /** Flip the namespace into the Host's served list; listeners fire as a real
         snapshot replacement would. */
@@ -180,7 +182,7 @@ const ctx = {
   get: (n) => {
     if (n === 'theme') return { overrideTokens: () => () => {} }
     if (n === 'slots') return slots
-    if (n === 'settingsScope') return scope2.binder
+    if (n === 'configForms') return scope2.service
     return undefined
   },
   effect: () => {},

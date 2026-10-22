@@ -1,22 +1,23 @@
 /**
- * settings-scope.js — canonical DSH settings seams used by the theme tests.
+ * settings-scope.js — canonical DSH settings seam used by the theme tests.
  *
  * Migration (see docs/engineering-notes.md): the theme no longer persists to
- * localStorage. Its switches read/write a DSH settings namespace and it has
- * outlived two generations of that seam, so this file models BOTH:
+ * localStorage. Its switches read/write a DSH settings namespace through the
+ * `configForms` shared-form service (peerDependencies floors the host at
+ * >=0.2.0, so the pre-0.1.7 `settingsScope` binder is NOT modelled any more —
+ * a page without configForms is not a supported configuration).
  *
- *   0.1.7-rc.1  `configFormsStub()` — the `ctx.configForms` service. A form is
- *               keyed by the PROFILE ENTRY ID (`theme-endfield`, see
- *               index.js SETTINGS_ENTRY); its `set()` returns
- *               `Promise<boolean>`, where `false` means the Host refused or
- *               skipped the write (memory mode on a non-loopback page). This is
- *               what test/settings-config-forms.test.js drives.
- *   <=0.1.5     `settingsScopeStub()` — the deprecated `ctx.settingsScope`
- *               binder over namespace `dsh-theme-endfield`, whose host half was
- *               `ctx.settings.register(ns, schema)` persisted by
- *               `@deepseek-ai/dsh-settings-file` to `<dshHome>/settings.yaml`.
- *               Every other settings test still drives this generation, which
- *               is exactly why the client keeps the fallback.
+ *   `configFormsStub()` — the `ctx.configForms` service. A form is keyed by
+ *               the PROFILE ENTRY ID (`theme-endfield`, see index.js
+ *               SETTINGS_ENTRY); its `set()` returns `Promise<boolean>`,
+ *               where `false` means the Host refused or skipped the write
+ *               (memory mode on a non-loopback page). This is what
+ *               test/settings-config-forms.test.js drives.
+ *   `formStub()`  — the same service pre-bound to the canonical entry id and
+ *               SERVED from the first read, with the convenience helpers
+ *               (section / setField / get / setSection / reset) the
+ *               simpler tests need. Same surface the old settingsScopeStub
+ *               exposed, minus the binder.
  *
  * THE SECTION IS KEYED BY SCHEMA FIELD NAME, NOT BY UI KEY. This is the whole
  * point of these tests and it is worth stating explicitly, because getting it
@@ -31,14 +32,12 @@
  * that mapping and must stay in step with client.js PREFS_KEY_TO_FIELD.
  *
  * Contracts honoured (mirroring @deepseek-ai/dsh-client-ui-settings):
- *   0.1.7       configForms.get(entryId) -> form
+ *   configForms.get(entryId) -> form
  *               form.getSnapshot() -> { status, value, base, user, revision, writable, mode }
+ *               (0.2.1-rc.2+ snapshots carry NO `mode` at all — model that with
+ *               the `omitMode` option; the theme reads absence as durable)
  *               form.subscribe(listener) -> disposer
  *               form.set(field, value) / form.unset(field) -> Promise<boolean>
- *   legacy      binder.bind({ namespace, decode? }) -> scope
- *               scope.getSnapshot() -> { status, value, writable, mode, ... }
- *               scope.subscribe(listener) -> disposer
- *               scope.set(field, value); scope.unset(field)
  *
  * The theme only trusts a `status === 'ready'` snapshot with a `value` object;
  * before that, and when no transport is present at all, it falls back to
@@ -136,59 +135,36 @@ function fieldName(key) {
 }
 
 /**
- * Build a fake settingsScope binder over an in-memory section.
+ * Build a fake `configForms` service pre-bound to the canonical entry id
+ * (`theme-endfield`) and SERVED from the first read, plus the convenience
+ * helpers the simpler tests drive values through.
  *
  * @param initial - initial stored section (schema field -> string; UI keys are
  *                  accepted too). Undefined fields resolve to FIELD_DEFAULTS
  *                  during value resolution, exactly like a schema `.default()`
  *                  merges into a stored section.
- * @returns { binder, section, getSnapshot, setField, setSection, change }
+ * @param options - forwarded to configFormsStub (mode / omitMode / writable /
+ *                  accept / loading are the useful ones).
+ * @returns { service, section, getSnapshot, writes, get, setField, setSection, reset }
  */
-function settingsScopeStub(initial = {}) {
-  // Merged defaults so `value` is never missing a key (mirrors schema defaults).
-  const section = Object.assign({}, FIELD_DEFAULTS)
-  for (const k of Object.keys(initial)) {
-    const field = fieldName(k)
-    if (Object.prototype.hasOwnProperty.call(FIELD_DEFAULTS, field)) section[field] = String(initial[k])
-  }
-
-  let listeners = []
-  const notify = () => { for (const l of listeners.slice()) { try { l() } catch (e) { /* test safety */ } } }
-
-  const getSnapshot = () => ({
-    status: 'ready',
-    value: Object.assign({}, section),
-    base: Object.assign({}, FIELD_DEFAULTS),
-    user: Object.assign({}, section),
-    revision: 1,
-    writable: true,
-    mode: 'host',
-  })
-
-  const scope = {
-    getSnapshot,
-    subscribe(listener) { listeners.push(listener); return () => { const i = listeners.indexOf(listener); if (i >= 0) listeners.splice(i, 1) } },
-    set(field, value) { section[field] = String(value); notify() },
-    unset(field) { section[field] = FIELD_DEFAULTS[field]; notify() },
-  }
-
-  const binder = {
-    bind() { return scope }, // the theme only uses the default field decode
-  }
-
+function formStub(initial = {}, options = {}) {
+  const NS = 'theme-endfield'
+  const backing = configFormsStub({ [NS]: initial }, Object.assign({ served: [NS] }, options))
+  const section = backing.sectionOf(NS)
   return {
-    binder,
+    service: backing.service,
+    writes: backing.writes,
     section,
     get: (key) => section[fieldName(key)],
-    set: scope.set,
-    unset: scope.unset,
-    setField: (key, value) => { section[fieldName(key)] = String(value); notify() },
+    setField: (key, value) => { section[fieldName(key)] = String(value); backing.touch(NS) },
     /** Write a section key VERBATIM — no key->field mapping. This is how a test
      *  reproduces a document a buggy build wrote (e.g. the undeclared
      *  'thunder-anim' next to a defaulted 'thunderAnim'). */
-    setSection: (key, value) => { section[key] = String(value); notify() },
-    getSnapshot,
-    reset() { for (const k of Object.keys(FIELD_DEFAULTS)) section[k] = FIELD_DEFAULTS[k]; notify() },
+    setSection: (key, value) => { section[key] = String(value); backing.touch(NS) },
+    getSnapshot: () => backing.service.get(NS).getSnapshot(),
+    reset() { for (const k of Object.keys(FIELD_DEFAULTS)) section[k] = FIELD_DEFAULTS[k]; backing.touch(NS) },
+    serve: backing.serve,
+    settle: backing.settle,
   }
 }
 
@@ -210,6 +186,10 @@ function settingsScopeStub(initial = {}) {
  *                            resolves false and the section does not change.
  * @param options.mode      - 'host' (default) or 'memory' (non-loopback page;
  *                            never persists).
+ * @param options.omitMode  - model the DSH 0.2.1-rc.2+ snapshot, which carries
+ *                            NO `mode` key at all. The theme must read absence
+ *                            as durable; a stub that always spells a mode
+ *                            freezes the 0.1.7-0.2.0 shape into the suite.
  * @param options.writable  - false models a read-only Host document.
  * @param options.loading   - namespaces that report `status:'loading'` with
  *                            `writable:false` and NO value, modelling the real
@@ -231,6 +211,8 @@ function configFormsStub(initialSections = {}, options = {}) {
   // Namespaces still in flight: 'loading' now, ready once settle() is called.
   const loading = (options.loading || []).slice()
   const mode = options.mode || 'host'
+  /* 0.2.1-rc.2+ snapshots carry no `mode` key at all (omitMode models that). */
+  const withMode = options.omitMode !== true
   const writable = options.writable !== false
   // A mirror that answers without replacing any form's snapshot (models the
   // worst case the theme's bounded settle watch exists for).
@@ -257,21 +239,24 @@ function configFormsStub(initialSections = {}, options = {}) {
        exact shape the live theme logs at boot — status 'loading', writable
        false, no value — and a write issued here must NOT be treated as landed
        (prefsDurablyServed requires status 'ready'). */
+    const snap = (extra) => {
+      if (withMode) return Object.assign({ mode }, extra)
+      return extra
+    }
     if (loading.indexOf(ns) >= 0) {
-      return { status: 'loading', value: undefined, base: undefined, user: undefined, revision: undefined, writable: false, mode }
+      return snap({ status: 'loading', value: undefined, base: undefined, user: undefined, revision: undefined, writable: false })
     }
     if (served.indexOf(ns) < 0) {
-      return { status: 'unavailable', value: undefined, base: undefined, user: undefined, revision: undefined, writable, mode }
+      return snap({ status: 'unavailable', value: undefined, base: undefined, user: undefined, revision: undefined, writable })
     }
-    return {
+    return snap({
       status: 'ready',
       value: Object.assign({}, sectionOf(ns)),
       base: Object.assign({}, FIELD_DEFAULTS),
       user: Object.assign({}, sectionOf(ns)),
       revision: 1,
       writable,
-      mode,
-    }
+    })
   }
   const formFor = (ns) => forms[ns] || (forms[ns] = {
     getSnapshot: () => snapshotOf(ns),
@@ -341,4 +326,4 @@ function configFormsStub(initialSections = {}, options = {}) {
   }
 }
 
-module.exports = { settingsScopeStub, configFormsStub, FIELD_DEFAULTS, KEY_TO_FIELD, fieldName }
+module.exports = { formStub, configFormsStub, FIELD_DEFAULTS, KEY_TO_FIELD, fieldName }

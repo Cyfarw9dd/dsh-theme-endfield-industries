@@ -24,7 +24,7 @@
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const { settingsScopeStub } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
+const { formStub } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
@@ -116,10 +116,10 @@ const makeLocale = (active) => {
 }
 
 /** Load the bundle and apply it with a given ctx; returns the captured render fn.
-    `section` seeds the fake dsh settingsScope binder (the theme no longer reads
+    `section` seeds the fake dsh configForms service (the theme no longer reads
     localStorage) with the same preferences the old store pre-wrote. */
 const mount = (ctxExtras, section) => {
-  const prefs = settingsScopeStub(section || {})
+  const prefs = formStub(section || {})
   const sandbox = {
     window: {
       __ModuleLoader__: null,
@@ -156,7 +156,7 @@ const mount = (ctxExtras, section) => {
     get: (n) => {
       if (n === 'theme') return { overrideTokens: () => () => {} }
       if (n === 'slots') return slots
-      if (n === 'settingsScope') return prefs.binder
+      if (n === 'configForms') return prefs.service
       return ctxExtras[n]
     },
     effect: (fn) => { const d = fn(); if (typeof d === 'function') effects.push(d) },

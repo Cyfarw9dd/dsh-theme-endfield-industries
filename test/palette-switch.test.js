@@ -107,7 +107,7 @@ const setScheme=(s)=>{
 }
 const mod=window.__MOD__.factory(()=>null)
 const ctx={
-  get:(n)=> n==='theme' ? {overrideTokens:(_s,t)=>{applyTokens(t); return ()=>{ for(const n of appliedTokens) document.body.style.removeProperty(n); appliedTokens=[] }}} : (n==='settingsScope' ? __prefs.binder : undefined),
+  get:(n)=> n==='theme' ? {overrideTokens:(_s,t)=>{applyTokens(t); return ()=>{ for(const n of appliedTokens) document.body.style.removeProperty(n); appliedTokens=[] }}} : (n==='configForms' ? __prefs.forms : undefined),
   effect:(f)=>{window.__dispose__=f()},
 }
 // palette is intentionally NOT seeded, so it resolves to its default 终末地灰.

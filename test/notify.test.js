@@ -57,7 +57,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
   }
   const mod=window.__MOD__.factory(()=>null)
   window.__dispose__=mod.apply({
-    get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='settingsScope'?__prefs.binder:(n==='sessions'?sess:undefined)),
+    get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='configForms'?__prefs.forms:(n==='sessions'?sess:undefined)),
     effect:(f)=>f(),
   })
   document.body.appendChild(document.createElement('span'))

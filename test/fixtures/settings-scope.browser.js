@@ -1,13 +1,14 @@
 /**
  * settings-scope.browser.js — reusable snippet (source text) that headless
- * Chrome tests inline to provide the dsh settingsScope seam to client.js.
+ * Chrome tests inline to provide the dsh configForms seam to client.js.
  *
- * The client bundle reads preferences through a fake `ctx.settingsScope` binder
- * provided by the test's stub `ctx`. This snippet returns a fresh binder over an
- * in-memory section seeded from a plain object, exactly like the Node fixture in
- * ./settings-scope.js. It is intentionally a string of JS meant to be
- * interpolated into the inline <script> of a mock page, because those pages
- * cannot `require()`.
+ * The client bundle reads preferences through a fake `ctx.configForms` service
+ * provided by the test's stub `ctx` (the pre-0.1.7 settingsScope binder is not
+ * modelled any more: peerDependencies floors the host at >=0.2.0). This snippet
+ * returns a fresh service over an in-memory section seeded from a plain object,
+ * exactly like the Node fixture in ./settings-scope.js. It is intentionally a
+ * string of JS meant to be interpolated into the inline <script> of a mock
+ * page, because those pages cannot `require()`.
  *
  * THE SECTION IS KEYED BY SCHEMA FIELD NAME (camelCase), exactly like the host's
  * index.js FIELD_DEFAULTS — see the long note in ./settings-scope.js for why a
@@ -31,7 +32,7 @@
  *   var __prefs = __endfieldSettingsScope({}, { omitMode: true });
  *   mod.apply({ get: function (n) {
  *     if (n === 'theme')      return { overrideTokens: function () { return function () {} } };
- *     if (n === 'settingsScope') return __prefs.binder;
+ *     if (n === 'configForms') return __prefs.forms;
  *     ...
  *   }, effect: function () {} });
  */
@@ -106,25 +107,30 @@ function __endfieldSettingsScope(initial, opts) {
     return s;
   };
   if (!ready) setTimeout(function () { ready = true; notify(); }, readyDelay);
-  var scope = {
+  var form = {
     getSnapshot: snap,
     subscribe: function (l) { listeners.push(l); return function(){var i=listeners.indexOf(l); if(i>=0)listeners.splice(i,1);}; },
-    set: function (f, v) { section[f] = String(v); notify(); },
-    unset: function (f) { section[f] = __endfieldFieldDefaults[f]; notify(); }
+    /* A real ConfigForm.set() returns Promise<boolean>; a synchronous truthy
+       return keeps the same "issued + accepted" settlement for stub pages. */
+    set: function (f, v) { section[f] = String(v); notify(); return true; },
+    unset: function (f) { section[f] = __endfieldFieldDefaults[f]; notify(); return true; }
   };
+  /* The ctx.configForms service: every entry spelling resolves to the same
+     single-namespace form (the theme binds the first candidate it finds). */
+  var forms = { get: function (ns) { return form; } };
   return {
-    binder: { bind: function () { return scope; } },
+    forms: forms,
     section: section,
     getSnapshot: snap,
-    set: scope.set,
+    set: form.set,
     /* Drop-in shims so a page that still speaks the old localStorage-key
        vocabulary keeps working: setItem('dsh-theme-endfield-thunder-anim', v)
        now writes the SCHEMA field, which is the whole point. */
-    setItem: function (name, v) { scope.set(fieldOf(name), v); },
-    removeItem: function (name) { scope.set(fieldOf(name), __endfieldFieldDefaults[fieldOf(name)]); },
+    setItem: function (name, v) { form.set(fieldOf(name), v); },
+    removeItem: function (name) { form.set(fieldOf(name), __endfieldFieldDefaults[fieldOf(name)]); },
     getItem: function (name) { var f = fieldOf(name); return f in section ? section[f] : null; },
     get: function (name){ var f = fieldOf(name); return f in section ? section[f] : undefined; },
-    setField: function (name, v) { scope.set(fieldOf(name), v); }
+    setField: function (name, v) { form.set(fieldOf(name), v); }
   };
 }
 `

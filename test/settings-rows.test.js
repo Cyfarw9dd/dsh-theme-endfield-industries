@@ -20,7 +20,7 @@
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const { settingsScopeStub, fieldName } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
+const { formStub, fieldName } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
@@ -131,7 +131,7 @@ const document = {
 /* The durable prefs seam: a fake settingsScope binder over an in-memory section.
    Start with the default section (enabled on). The panel drives reads from it,
    and every toggle writes back through it. */
-const prefStore = settingsScopeStub()
+const prefStore = formStub()
 
 const sandbox = {
   window: {
@@ -170,7 +170,7 @@ const ctx = {
   get: (n) => {
     if (n === 'theme') return { overrideTokens: () => () => {} }
     if (n === 'slots') return slots
-    if (n === 'settingsScope') return prefStore.binder
+    if (n === 'configForms') return prefStore.service
     return undefined
   },
   effect: () => {},

@@ -132,7 +132,7 @@ const setScheme=(s)=>{
   if(lastTokens) applyTokens(lastTokens)
 }
 const mod=window.__MOD__.factory(()=>null)
-mod.apply({get:(n)=>n==='theme'?{overrideTokens:(_s,t)=>{applyTokens(t);return ()=>{}}}: (n==='settingsScope'?__prefs.binder:undefined),effect:()=>{}})
+mod.apply({get:(n)=>n==='theme'?{overrideTokens:(_s,t)=>{applyTokens(t);return ()=>{}}}: (n==='configForms'?__prefs.forms:undefined),effect:()=>{}})
 
 const buttonTransition = getComputedStyle(document.getElementById('edit')).transition
 R('按钮悬停反馈无过渡延迟', buttonTransition === 'none', buttonTransition)
