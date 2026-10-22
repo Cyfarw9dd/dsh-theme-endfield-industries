@@ -16,12 +16,13 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
 /* CSS tier assertions read the source stylesheet (see palette-contrast). */
-const css = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
-  + '\n' + fs.readFileSync(path.join(ROOT, 'src', 'styles', 'generated.css'), 'utf8')
+const css = sources.concatCss()
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }

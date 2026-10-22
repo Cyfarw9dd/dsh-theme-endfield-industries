@@ -37,13 +37,15 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 const os = require('os')
 const { execFileSync } = require('child_process')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
-const cssSrc = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
+const cssSrc = sources.concatCss()
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }

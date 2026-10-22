@@ -16,13 +16,14 @@
  */
 const fs = require('fs')
 const path = require('path')
+/* Single definition of how the stylesheet composes (src/styles manifest). */
+const sources = require('../scripts/lib/sources.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 /* CSS-rule assertions read the SOURCE stylesheet: the build embeds the css as
    an escaped string literal, so selector/block layout only exists in src/. */
-const css = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
-  + '\n' + fs.readFileSync(path.join(ROOT, 'src', 'styles', 'generated.css'), 'utf8')
+const css = sources.concatCss()
 /* JS token-override literals keep their single-quoted spelling only in the
    pre-bundle client source (the bundler re-quotes artifact strings). */
 const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
