@@ -10,6 +10,7 @@ import {
   PREFS_FIELD_TO_LEGACY_KEY,
   prefsFieldOf,
 } from './prefs/keys.js'
+import { createLegacyMigrator } from './prefs/legacy.js'
 /**
  * dsh-theme-endfield — Edge Intelligence Theme (browser client bundle)
  * 还原自《明日方舟：终末地》（Arknights: Endfield）官网的「工业编辑风」。
@@ -658,74 +659,14 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       }
       return out
     }
-    /* Sections written by the BUILD THAT SHIPPED THE FIELD-NAME BUG still carry
-       the pre-migration spelling of a compound field ('watermarkPersist' written as
-       'watermark-persist'), because that write landed on an undeclared key the schema
-       passes through instead of storing it into the declared field. Without this
-       pass the user's stored choice is ignored and the field default silently
-       wins — for them the switch would look like it reset again after the fix.
-       Returns the [field, value] pairs whose recorded legacy value is the one to
-       honour, i.e. the edits that need re-committing onto the declared field.
-
-       WHEN IS THE DECLARED FIELD THE USER'S OWN VALUE? This is the whole
-       question, because a fetched section ALWAYS carries every declared field:
-       the schema merges its defaults into the stored section, so
-       `hasOwnProperty` cannot tell a user-set value from an implied default.
-       And in practice only ONE signal can: a value that differs from the shipped
-       default. A declared field sitting at its default is indistinguishable from
-       an untouched one — the section is the merged view, so nothing survives in
-       it to say whether the document stored that default or the schema inserted
-       it. Therefore:
-
-         declared absent or === default  -> nothing recorded a choice for this
-                                            field, so the stray legacy key is the
-                                            only trace of one: honour it.
-         declared set to anything else    -> a correctly-writing build stored it,
-                                            so it wins and the stray key is
-                                            ignored. (Never let the pre-migration
-                                            spelling overwrite a real edit.)
-
-       That makes the migration idempotent in the good direction: after the value
-       is re-committed, the declared field is non-default and the stray key can
-       never win again. */
-    const prefsLegacyFields = (section) => {
-      const out = []
-      if (section === null || typeof section !== 'object') return out
-      for (const field of Object.keys(PREFS_FIELD_TO_LEGACY_KEY)) {
-        const legacy = PREFS_FIELD_TO_LEGACY_KEY[field]
-        if (!Object.prototype.hasOwnProperty.call(section, legacy)) continue
-        const value = section[legacy]
-        if (value === undefined || value === null || String(value) === '') continue
-        const declared = Object.prototype.hasOwnProperty.call(section, field) ? String(section[field]) : undefined
-        if (declared !== undefined && declared !== PREFS_FIELD_DEFAULTS[field]) continue
-        out.push([field, String(value)])
-      }
-      return out
-    }
-    /* Re-commit a legacy-spelled value onto the declared field, once. Writes go
-       through prefsSet, i.e. through the same durable gate as a user toggle: on a
-       served scope it lands on the schema field immediately, on one that is not
-       served yet it is held and replayed (and mirrored locally, so the theme
-       behaves correctly meanwhile). The stale key itself is left in the document
-       — the theme no longer declares or reads it, and rewriting a section it does
-       not own would be a bigger hammer than the bug deserves. */
-    const prefsMigrated = new Set()
-    // The section object this pass has already run against. A section is a fresh
-    // object on every transport update, so identity is what says "this document
-    // has not been examined yet" — and it keeps the pass from re-running against
-    // its own writes within the same snapshot.
-    let prefsMigratedFor = null
-    const prefsMigrateLegacy = (section) => {
-      if (section === null || typeof section !== 'object') return
-      if (section === prefsMigratedFor) return
-      prefsMigratedFor = section
-      for (const [field, value] of prefsLegacyFields(section)) {
-        if (prefsMigrated.has(field)) continue
-        prefsMigrated.add(field)
-        dbg('migrating legacy-spelled field', PREFS_FIELD_TO_LEGACY_KEY[field], '->', field, '=', value)
-        prefsSet(field, value)
-      }
-    }
+    /* Legacy-spelled fields written by the buggy build are repaired once per run;
+       the pure decision rule lives in prefs/legacy.js. */
+    const prefsMigrateLegacy = createLegacyMigrator({
+      // Thunks, not references: prefsSet/dbg are declared in this closure and the
+      // migrator only ever calls them long after apply() finished.
+      commit: (field, value) => prefsSet(field, value),
+      debug: (...a) => dbg(...a),
+    }).migrate
     /* Everything a bound transport needs after acquisition: adopt the initial
        snapshot, subscribe, then run the catch-up / legacy-repair / settled
        passes the single-transport version already ran. */
