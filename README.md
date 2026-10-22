@@ -4,7 +4,7 @@ English (current) · [简体中文](README.zh-CN.md)
 
 A DSH Web theme plugin modeled on the official Arknights: Endfield website (an unofficial fan work).
 
-Cream paper background, ink-black text, zero-radius industrial editorial look. The default palette, **Endfield Gray**, follows the official site's gray-scale interaction grammar; Valley Yellow and Wuling Teal accents are also available. The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
+Cream paper background, ink-black text, zero-radius Endfield industrial-terminal look. The default palette, **Endfield Gray**, follows the official site's gray-scale interaction grammar; Valley Yellow and Wuling Teal accents are also available. The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
 
 ## Origin
 
