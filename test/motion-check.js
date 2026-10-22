@@ -51,21 +51,10 @@ const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 const os = require('os')
-const http = require('http')
-const zlib = require('zlib')
-const { spawn } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
-const findChrome = () => [process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/usr/bin/chromium-browser',
-  '/usr/bin/chromium',
-].filter(Boolean).find((p) => fs.existsSync(p))
-const chrome = findChrome()
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)
@@ -75,107 +64,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /* Colour expectations are read from the DOCUMENT, never restated as literals:
    the fixture declares the gray palette's tokens (the theme's default) and the
    expected colour is whatever the page resolves the variable to. */
-const decodePng = (buf) => {
-  let pos = 8, w = 0, h = 0, bd = 0, ct = 0
-  const idat = []
-  while (pos < buf.length) {
-    const len = buf.readUInt32BE(pos)
-    const type = buf.slice(pos + 4, pos + 8).toString('ascii')
-    const data = buf.slice(pos + 8, pos + 8 + len)
-    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); bd = data[8]; ct = data[9] }
-    else if (type === 'IDAT') idat.push(data)
-    else if (type === 'IEND') break
-    pos += 12 + len
-  }
-  if (bd !== 8) throw new Error('unsupported bit depth ' + bd)
-  const ch = ct === 6 ? 4 : ct === 2 ? 3 : null
-  if (ch === null) throw new Error('unsupported colour type ' + ct)
-  const raw = zlib.inflateSync(Buffer.concat(idat))
-  const stride = w * ch
-  const out = Buffer.alloc(h * stride)
-  let p = 0
-  for (let y = 0; y < h; y++) {
-    const filter = raw[p++]
-    const line = raw.slice(p, p + stride); p += stride
-    const prev = y === 0 ? Buffer.alloc(stride) : out.slice((y - 1) * stride, y * stride)
-    const cur = out.slice(y * stride, (y + 1) * stride)
-    for (let x = 0; x < stride; x++) {
-      const a = x >= ch ? cur[x - ch] : 0
-      const b = prev[x]
-      const c = x >= ch ? prev[x - ch] : 0
-      let v = line[x]
-      if (filter === 1) v += a
-      else if (filter === 2) v += b
-      else if (filter === 3) v += (a + b) >> 1
-      else if (filter === 4) {
-        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c)
-        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c)
-      }
-      cur[x] = v & 255
-    }
-  }
-  return { w, h, ch, data: out }
-}
-
-/* ---- minimal CDP client over the /json/... HTTP endpoints + websocket ---- */
-const httpJson = (port, p) => new Promise((resolve, reject) => {
-  http.get({ host: '127.0.0.1', port, path: p }, (res) => {
-    let d = ''; res.setEncoding('utf8')
-    res.on('data', (c) => { d += c }); res.on('end', () => { try { resolve(JSON.parse(d)) } catch (e) { reject(e) } })
-  }).on('error', reject)
-})
-
-const connectWs = (url) => new Promise((resolve, reject) => {
-  const net = require('net')
-  const crypto = require('crypto')
-  const u = new URL(url)
-  const sock = net.connect(Number(u.port), u.hostname, () => {
-    sock.write('GET ' + u.pathname + u.search + ' HTTP/1.1\r\nHost: ' + u.host + '\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ' + crypto.randomBytes(16).toString('base64') + '\r\nSec-WebSocket-Version: 13\r\n\r\n')
-  })
-  let buf = Buffer.alloc(0), open = false, nextId = 1
-  const waiters = new Map()
-  const emit = (m) => { if (m.id !== undefined && waiters.has(m.id)) { waiters.get(m.id)(m); waiters.delete(m.id) } }
-  const decodeFrames = () => {
-    for (;;) {
-      if (buf.length < 2) return
-      const l0 = buf[1] & 0x7f; let off = 2, len = l0
-      if (l0 === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4 }
-      else if (l0 === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10 }
-      if (buf.length < off + len) return
-      const pl = buf.slice(off, off + len); buf = buf.slice(off + len)
-      try { emit(JSON.parse(pl.toString('utf8'))) } catch (e) { /* non-JSON frame */ }
-    }
-  }
-  sock.on('data', (c) => {
-    if (!open) {
-      buf = Buffer.concat([buf, c]); const i = buf.indexOf('\r\n\r\n'); if (i < 0) return
-      if (!/101/.test(buf.slice(0, i).toString('ascii'))) { reject(new Error('ws upgrade failed: ' + buf.slice(0, i).toString().split('\r\n')[0])); return }
-      buf = buf.slice(i + 4); open = true; resolve(api); decodeFrames(); return
-    }
-    buf = Buffer.concat([buf, c]); decodeFrames()
-  })
-  sock.on('error', reject)
-  const send = (obj) => {
-    const data = Buffer.from(JSON.stringify(obj), 'utf8')
-    const mask = require('crypto').randomBytes(4)
-    let header
-    if (data.length < 126) header = Buffer.from([0x81, 0x80 | data.length])
-    else if (data.length < 65536) { header = Buffer.alloc(4); header[0] = 0x81; header[1] = 0xfe; header.writeUInt16BE(data.length, 2) }
-    else { header = Buffer.alloc(10); header[0] = 0x81; header[1] = 0xff; header.writeBigUInt64BE(BigInt(data.length), 2) }
-    const masked = Buffer.alloc(data.length)
-    for (let i = 0; i < data.length; i++) masked[i] = data[i] ^ mask[i % 4]
-    sock.write(Buffer.concat([header, mask, masked]))
-  }
-  const api = {
-    call: (method, params) => new Promise((res) => {
-      const id = nextId++
-      waiters.set(id, (msg) => res(msg.result))
-      send({ id, method, params: params || {} })
-    }),
-    close: () => sock.destroy(),
-  }
-})
-
 /* ---------------- fixture ----------------
    Hash-free class names, because the theme's hooks are all suffix/substring
    matches ('_newSession', '_sessionRow', '_optionLabel'). The app shapes below
@@ -384,31 +272,12 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'))
   const page = path.join(tmp, 'page.html')
   fs.writeFileSync(page, html)
-  const port = 9333 + (process.pid % 400)
-  const proc = spawn(chrome, [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--remote-debugging-port=' + port,
-    '--user-data-dir=' + path.join(tmp, 'profile'),
-    '--window-size=900,1200',
-    'file://' + page,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] })
-
   let cdp
   try {
-    let target = null
-    for (let i = 0; i < 60 && target === null; i++) {
-      await sleep(200)
-      try {
-        const list = await httpJson(port, '/json/list')
-        target = (list || []).find((t) => t.type === 'page' && t.webSocketDebuggerUrl) || null
-      } catch (e) { /* not up yet */ }
-    }
-    if (target === null) { fail('could not reach the DevTools endpoint'); throw new Error('no target') }
-
-    cdp = await connectWs(target.webSocketDebuggerUrl)
-    await cdp.call('Runtime.enable')
-    await cdp.call('Page.enable')
-    await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: 2, mobile: false })
+    cdp = await launch({
+      width: 900, height: 1200, dpr: 2,
+      url: 'file://' + page, args: ['--hide-scrollbars'],
+    })
     await sleep(500)
 
     /* The reduced-motion state is emulator-level and persists across the whole
@@ -422,7 +291,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       if (r && r.exceptionDetails) throw new Error('page threw: ' + JSON.stringify(r.exceptionDetails.exception && r.exceptionDetails.exception.description))
       return r && r.result ? r.result.value : undefined
     }
-    const shoot = async () => decodePng(Buffer.from((await cdp.call('Page.captureScreenshot', { format: 'png' })).data, 'base64'))
+    const shoot = () => cdp.screenshot()
     const setMotion = async (m) => {
       await evaluate(`document.body.setAttribute('data-endfield-motion', ${JSON.stringify(m)})`)
       await sleep(90)
@@ -708,7 +577,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       /* DPR loop: a decoration that only survives one DPR is a HiDPI bug nothing
          else can see. */
       for (const dpr of [1, 3, 1, 2]) {
-        await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: dpr, mobile: false })
+        await cdp.setViewport(dpr)
         await sleep(220)
         await hover('sessionRow')
         const imgHi = await shoot()
@@ -726,7 +595,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
             + ' region=' + topColors(imgHi, boxHi, 4, dpr) + ']')
         }
       }
-      await cdp.call('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: 2, mobile: false })
+      await cdp.setViewport(2)
       await sleep(200)
       await park()
 
@@ -947,8 +816,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
     console.error('ERROR ' + (e && e.stack || e))
     failures++
   } finally {
-    if (cdp) cdp.close()
-    try { proc.kill('SIGKILL') } catch (e) { /* already gone */ }
+    if (cdp) await cdp.close()
   }
 
   console.log(failures === 0 ? '\nall motion checks passed' : '\n' + failures + ' motion check(s) failed')
