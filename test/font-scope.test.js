@@ -40,7 +40,8 @@ const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
@@ -60,15 +61,6 @@ if (/\.endfield-settings\s*\{[^}]*font-family:\s*var\(--edge-font\)/.test(cssSrc
 else fail('no .endfield-settings { font-family: var(--edge-font) } rule — the panel keeps the app font')
 if (/--edge-font:\s*Arial[^;]*var\(--dsw-font-family\)/.test(cssSrc)) pass('--edge-font leads with the theme stack and still honours --dsw-font-family')
 else fail('--edge-font no longer reads --dsw-font-family as its fallback')
-
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 /* The app's OWN declarations, verbatim from the installed bundles:
    @deepseek-ai/dsh-client-ui-theme lib/client.js (base_css_default = the :root
@@ -189,30 +181,16 @@ ${BROWSER_SETTINGS_SCOPE_SNIPPET}
 
 const page = path.join(OUT, 'font-scope.html')
 fs.writeFileSync(page, PAGE)
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-font-scope-profile-'))
 
-let dom = ''
-try {
-  dom = execFileSync(chrome, [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--virtual-time-budget=2500', '--window-size=1280,800',
-    '--user-data-dir=' + profile, '--dump-dom',
-    'file:///' + page.replace(/\\/g, '/'),
-  ], { encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] })
-} catch (e) {
-  console.error('FAIL  browser run failed: ' + e.message)
-  process.exit(1)
-}
-
-const m = dom.match(/<title>FONTSCOPE ([\s\S]*?)<\/title>/)
-if (!m) {
-  console.error('FAIL  page produced no results')
-  const t = dom.match(/<title>([\s\S]*?)<\/title>/)
-  if (t) console.error('      title was: ' + t[1].slice(0, 300))
-  process.exit(1)
-}
-const decode = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-const r = JSON.parse(decode(m[1]))
+;(async () => {
+  const browser = await launch({ url: 'file:///' + page.replace(/\\/g, '/'), width: 1280, height: 800, dpr: 1, args: ['--hide-scrollbars'] })
+  let r
+  try {
+    await browser.until("document.title.indexOf('FONTSCOPE ') === 0")
+    r = JSON.parse((await browser.evaluate('document.title')).slice('FONTSCOPE '.length))
+  } finally {
+    await browser.close()
+  }
 const firstFamily = (stack) => {
   const f = String(stack || '').split(',')[0].trim().replace(/^["']|["']$/g, '')
   return f.toLowerCase()
@@ -297,3 +275,4 @@ if (failures) {
   process.exit(1)
 }
 console.log('all font-scope checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })

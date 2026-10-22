@@ -26,22 +26,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 
-function findChrome() {
-  const c = [process.env.CHROME_PATH,
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'].filter(Boolean)
-  for (const p of c) if (fs.existsSync(p)) return p
-  return null
-}
-const chrome = findChrome()
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-palette-'))
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
@@ -187,14 +177,20 @@ setTimeout(()=>{
 },120)
 </script></body></html>`)
 
-const html = execFileSync(chrome, ['--headless', '--disable-gpu', '--no-sandbox',
-  '--virtual-time-budget=4000', '--dump-dom', 'file:///' + page.replace(/\\/g, '/')],
-  { encoding: 'utf8', maxBuffer: 1 << 26 })
-const m = html.match(/<title>([\s\S]*?)<\/title>/)
-if (!m || !m[1].trim()) { console.error('FAIL  page produced no results (script error?)'); process.exit(1) }
-const decode = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-let results
-try { results = JSON.parse(decode(m[1])) } catch (e) { console.error('FAIL  bad results JSON: ' + m[1].slice(0, 200)); process.exit(1) }
+;(async () => {
+  const browser = await launch({ url: 'file:///' + page.replace(/\\/g, '/'), width: 1200, height: 900, dpr: 1 })
+  let results
+  try {
+    /* The page finishes its async palette flips, then writes the verdict array
+       into document.title; wait for that marker, then read it back as data. */
+    await browser.until("document.title.trim().length > 2")
+    try { results = JSON.parse(await browser.evaluate('document.title')) } catch (e) {
+      console.error('FAIL  bad results JSON: ' + String(await browser.evaluate('document.title')).slice(0, 200))
+      process.exit(1)
+    }
+  } finally {
+    await browser.close()
+  }
 
 let failures = 0
 for (const r of results) {
@@ -204,3 +200,4 @@ for (const r of results) {
 console.log('')
 if (failures) { console.error(failures + ' palette-switch check(s) failed'); process.exit(1) }
 console.log('all palette-switch checks passed (' + results.length + ' assertions)')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })
