@@ -4265,6 +4265,18 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       [class*='tableScroll' i] tbody tr:hover * {
         color: var(--dsw-alias-label-primary) !important;
         background: color-mix(in srgb, var(--edge-accent) 15%, var(--dsw-alias-bg-base)) !important;
+        /* 染色只许落在 padding-box 里。上游 markdown 链接用「3px 透明左边框 +
+           margin-left:-3px」白嫖 3px 点击区（ui-chat 的 ._markdown a，几何见
+           test/motion-check.js 夹具里的 .x_mdScroll）：盒子比单元格内容盒左探
+           3px，而 background 默认按 border-box 绘制、又是隔着透明边框透出来
+           的——于是悬停染上的行底色正好盖住行左缘那条 3px 信号条，在链接
+           （首列就是项目名 + 图标链接）那一行的高度上把竖线啃掉一段，看起来
+           就是「图标和黄色高亮竖线之间有缺口」。裁到 padding-box 后，链接
+           的透明边框区不再参与绘制，信号条完整；行自身的染色同理（bar 是
+           不透明边框，画在背景之上，裁掉边下的底色不可见）。
+           不能只给链接清底（background: transparent）：上游只要再给别的内联
+           元素加同样的负 margin 盒子就复发，这条是结构约束。 */
+        background-clip: padding-box !important;
       }
       /* Row hover keeps the accent tint; ::selection is scheme-gray in every
          palette (see the selection block), so the two stay distinct by texture. */
