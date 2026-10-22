@@ -1,5 +1,6 @@
 import THEME_CSS from '../styles/theme.css?raw'
 import GENERATED_CSS from '../styles/generated.css?raw'
+import { createServices } from './services.js'
 /**
  * dsh-theme-endfield — Edge Intelligence Theme (browser client bundle)
  * 还原自《明日方舟：终末地》（Arknights: Endfield）官网的「工业编辑风」。
@@ -56,7 +57,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     if (typeof window !== 'undefined' && window.__dshThemeEndfieldApplied) return
     // Claim the flag only once the theme service is actually there: a boot order where
     // it is still missing must not lock the flag in place and kill every later apply.
-    const theme = ctx.get('theme')
+    const services = createServices(ctx)
+    const theme = services.theme()
     if (theme === undefined) return
     if (typeof window !== 'undefined') window.__dshThemeEndfieldApplied = true
 
@@ -81,8 +83,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                  persists user edits into the PROFILE PATCH
                  (<profile>/cordis.patch.yml) through `ctx.configEditor`,
                  i.e. a path owned by DSH and independent of the web origin.
-         client  `ctx.get('configForms')` — the settings domain's shared-form
-                 service — `.get(<profile entry id>)` returns that entry's
+         client  `services.configForms()` (src/client/services.js) — the
+                 settings domain's shared-form service — `.get(<profile entry id>)` returns that entry's
                  ConfigForm: getSnapshot() / subscribe() / set() / unset() /
                  mutate().
 
@@ -421,8 +423,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        (>=0.2.0 floor; the pre-0.1.7 `settingsScope` binder was dropped — a
        host without configForms is not a supported configuration):
 
-          cfg = ctx.get('configForms')   (the settings domain's
-          shared-form service)
+          cfg = services.configForms()   (the settings domain's
+          shared-form service; see src/client/services.js)
           cfg.get(<profile entry id>) -> ConfigForm with
           getSnapshot() / subscribe() / set() / unset() / mutate()
           and a snapshot of { status, value, base, user, revision,
@@ -459,15 +461,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        access forms are tried: the injected-property spelling DSH's own client
        plugins use, then the optional-lookup form this module has always used. */
     const getConfigForms = () => {
-      try {
-        if (ctx.configForms !== undefined && ctx.configForms !== null
-          && typeof ctx.configForms.get === 'function') return ctx.configForms
-      } catch (e) { /* property may be a getter that throws when not available */ }
-      try {
-        const forms = ctx.get('configForms')
-        if (forms !== undefined && forms !== null && typeof forms.get === 'function') return forms
-      } catch (e) { /* optional service lookup */ }
-      return undefined
+      return services.configForms()
     }
     /* The namespaces the Host's describe view actually SERVES, for diagnostics.
        This is the one fact that tells "the host half exported no Config" apart
@@ -1107,7 +1101,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     // also releases the transport subscription: a ConfigForm is shared and
     // provider-owned, so leaving our listener behind would leak it into the
     // next run of this plugin in the same page.
-    ctx.effect(() => () => {
+    services.effect(() => () => {
       prefsListeners.length = 0
       prefsReleaseSubscription()
       prefsScope = null
@@ -1927,7 +1921,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        hashes those surfaces carry are not a contract, and a spinner appearing is
        not the same event as a turn starting.
 
-       Reached through ctx.get('sessions'), NOT inject: the theme must still mount
+       Reached through services.sessions(), NOT inject: the theme must still mount
        when the sessions service is absent (the in-process settings tests supply a
        ctx with only theme/slots), and a missing service means "no announcements",
        not "no theme".
@@ -2026,7 +2020,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        plugin row concurrently (`Promise.all` over the manifest in dsh-web-frontend)
        and this theme declares no `inject`, so apply() can legitimately run before
        dsh-client-runtime has provided `sessions`. A one-shot `const sessions =
-       ctx.get('sessions')` here would capture undefined for the whole session and
+       services.sessions()` here would capture undefined for the whole session and
        the feature would be permanently dead depending on load order — the exact
        kind of race that only shows up on a slow or cold page load.
 
@@ -2035,10 +2029,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        would delay the token/stylesheet mount that everything else here depends on.
        A theme must paint even if the announcement feature never gets its service,
        so the lookup is deferred instead and re-tried on the retry timer below. */
-    const getSessions = () => {
-      const s = ctx.get('sessions')
-      return (s === undefined || s === null) ? undefined : s
-    }
+    const getSessions = () => services.sessions()
     let thunderUnsubList = null
     let thunderUnsubSession = null
     let thunderRebindTimer = null
@@ -2875,14 +2866,14 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        working (Chinese) settings page rather than a crash. `t` therefore falls back
        to the zh dictionary, and only the key itself as a last resort — a visible
        key beats a blank row. */
-    const locale = ctx.get('locale')
+    const locale = services.locale()
     let t = (key) => (Object.prototype.hasOwnProperty.call(LOCALE_ZH, key) ? LOCALE_ZH[key] : key)
     let localeReady = false
     if (locale !== undefined && typeof locale.register === 'function' && typeof locale.bind === 'function') {
       /* Registered through ctx.effect so the dictionaries retire with the run;
          re-applying the bundle would otherwise throw on the duplicate (ns, locale)
          the service rejects by design. */
-      ctx.effect(() => locale.register(ENDFIELD_NS, { zh: LOCALE_ZH, en: LOCALE_EN }))
+      services.effect(() => locale.register(ENDFIELD_NS, { zh: LOCALE_ZH, en: LOCALE_EN }))
       const bound = locale.bind(ENDFIELD_NS)
       if (typeof bound === 'function') {
         t = bound
@@ -2891,7 +2882,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     }
 
     /* ---------- Settings page: 主题 (own settings.section) ---------- */
-    const slots = ctx.get('slots')
+    const slots = services.slots()
     const disposeRows = []
     let disposeSettings = () => { disposeRows.forEach((d) => d()) }
     if (slots !== undefined) {
@@ -3903,7 +3894,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     })
     }
 
-    ctx.effect(() => () => {
+    services.effect(() => () => {
       unmount()
       // Release the idempotency flag so a re-apply after this dispose can mount
       // the theme again; leaving it set killed the theme until a hard reload.
