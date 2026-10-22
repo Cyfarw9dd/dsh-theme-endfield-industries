@@ -50,6 +50,7 @@ All docs are written in Chinese.
 | --- | --- | --- |
 | [docs/AGENTS.md](docs/AGENTS.md) | Governance | Doc layering rules and contribution flow |
 | [docs/design-principles.md](docs/design-principles.md) | Governance | Design principles: one necessary decoration only, stay out of the core workspace, motion must pay its way |
+| [TODO.md](TODO.md) | Governance | Long-running refactor backlog: remaining module split order, hazards and acceptance gates |
 | [docs/architecture.md](docs/architecture.md) | Theme | Two-half structure, stylesheet organization, verification chain |
 | [docs/compatibility.md](docs/compatibility.md) | Theme | Backwards compatibility and stability: upstream risk grading, version matrix |
 | [docs/glossary.md](docs/glossary.md) | Theme | Glossary and token quick reference |
