@@ -21,6 +21,9 @@ const sources = require('../scripts/lib/sources.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The key vocabulary moved to its own module (prefs/keys.js); the prefs entry
+   for the texture row is asserted against that module now. */
+const keysSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'prefs', 'keys.js'), 'utf8')
 /* CSS tier assertions read the source stylesheet (see palette-contrast). */
 const css = sources.concatCss()
 
@@ -90,7 +93,7 @@ if (/setAttribute\?\.\('data-endfield-texture', value\)[\s\S]{0,60}else document
 }
 if (/const TEXTURE_OPTIONS = \['off', 'subtle', 'standard'\]/.test(src)) pass('client TEXTURE_OPTIONS matches the three tiers')
 else fail('client TEXTURE_OPTIONS is missing or drifted from the CSS tiers')
-if (/'dsh-theme-endfield-texture': 'texture'/.test(src)) pass('prefs key maps to the schema field "texture"')
+if (/'dsh-theme-endfield-texture': 'texture'/.test(keysSrc)) pass('prefs key maps to the schema field "texture"')
 else fail('PREFS_KEY_TO_FIELD has no entry for dsh-theme-endfield-texture — the row would not persist')
 const host = fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8')
 if (/texture: 'standard'/.test(host)) pass('host FIELD_DEFAULTS ships texture=standard')

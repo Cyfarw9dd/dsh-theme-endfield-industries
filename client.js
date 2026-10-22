@@ -43,6 +43,94 @@
 		};
 	}
 
+// src/client/prefs/keys.js
+/**
+	* prefs/keys.js — the preference-key vocabulary: schema fields, UI keys, and the
+	* mapping between them. Pure data + pure functions (no ctx, no DOM, no storage),
+	* so the entry, the diagnostics and the tests can all import the same table.
+	*
+	* Two namespaces coexist on purpose: PREFS_ENTRY is the DSH profile entry id the
+	* settings transport is keyed by (index.js SETTINGS_ENTRY), while PREFS_NS is the
+	* pre-0.1.7 namespace that is still the PREFIX of every UI key. The tables below
+	* are the single place that knows both spellings; the read and write paths both
+	* go through prefsFieldOf(), which is why a compound field cannot half-migrate.
+	*/
+	const PREFS_ENTRY = "theme-endfield";
+	const PREFS_NS = "dsh-theme-endfield";
+	const PREFS_FIELD_DEFAULTS = {
+		enabled: "1",
+		palette: "gray",
+		radius: "square",
+		glass: "off",
+		texture: "standard",
+		motion: "signal",
+		watermark: "1",
+		watermarkPersist: "0",
+		loader: "0",
+		thunder: "0",
+		thunderAnim: "0",
+		notify: "1",
+		notifyDone: "1",
+		notifyQuestion: "1",
+		notifyApprove: "1",
+		audioEnabled: "0",
+		audioVolume: "100",
+		audioBoot: "1",
+		audioTurnStart: "1",
+		audioTurnDone: "1",
+		audioAttention: "1",
+		audioTurnFail: "1",
+		audioDebounceMs: "2500",
+		audioSoundDir: "",
+		audioHumanOnly: "1",
+		audioDiag: "0"
+	};
+	const prefsFieldFromKey = (rawKey) => {
+		return (rawKey.indexOf("dsh-theme-endfield-") === 0 ? rawKey.slice(19) : rawKey).replace(/-([a-z0-9])/g, (_, ch) => ch.toUpperCase());
+	};
+	const PREFS_KEY_TO_FIELD = {
+		"dsh-theme-endfield-enabled": "enabled",
+		"dsh-theme-endfield-palette": "palette",
+		"dsh-theme-endfield-radius": "radius",
+		"dsh-theme-endfield-glass": "glass",
+		"dsh-theme-endfield-texture": "texture",
+		"dsh-theme-endfield-motion": "motion",
+		"dsh-theme-endfield-watermark": "watermark",
+		"dsh-theme-endfield-watermark-persist": "watermarkPersist",
+		"dsh-theme-endfield-loader": "loader",
+		"dsh-theme-endfield-thunder": "thunder",
+		"dsh-theme-endfield-thunder-anim": "thunderAnim",
+		"dsh-theme-endfield-notify": "notify",
+		"dsh-theme-endfield-notify-done": "notifyDone",
+		"dsh-theme-endfield-notify-question": "notifyQuestion",
+		"dsh-theme-endfield-notify-approve": "notifyApprove",
+		"dsh-theme-endfield-audio-enabled": "audioEnabled",
+		"dsh-theme-endfield-audio-volume": "audioVolume",
+		"dsh-theme-endfield-audio-boot": "audioBoot",
+		"dsh-theme-endfield-audio-turn-start": "audioTurnStart",
+		"dsh-theme-endfield-audio-turn-done": "audioTurnDone",
+		"dsh-theme-endfield-audio-attention": "audioAttention",
+		"dsh-theme-endfield-audio-turn-fail": "audioTurnFail",
+		"dsh-theme-endfield-audio-debounce-ms": "audioDebounceMs",
+		"dsh-theme-endfield-audio-sound-dir": "audioSoundDir",
+		"dsh-theme-endfield-audio-human-only": "audioHumanOnly",
+		"dsh-theme-endfield-audio-diag": "audioDiag"
+	};
+	const PREFS_FIELD_TO_LEGACY_KEY = (() => {
+		const m = {};
+		for (const field of Object.keys(PREFS_KEY_TO_FIELD)) {
+			const f = PREFS_KEY_TO_FIELD[field];
+			const legacy = field.slice(19);
+			if (legacy !== f) m[f] = legacy;
+		}
+		return m;
+	})();
+	const prefsFieldOf = (rawKey) => {
+		if (Object.prototype.hasOwnProperty.call(PREFS_KEY_TO_FIELD, rawKey)) return PREFS_KEY_TO_FIELD[rawKey];
+		if (Object.prototype.hasOwnProperty.call(PREFS_FIELD_DEFAULTS, rawKey)) return rawKey;
+		return prefsFieldFromKey(rawKey);
+	};
+
 // src/client/index.js
 /**
 	* dsh-theme-endfield — Edge Intelligence Theme (browser client bundle)
@@ -90,82 +178,6 @@
 				const theme = services.theme();
 				if (theme === void 0) return;
 				if (typeof window !== "undefined") window.__dshThemeEndfieldApplied = true;
-				const PREFS_ENTRY = "theme-endfield";
-				const PREFS_NS = "dsh-theme-endfield";
-				const PREFS_FIELD_DEFAULTS = {
-					enabled: "1",
-					palette: "gray",
-					radius: "square",
-					glass: "off",
-					texture: "standard",
-					motion: "signal",
-					watermark: "1",
-					watermarkPersist: "0",
-					loader: "0",
-					thunder: "0",
-					thunderAnim: "0",
-					notify: "1",
-					notifyDone: "1",
-					notifyQuestion: "1",
-					notifyApprove: "1",
-					audioEnabled: "0",
-					audioVolume: "100",
-					audioBoot: "1",
-					audioTurnStart: "1",
-					audioTurnDone: "1",
-					audioAttention: "1",
-					audioTurnFail: "1",
-					audioDebounceMs: "2500",
-					audioSoundDir: "",
-					audioHumanOnly: "1",
-					audioDiag: "0"
-				};
-				const prefsFieldFromKey = (rawKey) => {
-					const prefix = PREFS_NS + "-";
-					return (rawKey.indexOf(prefix) === 0 ? rawKey.slice(19) : rawKey).replace(/-([a-z0-9])/g, (_, ch) => ch.toUpperCase());
-				};
-				const PREFS_KEY_TO_FIELD = {
-					"dsh-theme-endfield-enabled": "enabled",
-					"dsh-theme-endfield-palette": "palette",
-					"dsh-theme-endfield-radius": "radius",
-					"dsh-theme-endfield-glass": "glass",
-					"dsh-theme-endfield-texture": "texture",
-					"dsh-theme-endfield-motion": "motion",
-					"dsh-theme-endfield-watermark": "watermark",
-					"dsh-theme-endfield-watermark-persist": "watermarkPersist",
-					"dsh-theme-endfield-loader": "loader",
-					"dsh-theme-endfield-thunder": "thunder",
-					"dsh-theme-endfield-thunder-anim": "thunderAnim",
-					"dsh-theme-endfield-notify": "notify",
-					"dsh-theme-endfield-notify-done": "notifyDone",
-					"dsh-theme-endfield-notify-question": "notifyQuestion",
-					"dsh-theme-endfield-notify-approve": "notifyApprove",
-					"dsh-theme-endfield-audio-enabled": "audioEnabled",
-					"dsh-theme-endfield-audio-volume": "audioVolume",
-					"dsh-theme-endfield-audio-boot": "audioBoot",
-					"dsh-theme-endfield-audio-turn-start": "audioTurnStart",
-					"dsh-theme-endfield-audio-turn-done": "audioTurnDone",
-					"dsh-theme-endfield-audio-attention": "audioAttention",
-					"dsh-theme-endfield-audio-turn-fail": "audioTurnFail",
-					"dsh-theme-endfield-audio-debounce-ms": "audioDebounceMs",
-					"dsh-theme-endfield-audio-sound-dir": "audioSoundDir",
-					"dsh-theme-endfield-audio-human-only": "audioHumanOnly",
-					"dsh-theme-endfield-audio-diag": "audioDiag"
-				};
-				const PREFS_FIELD_TO_LEGACY_KEY = (() => {
-					const m = {};
-					for (const field of Object.keys(PREFS_KEY_TO_FIELD)) {
-						const f = PREFS_KEY_TO_FIELD[field];
-						const legacy = field.slice(19);
-						if (legacy !== f) m[f] = legacy;
-					}
-					return m;
-				})();
-				const prefsFieldOf = (rawKey) => {
-					if (Object.prototype.hasOwnProperty.call(PREFS_KEY_TO_FIELD, rawKey)) return PREFS_KEY_TO_FIELD[rawKey];
-					if (Object.prototype.hasOwnProperty.call(PREFS_FIELD_DEFAULTS, rawKey)) return rawKey;
-					return prefsFieldFromKey(rawKey);
-				};
 				const AUDIO_ENABLED_KEY = "audioEnabled";
 				const AUDIO_BOOT_KEY = "audioBoot";
 				const AUDIO_TURN_START_KEY = "audioTurnStart";
