@@ -24,25 +24,16 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
+/* Browser plumbing (launch/CDP/PNG) is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 const ROOT = path.resolve(__dirname, '..')
 
-function findChrome() {
-  const c = [process.env.CHROME_PATH,
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'].filter(Boolean)
-  for (const p of c) if (fs.existsSync(p)) return p
-  return null
-}
-const chrome = findChrome()
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
-
-/* Expected values are read from the real source (client.js), never restated. */
-const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+/* Expected values are read from the real source, never restated. JS token
+   literals live in the PRE-BUNDLE source: the bundler re-quotes strings
+   (single → double), so the artifact cannot be matched with this regex. */
+const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
 const jsToken = (name) => {
   const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
   if (!m) { console.error('FAIL  overrideTokens 里读不到 ' + name); process.exit(1) }
@@ -171,28 +162,27 @@ run('武陵青')
 document.title='DONE '+JSON.stringify(window.__RESULTS__)
 </script></body></html>`)
 
-const html = execFileSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox',
-  /* Chrome ≥ 13x refuses to start without an explicit profile dir on some
-     Linux setups ("Failed to create headless user data directory container"),
-     and Chrome ≥ 132 removed the old --headless mode entirely. */
-  '--user-data-dir=' + path.join(OUT, 'profile'),
-  '--virtual-time-budget=4000', '--dump-dom', 'file:///' + page.replace(/\\/g, '/')],
-  { encoding: 'utf8', maxBuffer: 1 << 26, timeout: 60000, killSignal: 'SIGKILL' })
-const m = html.match(/<title>DONE ([\s\S]*?)<\/title>/)
-if (!m) {
-  console.error('FAIL  page produced no results')
-  const t = html.match(/<title>([\s\S]*?)<\/title>/)
-  if (t) console.error('      title was: ' + t[1].slice(0, 300))
-  process.exit(1)
-}
-const decode = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-const results = JSON.parse(decode(m[1]))
+;(async () => {
+  const browser = await launch({
+    url: 'file:///' + page.replace(/\\/g, '/'),
+    width: 900, height: 700, dpr: 1,
+  })
+  let results
+  try {
+    /* The page writes its verdicts into document.title once every assertion ran;
+       wait for that marker instead of a virtual-time budget. */
+    await browser.until("document.title.indexOf('DONE ') === 0")
+    results = JSON.parse((await browser.evaluate('document.title')).slice(5))
+  } finally {
+    await browser.close()
+  }
 
 let failures = 0
 for (const r of results) {
   if (r.pass) console.log('ok    ' + r.name + '  [' + r.detail + ']')
   else { console.error('FAIL  ' + r.name + '  [' + r.detail + ']'); failures++ }
 }
-console.log('')
-if (failures) { console.error(failures + ' tooltip check(s) failed'); process.exit(1) }
-console.log('all tooltip checks passed (' + results.length + ' assertions)')
+  console.log('')
+  if (failures) { console.error(failures + ' tooltip check(s) failed'); process.exit(1) }
+  console.log('all tooltip checks passed (' + results.length + ' assertions)')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })
