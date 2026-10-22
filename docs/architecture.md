@@ -35,6 +35,10 @@
   不缓存）、`locale`（缺席退回中文）、`slots`（设置页挂载点），以及把清理
   钩子登记到 run 生命周期的 `effect()`。DSH 升级时先看这个文件；它也是测试
   打桩服务的接缝（不必伪造整个 cordis 上下文）
+- **偏好键词汇表独立成模块**：`src/client/prefs/keys.js` 放 schema 字段、UI/存储键
+  与两者映射（`prefsFieldOf()` 是读写两条路径唯一的入口），纯数据 + 纯函数，
+  不碰 ctx/DOM/存储。入口只 import；读这张表的测试（settings-namespace /
+  settings-config-forms / texture）直接对源文件断言
 - **样式源怎么拼，只有一个定义**：`scripts/lib/sources.js` 的 `STYLE_FILES`
   是层清单（顺序 = 级联顺序），`concatCss()` 就是客户端入口嵌进
   `insertCss()` 的那串字节。构建检查、`check.js`、`selftest.js` 的临时树、

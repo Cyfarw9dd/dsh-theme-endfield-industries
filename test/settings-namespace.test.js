@@ -47,7 +47,8 @@ const HOST = require(path.join(__dirname, '..', 'index.js'))
 const ROOT = path.resolve(__dirname, '..')
 const rawSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 /* Source-level regexes read the pre-bundle client source (see config-forms). */
-const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The key vocabulary moved to its own module (prefs/keys.js); read it there. */
+const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'prefs', 'keys.js'), 'utf8')
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
@@ -62,7 +63,7 @@ const clientTable = (() => {
   /* String#match / String#matchAll rather than RegExp#exec loops: identical
      results, but a bare dot-exec call reads as child_process.exec to static
      signature scanners, which cannot see the receiver (see SECURITY.md). */
-  const m = clientSrc.match(/const PREFS_KEY_TO_FIELD = \{([\s\S]*?)\n    \}/)
+  const m = clientSrc.match(/const PREFS_KEY_TO_FIELD = \{([\s\S]*?)\n\s*\}/)
   if (!m) return null
   const out = {}
   const re = /'(dsh-theme-endfield-[a-z-]+)':\s*'([A-Za-z]+)'/g

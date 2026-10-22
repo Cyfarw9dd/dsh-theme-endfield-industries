@@ -55,7 +55,8 @@ const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 /* Source-level regexes read the pre-bundle client source: the artifact's
    strings are re-quoted by the bundler. */
-const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* PREFS_ENTRY lives in the key vocabulary module now. */
+const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'prefs', 'keys.js'), 'utf8')
 const HOST = require(path.join(ROOT, 'index.js'))
 const { configFormsStub } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
 

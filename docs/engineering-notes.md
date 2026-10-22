@@ -124,7 +124,7 @@ const field = PREFS_KEY_TO_FIELD[rawKey] || rawKey.slice(PREFS_NS.length + 1)
 
 配套的坑是**测试桩复述了同一个错误**：`test/fixtures/settings-scope.js` 当时也用 `slice` 去前缀，于是「客户端读 `contour-fps`」与「测试桩写 `contour-fps`」两边对上，全绿——而生产环境里那个名字根本没人认。**测试桩必须按生产 schema 的形状（camelCase 字段名）造数据，否则它证明的是自己跟自己的约定。**
 
-现在的写法：`PREFS_KEY_TO_FIELD` 把每个键**显式**映射到字段名，读写两侧都走 `prefsFieldOf()`，所以「读的字段」与「写的字段」不可能再是两条路径。`test/settings-namespace.test.js` 同时对着三份东西交叉验证：`client.js` 的表、Host 的 `FIELD_DEFAULTS`、以及设置面板真实渲染出来的每个开关。
+现在的写法：`PREFS_KEY_TO_FIELD` 把每个键**显式**映射到字段名，读写两侧都走 `prefsFieldOf()`，所以「读的字段」与「写的字段」不可能再是两条路径。`test/settings-namespace.test.js` 同时对着三份东西交叉验证：`src/client/prefs/keys.js` 的表、Host 的 `FIELD_DEFAULTS`、以及设置面板真实渲染出来的每个开关。
 
 ### 已经写坏的存档：把旧拼写里的值搬回声明字段
 
