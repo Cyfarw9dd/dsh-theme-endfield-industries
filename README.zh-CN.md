@@ -8,7 +8,7 @@
 
 ## 来源
 
-本项目衍生自 [ymh0000123/dsh-theme-endfield](https://github.com/ymh0000123/dsh-theme-endfield)，在其视觉方向与插件架构基础上独立演化（工业版）；需要时通过 `upstream` 远程同步上游改动。原始设计与实现的贡献归于上游作者，遵循 MIT 协议。
+本项目衍生自 [ymh0000123/dsh-theme-endfield](https://github.com/ymh0000123/dsh-theme-endfield)，在其视觉方向与插件架构基础上独立演化（终末地工业终端风格）；需要时通过 `upstream` 远程同步上游改动。原始设计与实现的贡献归于上游作者，遵循 MIT 协议。
 
 ## 安装
 
