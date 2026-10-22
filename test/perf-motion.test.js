@@ -49,19 +49,10 @@ const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 const os = require('os')
-const http = require('http')
-const { spawn } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
-const findChrome = () => [process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/usr/bin/chromium-browser',
-  '/usr/bin/chromium',
-].filter(Boolean).find((p) => fs.existsSync(p))
-const chrome = findChrome()
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)
@@ -169,55 +160,6 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
 </body></html>`
 
 /* ---------------- minimal CDP client (same as the other browser tests) ---------------- */
-const httpJson = (port, p) => new Promise((resolve, reject) => {
-  http.get({ host: '127.0.0.1', port, path: p }, (res) => {
-    let d = ''; res.setEncoding('utf8')
-    res.on('data', (c) => { d += c }); res.on('end', () => { try { resolve(JSON.parse(d)) } catch (e) { reject(e) } })
-  }).on('error', reject)
-})
-const connectWs = (url) => new Promise((resolve, reject) => {
-  const net = require('net'), crypto = require('crypto'), u = new URL(url)
-  const sock = net.connect(Number(u.port), u.hostname, () => {
-    sock.write('GET ' + u.pathname + u.search + ' HTTP/1.1\r\nHost: ' + u.host + '\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ' + crypto.randomBytes(16).toString('base64') + '\r\nSec-WebSocket-Version: 13\r\n\r\n')
-  })
-  let buf = Buffer.alloc(0), open = false, nextId = 1
-  const waiters = new Map()
-  const emit = (m) => { if (m.id !== undefined && waiters.has(m.id)) { waiters.get(m.id)(m); waiters.delete(m.id) } }
-  const decodeFrames = () => {
-    for (;;) {
-      if (buf.length < 2) return
-      const l0 = buf[1] & 0x7f; let off = 2, len = l0
-      if (l0 === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4 }
-      else if (l0 === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10 }
-      if (buf.length < off + len) return
-      const pl = buf.slice(off, off + len); buf = buf.slice(off + len)
-      try { emit(JSON.parse(pl.toString('utf8'))) } catch (e) { /* non-JSON frame */ }
-    }
-  }
-  sock.on('data', (c) => {
-    if (!open) {
-      buf = Buffer.concat([buf, c]); const i = buf.indexOf('\r\n\r\n'); if (i < 0) return
-      if (!/101/.test(buf.slice(0, i).toString())) { reject(new Error('ws upgrade failed')); return }
-      buf = buf.slice(i + 4); open = true; resolve(api); decodeFrames(); return
-    }
-    buf = Buffer.concat([buf, c]); decodeFrames()
-  })
-  sock.on('error', reject)
-  const send = (o) => {
-    const d = Buffer.from(JSON.stringify(o)); const m = crypto.randomBytes(4)
-    let hd
-    if (d.length < 126) hd = Buffer.from([0x81, 0x80 | d.length])
-    else { hd = Buffer.alloc(4); hd[0] = 0x81; hd[1] = 0xfe; hd.writeUInt16BE(d.length, 2) }
-    const mk = Buffer.alloc(d.length); for (let i = 0; i < d.length; i++) mk[i] = d[i] ^ m[i % 4]
-    sock.write(Buffer.concat([hd, m, mk]))
-  }
-  const api = {
-    call: (method, params) => new Promise((res) => { const id = nextId++; waiters.set(id, (m) => res(m.result)); send({ id, method, params: params || {} }) }),
-    close: () => sock.destroy(),
-  }
-  return api
-})
-
 /* Nearest-rank percentile over the frame intervals. Small arrays; no dependency. */
 const pct = (arr, p) => {
   if (!arr || arr.length === 0) return 0
@@ -229,25 +171,11 @@ const pct = (arr, p) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-motion-'))
   const page = path.join(tmp, 'page.html')
   fs.writeFileSync(page, fixture)
-  const port = 9800 + (process.pid % 150)
-  const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--remote-debugging-port=' + port, '--user-data-dir=' + path.join(tmp, 'profile'),
-    '--window-size=1000,720', 'file://' + page], { stdio: ['ignore', 'ignore', 'pipe'] })
-
   let cdp
   try {
-    let target = null
-    for (let i = 0; i < 60 && !target; i++) {
-      await sleep(200)
-      try { target = (await httpJson(port, '/json/list')).find((t) => t.type === 'page' && t.webSocketDebuggerUrl) || null } catch (e) { /* not up */ }
-    }
-    if (!target) { fail('could not reach the DevTools endpoint'); throw new Error('no target') }
-    cdp = await connectWs(target.webSocketDebuggerUrl)
-    await cdp.call('Runtime.enable')
-    await cdp.call('Page.enable')
+    cdp = await launch({ width: 1000, height: 720, dpr: 1, url: 'file://' + page, args: ['--hide-scrollbars'] })
     await cdp.call('Performance.enable')
     await cdp.call('LayerTree.enable')
-    await cdp.call('Emulation.setDeviceMetricsOverride', { width: 1000, height: 720, deviceScaleFactor: 1, mobile: false })
     await sleep(800)
 
     const evaluate = async (expr) => {
@@ -490,8 +418,7 @@ const pct = (arr, p) => {
   } catch (e) {
     fail('harness error: ' + (e && e.message))
   } finally {
-    if (cdp) cdp.close()
-    try { proc.kill() } catch (e) { /* already gone */ }
+    if (cdp) await cdp.close()
   }
 
   console.log('')

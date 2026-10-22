@@ -10,6 +10,8 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 
 第二条原则：**每条断言都做过反向对照（变异验证）。** 故意把被测行为改坏，确认该断言真的会失败。一个从未被观察到失败过的校验，不能算证据。
 
+**浏览器测试共用一套夹具**：`test/fixtures/chrome-cdp.js` 负责 Chrome 发现、启动、CDP 传输、截图解码与视口切换（`launch({ width, height, dpr, args, url })` → `evaluate` / `until` / `screenshot` / `setViewport` / `send`）；测试只写断言。需要别的 Chrome flags 或视口就传参，**不要再复制启动代码或手搓 WebSocket/PNG 解码**——同一份逻辑曾经在三个测试里各存一份，改一次要改三处。
+
 > **运行环境。** 带「真实浏览器」字样的脚本会 spawn 本机 Chrome 做无头渲染，需要本机安装 Chrome。以下脚本是**纯进程内**的，任何环境都能跑：`check.js`、`selftest.js`、`palette-contrast`、`settings-rows`、`settings-locale`、`thunder-edges`。
 
 ---

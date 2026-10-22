@@ -34,142 +34,19 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const http = require('http')
-const zlib = require('zlib')
-const { spawn } = require('child_process')
+/* Browser plumbing (Chrome discovery, launch, CDP transport, PNG decoding) is
+   shared with the rest of the suite — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 const ROOT = path.resolve(__dirname, '..')
-const findChrome = () => [process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe']
-  .filter(Boolean).find((p) => fs.existsSync(p))
-const chrome = findChrome()
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 
-/* ---- PNG decode (screenshots come back base64 PNG) ---- */
-const decodePng = (buf) => {
-  let pos = 8, w = 0, h = 0, bd = 0, ct = 0
-  const idat = []
-  while (pos < buf.length) {
-    const len = buf.readUInt32BE(pos)
-    const type = buf.toString('ascii', pos + 4, pos + 8)
-    const data = buf.slice(pos + 8, pos + 8 + len)
-    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); bd = data[8]; ct = data[9] }
-    else if (type === 'IDAT') idat.push(data)
-    else if (type === 'IEND') break
-    pos += 12 + len
-  }
-  const ch = ct === 6 ? 4 : ct === 2 ? 3 : 0
-  if (!ch || bd !== 8) throw new Error('unsupported png ct=' + ct)
-  const raw = zlib.inflateSync(Buffer.concat(idat))
-  const stride = w * ch
-  const out = Buffer.alloc(w * h * ch)
-  let prev = Buffer.alloc(stride)
-  for (let y = 0; y < h; y++) {
-    const ft = raw[y * (stride + 1)]
-    const line = raw.slice(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride)
-    const cur = Buffer.alloc(stride)
-    for (let x = 0; x < stride; x++) {
-      const a = x >= ch ? cur[x - ch] : 0, b = prev[x], c = x >= ch ? prev[x - ch] : 0
-      let v = line[x]
-      if (ft === 1) v += a; else if (ft === 2) v += b
-      else if (ft === 3) v += (a + b) >> 1
-      else if (ft === 4) { const p = a + b - c
-        const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c)
-        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c) }
-      cur[x] = v & 0xff
-    }
-    cur.copy(out, y * stride); prev = cur
-  }
-  return { w, h, ch, data: out }
-}
-
 const lin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4) }
 const lum = (p) => 0.2126 * lin(p[0]) + 0.7152 * lin(p[1]) + 0.0722 * lin(p[2])
 const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05) }
-
-/* ---- minimal CDP client over the /json/... HTTP endpoints + websocket ---- */
-const httpJson = (port, p) => new Promise((resolve, reject) => {
-  http.get({ host: '127.0.0.1', port, path: p }, (res) => {
-    let d = ''; res.setEncoding('utf8')
-    res.on('data', (c) => { d += c }); res.on('end', () => { try { resolve(JSON.parse(d)) } catch (e) { reject(e) } })
-  }).on('error', reject)
-})
-
-/* Tiny RFC6455 client: enough for CDP's text frames. Avoids adding a dependency
-   to a package that currently has none. */
-const connectWs = (url) => new Promise((resolve, reject) => {
-  const net = require('net')
-  const crypto = require('crypto')
-  const u = new URL(url)
-  const key = crypto.randomBytes(16).toString('base64')
-  const sock = net.connect(Number(u.port), u.hostname, () => {
-    sock.write('GET ' + u.pathname + u.search + ' HTTP/1.1\r\n'
-      + 'Host: ' + u.host + '\r\n'
-      + 'Upgrade: websocket\r\nConnection: Upgrade\r\n'
-      + 'Sec-WebSocket-Key: ' + key + '\r\nSec-WebSocket-Version: 13\r\n\r\n')
-  })
-  let buf = Buffer.alloc(0)
-  let open = false
-  const waiters = new Map()
-  let nextId = 1
-  const emit = (msg) => {
-    if (msg.id !== undefined && waiters.has(msg.id)) { waiters.get(msg.id)(msg); waiters.delete(msg.id) }
-  }
-  const decodeFrames = () => {
-    for (;;) {
-      if (buf.length < 2) return
-      const len0 = buf[1] & 0x7f
-      let off = 2, len = len0
-      if (len0 === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4 }
-      else if (len0 === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10 }
-      if (buf.length < off + len) return
-      const payload = buf.slice(off, off + len)
-      buf = buf.slice(off + len)
-      try { emit(JSON.parse(payload.toString('utf8'))) } catch (e) { /* non-JSON frame */ }
-    }
-  }
-  sock.on('data', (chunk) => {
-    if (!open) {
-      buf = Buffer.concat([buf, chunk])
-      const i = buf.indexOf('\r\n\r\n')
-      if (i < 0) return
-      const head = buf.slice(0, i).toString('ascii')
-      if (!/101/.test(head)) { reject(new Error('ws upgrade failed: ' + head.split('\r\n')[0])); return }
-      buf = buf.slice(i + 4); open = true
-      resolve(api)
-      decodeFrames()
-      return
-    }
-    buf = Buffer.concat([buf, chunk]); decodeFrames()
-  })
-  sock.on('error', reject)
-  const send = (obj) => {
-    const data = Buffer.from(JSON.stringify(obj), 'utf8')
-    const mask = require('crypto').randomBytes(4)
-    let header
-    if (data.length < 126) header = Buffer.from([0x81, 0x80 | data.length])
-    else if (data.length < 65536) { header = Buffer.alloc(4); header[0] = 0x81; header[1] = 0xfe; header.writeUInt16BE(data.length, 2) }
-    else { header = Buffer.alloc(10); header[0] = 0x81; header[1] = 0xff; header.writeBigUInt64BE(BigInt(data.length), 2) }
-    const masked = Buffer.alloc(data.length)
-    for (let i = 0; i < data.length; i++) masked[i] = data[i] ^ mask[i % 4]
-    sock.write(Buffer.concat([header, mask, masked]))
-  }
-  const api = {
-    call: (method, params) => new Promise((res) => {
-      const id = nextId++
-      waiters.set(id, (msg) => res(msg.result))
-      send({ id, method, params: params || {} })
-    }),
-    close: () => sock.destroy(),
-  }
-})
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -296,8 +173,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     window.__pseudo__=(id,which,prop)=>getComputedStyle(document.getElementById(id),which)[prop]
   </script></body></html>`)
 
-  const port = 9333 + Math.floor(Math.random() * 400)
-  /* Font-rendering flags plus the 4x device scale below are what make this check
+  /* Font-rendering flags plus the 4x device scale are what make this check
      platform-independent. The ink sample picks "the pixel furthest in luminance
      from the fill that occurs >= 3 times", which needs SOLID stroke pixels to
      land on. At 1x and 12px, Windows (DirectWrite) leaves plenty but Linux
@@ -309,43 +185,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
      sufficient; rasterising at 4x is what guarantees a solid stroke core exists
      on every platform. The CSS is untouched, so the rule under test is still the
      shipped one. */
-  const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox',
-    '--hide-scrollbars', '--window-size=520,560',
-    '--font-render-hinting=none', '--disable-font-subpixel-positioning',
-    '--disable-lcd-text', '--force-color-profile=srgb',
-    '--remote-debugging-port=' + port,
-    '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'hover-prof-')),
-    'file:///' + page.replace(/\\/g, '/')], { stdio: ['ignore', 'ignore', 'ignore'] })
-
+  const SCALE = 4
+  let cdp
   try {
-    let target = null
-    for (let i = 0; i < 60 && target === null; i++) {
-      await sleep(250)
-      try {
-        const list = await httpJson(port, '/json/list')
-        target = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl) || null
-      } catch (e) { /* not up yet */ }
-    }
-    if (target === null) { fail('could not reach the DevTools endpoint'); throw new Error('no target') }
-
-    const cdp = await connectWs(target.webSocketDebuggerUrl)
-    await cdp.call('Runtime.enable')
-    await cdp.call('Page.enable')
-    /* Screenshot at 4x so glyph strokes have solid cores everywhere (see above).
-       Layout stays identical — only the rasteriser output grows. */
-    const SCALE = 4
-    await cdp.call('Emulation.setDeviceMetricsOverride',
-      { width: 520, height: 560, deviceScaleFactor: SCALE, mobile: false })
+    cdp = await launch({
+      width: 520, height: 560, dpr: SCALE,
+      url: 'file:///' + page.replace(/\\/g, '/'),
+      args: ['--hide-scrollbars', '--font-render-hinting=none',
+        '--disable-font-subpixel-positioning', '--disable-lcd-text',
+        '--force-color-profile=srgb'],
+    })
     await sleep(600)
 
-    const evaluate = async (expr) => {
-      const r = await cdp.call('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })
-      return r && r.result ? r.result.value : undefined
-    }
-    const shoot = async () => {
-      const r = await cdp.call('Page.captureScreenshot', { format: 'png' })
-      return decodePng(Buffer.from(r.data, 'base64'))
-    }
+    const evaluate = (expr) => cdp.evaluate(expr)
+    const shoot = () => cdp.screenshot()
 
     const hexRgb = (s) => {
       const m = /^#?([0-9a-f]{6})$/i.exec(String(s).trim())
@@ -618,7 +471,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
     cdp.close()
   } finally {
-    proc.kill()
+    if (cdp) await cdp.close()
   }
 
   console.log('')
