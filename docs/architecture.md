@@ -28,6 +28,13 @@
   `client.js`**（DSH 插件加载器的硬约束），与 @deepseek-ai 自家 client 包
   （`tsdown bundle → lib/client.js`）同一条管线；产物提交入库，
   `scripts/build-client.js --check` 保证不过期
+- **DSH 服务只经一个适配层**：`src/client/services.js` 的 `createServices(ctx)`
+  是浏览器半区**唯一**出现 `ctx.get` / `ctx.effect` 的地方——`theme`（必需，
+  缺席时 apply 直接返回且不锁幂等标记）、`configForms`（两代形态：上下文属性
+  优先，其次服务；二者都要有 `.get()`）、`sessions`（可迟到，调用方重试、
+  不缓存）、`locale`（缺席退回中文）、`slots`（设置页挂载点），以及把清理
+  钩子登记到 run 生命周期的 `effect()`。DSH 升级时先看这个文件；它也是测试
+  打桩服务的接缝（不必伪造整个 cordis 上下文）
 - **样式源怎么拼，只有一个定义**：`scripts/lib/sources.js` 的 `STYLE_FILES`
   是层清单（顺序 = 级联顺序），`concatCss()` 就是客户端入口嵌进
   `insertCss()` 的那串字节。构建检查、`check.js`、`selftest.js` 的临时树、

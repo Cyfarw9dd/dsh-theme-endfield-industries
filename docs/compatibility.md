@@ -25,6 +25,15 @@
 
 **策略**：每个 `ctx.get()` 都有 `try-catch` + `undefined` 回退 + 功能降级。没有 inject 声明（不依赖加载顺序），apply 时缺什么就跳过什么。设置传输不再有旧代回落——**兼容下限 DSH 0.2.0 由 peerDependencies 强制**（`@deepseek-ai/dsh >=0.2.0`），`evaluatePluginCompatibility()` 会在不满足时告警/要求豁免。
 
+### 1b. 服务访问面收敛（低风险，接入点唯一）
+
+所有服务查找都在 `src/client/services.js`（`createServices(ctx)`）里：`theme`、
+`configForms`、`sessions`、`locale`、`slots` 五个服务 + `ctx.effect` 清理钩子。
+上游换 API 形状（例如换掉 `configForms` 这一代、或把服务搬到别处）只需改这一个
+文件；客户端入口里不再出现 `ctx.get(`。迟到绑定（`sessions`、`configForms`
+的重新选择）由适配层保持"每次调用重读"，不缓存——这一点与拆分前逐处调用的
+语义一致。
+
 ### 2. CSS Module 后缀匹配（中风险，选择器粒度）
 
 这是**最大的脆弱面**。主题用 86 处语义后缀匹配（`[class$='_centerCol']` 等），而不是哈希类名。
