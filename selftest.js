@@ -35,6 +35,16 @@ function stageTree() {
   fs.mkdirSync(path.join(tmpRoot, 'src', 'styles'), { recursive: true })
   fs.mkdirSync(path.join(tmpRoot, 'src', 'client'), { recursive: true })
   fs.mkdirSync(path.join(tmpRoot, 'scripts'), { recursive: true })
+  /* The entry is split into modules now (src/client/prefs/*.js), and check.js
+     reads the entry as text. Copy the whole prefs directory so the redirected
+     tree stays shaped like the real one and a future guard that resolves the
+     entry's imports does not fail on a missing sibling. */
+  const prefsSrc = path.join(root, 'src', 'client', 'prefs')
+  const prefsTmp = path.join(tmpRoot, 'src', 'client', 'prefs')
+  fs.mkdirSync(prefsTmp, { recursive: true })
+  for (const name of fs.readdirSync(prefsSrc)) {
+    fs.copyFileSync(path.join(prefsSrc, name), path.join(prefsTmp, name))
+  }
   fs.copyFileSync(path.join(root, 'check.js'), path.join(tmpRoot, 'check.js'))
   /* check.js loads scripts/lib/sources.js from ITS directory: the temp tree must
      carry the manifest too, or every case would fail on a missing module. */

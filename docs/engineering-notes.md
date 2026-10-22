@@ -155,6 +155,16 @@ const field = PREFS_KEY_TO_FIELD[rawKey] || rawKey.slice(PREFS_NS.length + 1)
 
 **测试侧的教训**：浏览器夹具（`test/fixtures/settings-scope.browser.js`）当时永远输出 `mode:'host'`，等于把 0.1.7 的快照形状冻结进了测试套件——真机契约已变，套件照样全绿。这和当年「测试桩复述 slice 去前缀」是同一类病：**桩必须建模生产契约的每一代形状**。夹具新增 `omitMode` 选项建模 0.2.1 快照；`test/settings-mode-gate.test.js` 用三个只差 `mode` 键的 ready+writable 快照钉死契约三边（缺失＝可写、显式 `host`＝可写、显式 `memory`＝拒写），并对修复前的判定做过变异验证（场景 A 必失败）。
 
+### store 与 transport 的接缝：按「谁决定何时」切，不按变量归属切（2026-10，v0.2.2 前）
+
+偏好层原来是入口里约 700 行的一整块闭包：值、脏队列、写入闸、表单发现、重试、settle watch、boot report 全缠在一起。拆成 `prefs/store.js` 与 `prefs/transport.js` 时，有两条经验值得留住。
+
+**边界不是按变量归属划的，而是按「谁决定何时」。** 写入闸（`prefsCommit` / `prefsWriteField` / 脏队列）留在 store，因为它决定「这次编辑现在能不能落盘」；snapshot 长什么样、哪个 entry 拼写被 served 属于 transport。于是依赖天然是双向的：transport 用 store 的协议（`adopt/flush/migrate/notify/markSettled/...`）驱动它，store 通过 transport 用 `bindTransport()` 装进来的 port（`snapshot` / `write` / `binding` / `served` / `dispose`）问它。两个模块互相**不 import**，entry 是唯一的组合根，`debug` 也从入口注入——这样「从 apply() 闭包搬到模块」不会留下任何隐式引用。
+
+**物理相邻 ≠ 同一个模块。** 第一次拆完，`prefsRetryTimer` 的声明跟着它两侧的 `prefsBindTimer` / `prefsSettleTimer` 一起进了 transport，而用它的是 store 的重试循环：构建与静态检查全绿，`settings-config-forms` 一跑就 `ReferenceError: prefsRetryTimer is not defined`。同一次还漏了 settle watch 重新选绑后那句 `prefsEmit()`（应为 `store.notify()`）。这正是「搬代码」最危险的地方——它看起来是纯移动。教训是：**这类拆分不能只看 diff 像不像移动，必须让真实运输层的用例跑一遍**（`settings-config-forms` 用假 `configForms` 驱动真实 client，一步就抓到）。
+
+实测：入口 `src/client/index.js` 3536 → 2789 行（-747，约 -21%），`prefs/store.js` 451 行、`prefs/transport.js` 438 行；产物 `client.js` 417,790 → 424,576 字节（+6,786，两段模块头注释与 store/transport 协议接口的开销；整个重构起点 417,207）。`selftest.js` 的 `stageTree()` 现在整目录复制 `src/client/prefs/`——新增 src 文件若不在临时树里，重定向后的 check 会看到一棵不完整的树。
+
 ## 变量必须声明在 body 而不是 :root
 
 **应用把主题令牌写成 `<body>` 的行内样式**（`dsh-client-ui-layout` 对每个令牌调用 `body.style.setProperty`）。
