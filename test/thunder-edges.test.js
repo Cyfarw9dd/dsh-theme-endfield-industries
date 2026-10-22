@@ -28,6 +28,11 @@ const { formStub, fieldName } = require(path.join(__dirname, 'fixtures', 'settin
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+/* CSS contracts read the SOURCE stylesheet (the artifact carries it as an escaped
+   JSON string constant, so the old "slice to the template literal's closing
+   backtick" trick no longer exists). */
+const sources = require('../scripts/lib/sources.js')
+const cssAll = sources.concatCss()
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
@@ -592,9 +597,8 @@ advance(3000)
    than a fixed byte count: a hardcoded window silently stopped reaching the
    reduced-motion block the moment the section's comments grew, which reported a
    MISSING rule that was in fact present two lines further down. */
-const sheetAt = src.indexOf('[data-endfield-thunder] {')
-const sheetEnd = sheetAt < 0 ? -1 : src.indexOf('`)', sheetAt)
-const sheet = (sheetAt < 0 || sheetEnd < 0) ? '' : src.slice(sheetAt, sheetEnd)
+const sheetAt = cssAll.indexOf('[data-endfield-thunder] {')
+const sheet = sheetAt < 0 ? '' : cssAll.slice(sheetAt)
 if (sheet === '') fail('could not locate the 雷霆大字 stylesheet block')
 const need = [
   [/position:\s*fixed/, '固定定位（不随滚动移动）'],
@@ -622,7 +626,7 @@ for (const [re, what] of need) {
 /* The boot plate must still win the screen it owns: it is the one surface that
    legitimately covers everything, so the announcement has to sit BELOW it. */
 const zThunder = (sheet.match(/z-index:\s*(\d+)/) || [])[1]
-const zLoader = (src.match(/\[data-endfield-loader\]\s*\{[\s\S]{0,400}?z-index:\s*(\d+)/) || [])[1]
+const zLoader = (cssAll.match(/\[data-endfield-loader\]\s*\{[\s\S]{0,400}?z-index:\s*(\d+)/) || [])[1]
 if (zThunder && zLoader && Number(zThunder) < Number(zLoader)) {
   pass('层级低于启动加载屏（' + zThunder + ' < ' + zLoader + '）')
 } else {
