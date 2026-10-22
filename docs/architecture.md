@@ -20,21 +20,26 @@
 - **Host 半**只在 profile 启动时加载一次；**Client 半**按请求从磁盘读取，刷新生效
 - 两半通过 DSH 设置命名空间（`theme-endfield`，`ctx.configForms`，兼容下限 DSH 0.2.0）同步偏好；浏览器 localStorage 已弃用（见工程笔记）
 
-## 样式表组织
+## 源码组织与构建
 
-- 全部 CSS 在 client.js 的**一个模板字符串**里，由 `insertCss()` 注入——
-  因此 `check.js` 守护反引号/插值/括号配平这类「解析不报错但全坏」的改动
+- 浏览器半的源码在 `src/`：`src/client/index.js`（JS，含外壳与 `insertCss()`）
+  + `src/styles/theme.css`（手写样式，真 CSS 文件）+ `src/styles/generated.css`
+  （机器生成的掩码/纹理围栏区）。tsdown 把两者打包成**单文件产物
+  `client.js`**（DSH 插件加载器的硬约束），与 @deepseek-ai 自家 client 包
+  （`tsdown bundle → lib/client.js`）同一条管线；产物提交入库，
+  `scripts/build-client.js --check` 保证不过期
 - 强调色按**调色板 class**（`theme-endfield-gray` / `-wuling`）切换：一个 class
   翻转全量重绘，无 JS 重绘
 - 选中/光标是**不随调色板**的固定交互灰（官网语法，见调研文档）
-- 生成物（徽标矢量掩码）嵌在标记区 `EMBLEM_MASK_BEGIN/END` 内，
-  由 `scripts/build-emblem.js` 生成，`--check` 防漂移
+- 生成物由各自脚本维护（`build-emblem.js` / `build-logo.js` /
+  `build-texture.js` 打进 `generated.css` 围栏区），`--check` 防漂移
 
 ## 验证链
 
 ```
-node check.js → 静态不变量（样式表结构、调色板块、掩码包装）
-node selftest.js → 变异验证：把每个真实 bug 注入副本，证明 check 真能抓住
+node scripts/build-client.js --check → 产物新鲜度（重打包并逐字节比对 client.js）
+node check.js → 静态不变量（源样式表结构、调色板块、围栏、产物可解析）
+node selftest.js → 变异验证：把每个真实 bug 注入临时副本树，证明 check 真能抓住
 npm test → 上述 + 配色对比度 / 设置页 / 真实浏览器渲染 / 性能预算
 ```
 

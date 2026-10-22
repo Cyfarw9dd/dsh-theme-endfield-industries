@@ -19,6 +19,13 @@ const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+/* CSS-rule assertions read the SOURCE stylesheet: the build embeds the css as
+   an escaped string literal, so selector/block layout only exists in src/. */
+const css = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(ROOT, 'src', 'styles', 'generated.css'), 'utf8')
+/* JS token-override literals keep their single-quoted spelling only in the
+   pre-bundle client source (the bundler re-quotes artifact strings). */
+const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
@@ -50,10 +57,10 @@ const INK = hex('#101110')
 /* ---------- pull the palette definitions out of the real stylesheet ---------- */
 /** Read one custom property from a specific CSS block in client.js. */
 const blockOf = (selector) => {
-  const i = src.indexOf(selector + ' {')
+  const i = css.indexOf(selector + ' {')
   if (i < 0) return null
-  const j = src.indexOf('}', i)
-  return j < 0 ? null : src.slice(i, j)
+  const j = css.indexOf('}', i)
+  return j < 0 ? null : css.slice(i, j)
 }
 const varIn = (block, name) => {
   if (block === null) return null
@@ -71,10 +78,10 @@ const GRAY_DARK_SEL = 'body.theme-endfield-gray[data-ds-dark-theme]'
 const defaultBlock = (() => {
   let from = 0
   for (;;) {
-    const i = src.indexOf('\n      body {', from)
+    const i = css.indexOf('\n      body {', from)
     if (i < 0) return null
     const j = src.indexOf('}', i)
-    const b = src.slice(i, j)
+    const b = css.slice(i, j)
     if (/--edge-accent\s*:/.test(b)) return b
     from = i + 1
   }
@@ -354,9 +361,9 @@ for (const [name, block] of Object.entries(palettes)) {
     const needle = dark ? '\n      body[data-ds-dark-theme] {' : '\n      body {'
     let from = 0
     for (;;) {
-      const i = src.indexOf(needle, from)
+      const i = css.indexOf(needle, from)
       if (i < 0) return null
-      const b = src.slice(i, src.indexOf('}', i))
+      const b = css.slice(i, css.indexOf('}', i))
       if (b.includes('--edge-select-fill')) return b
       from = i + 1
     }
@@ -439,7 +446,7 @@ for (const [name, block] of Object.entries(palettes)) {
    these lines prove every text/fill pair the control paints clears AA, reading
    the values out of the real rules. */
 {
-  const flat = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
   const ruleOf = (sel) => {
     const m = new RegExp(sel.replace(/[.[\]'()]/g, (c) => '\\' + c) + '\\s*\\{([^}]*)\\}').exec(flat)
     return m ? m[1] : null
@@ -495,10 +502,10 @@ for (const [name, block] of Object.entries(palettes)) {
    text/fill pair plus the decorative floors (ring edge, keycap separation). */
 {
   const jsToken = (name) => {
-    const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
+    const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc)
     return m ? { light: m[1], dark: m[2] } : null
   }
-  const cssVals = (name) => [...src.matchAll(new RegExp(name + ':\\s*(#[0-9a-f]{6})', 'gi'))].map((m) => m[1].toLowerCase())
+  const cssVals = (name) => [...css.matchAll(new RegExp(name + ':\\s*(#[0-9a-f]{6})', 'gi'))].map((m) => m[1].toLowerCase())
   const bubble = jsToken('--dsw-alias-tooltip-bg')
   const key = jsToken('--dsw-alias-tooltip-key-bg')
   const text = jsToken('--dsw-alias-label-primary')
@@ -561,11 +568,11 @@ for (const [name, block] of Object.entries(palettes)) {
   const offActive = official('#e5e5e5', '#ffffff')
   /* rule bodies, not indexOf windows: the same ::before selector also appears
      inside the reduced-transparency block as a bare display:none. */
-  const bodiesOf = (selPat) => [...src.matchAll(new RegExp(selPat + '\\s*\\{([^}]*)\\}', 'g'))].map((m) => m[1])
+  const bodiesOf = (selPat) => [...css.matchAll(new RegExp(selPat + '\\s*\\{([^}]*)\\}', 'g'))].map((m) => m[1])
   const alphaIn = (body) => { const m = /rgba\(0, 0, 0, 0\.(\d+)\)/.exec(body); return m === null ? null : Number('0.' + m[1]) }
   const hoverA = bodiesOf("\\[class\\$='_centerCol'\\] \\[class\\$='_tabs'\\] :is\\(\\[class\\$='_tab'\\],\\[class\\$='_tabActive'\\]\\)::before").map(alphaIn).find((v) => v !== null)
   const activeA = bodiesOf("\\[class\\$='_centerCol'\\] \\[class\\$='_tabs'\\] \\[class\\$='_tabActive'\\]::before").map(alphaIn).find((v) => v !== null)
-  const paperM = new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
+  const paperM = new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc)
   const paper = paperM ? paperM[1] : null
   if (hoverA === undefined || activeA === undefined || paper === null) {
     fail('页签洗面 · 规则或纸底令牌读不到（hover alpha=' + hoverA + '，active alpha=' + activeA + '）')
@@ -592,7 +599,7 @@ for (const [name, block] of Object.entries(palettes)) {
        the chip colours literally; the divider reads the border-l1 token). */
     const circleM = /fill='%23([0-9a-f]{6})'/i.exec(src)
     const chevM = /stroke='%23([0-9a-f]{6})'/i.exec(src)
-    const bl1 = { light: hoverA === undefined ? null : (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1], dark: (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1] }
+    const bl1 = { light: hoverA === undefined ? null : (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1], dark: (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1] }
     if (circleM && chevM && bl1.light && bl1.dark) {
       const circle = '#' + circleM[1], chev = '#' + chevM[1]
       const rCircle = ratio(hex(circle), comp(activeA))
@@ -601,7 +608,7 @@ for (const [name, block] of Object.entries(palettes)) {
       const rChev = ratio(hex(chev), hex(circle))
       if (rChev >= 1.6) pass('页签箭头 · 山形/圆片：' + chev + ' = ' + rChev.toFixed(2) + ':1（官方 #999/#fafafa ' + official('#999999', '#fafafa').toFixed(2) + ':1）')
       else fail('页签箭头山形不可读：' + rChev.toFixed(2) + ':1')
-      const darkBase = (new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+      const darkBase = (new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
       for (const [mode, v, base] of [['亮', bl1.light, paper], ['暗', bl1.dark, darkBase]]) {
         if (!v || !base) { fail('页签分隔线 · ' + mode + '色底色读不到'); continue }
         const rDiv = ratio(hex(v), hex(base))
@@ -622,11 +629,11 @@ for (const [name, block] of Object.entries(palettes)) {
    band (<1.6) and the label-primary ink must stay AA on the washed surface.
    Values are read out of the real rules and token blocks, never restated. */
 {
-  const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '')
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
   const flat = noComments.replace(/\n\s*/g, ' ')
   const lightBody = /body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):hover, body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):focus-visible \{([^}]*)\}/.exec(flat)
   const washM = lightBody && /rgba\(0, 0, 0, 0\.(\d+)\)/.exec(lightBody[1])
-  const tok = (name, mode) => (new RegExp("'" + name + "'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+  const tok = (name, mode) => (new RegExp("'" + name + "'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
   const l2 = { light: tok('--dsw-alias-bg-layer-2', 'light'), dark: tok('--dsw-alias-bg-layer-2', 'dark') }
   const l3dark = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-bg-layer-3: (#[0-9a-f]{6})/.exec(flat) || [])[1]
   const inkLight = tok('--dsw-alias-label-primary', 'light')
@@ -660,12 +667,12 @@ for (const [name, block] of Object.entries(palettes)) {
    keep it inside the decorative band (1.06–1.6), in step with the column
    texture (1.10–1.19). Values read from the real declarations. */
 {
-  const noC = src.replace(/\/\*[\s\S]*?\*\//g, '')
+  const noC = css.replace(/\/\*[\s\S]*?\*\//g, '')
   const flat = noC.replace(/\n\s*/g, ' ')
   const band = /\[data-team-panel\]::after\s*\{([^}]*)\}/.exec(flat)
   const tok = (name) => (new RegExp(name + ":\\s*(#[0-9a-f]{6})").exec(noC) || [])[1]
   const alpha = (name) => (new RegExp(name + ":\\s*(\\d+)%").exec(noC) || [])[1]
-  const menu = (mode) => (new RegExp("'--dsw-menu-surface-fill'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(src) || [])[1]
+  const menu = (mode) => (new RegExp("'--dsw-menu-surface-fill'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
   const inkLight = tok('--edge-tex-ink'), aLight = alpha('--edge-tex-hatch-a')
   const inkDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-ink:\s*(#[0-9a-f]{6})/.exec(flat)
   const aDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-hatch-a:\s*(\d+)%/.exec(flat)

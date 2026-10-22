@@ -93,6 +93,11 @@ jobs:
         with:
           node-version: '22'
 
+      # test:ci 现在以 scripts/build-client.js --check 开头（产物新鲜度门禁），
+      # tsdown 等 devDependencies 必须先就位。
+      - name: 安装构建依赖
+        run: npm install --no-audit --no-fund
+
       - name: 定位 Chrome
         run: |
           p="$(command -v google-chrome || command -v google-chrome-stable \
@@ -147,6 +152,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+
+      # test:ci 现在以 scripts/build-client.js --check 开头（产物新鲜度门禁），
+      # tsdown 等 devDependencies 必须先就位。
+      - name: 安装构建依赖
+        run: npm install --no-audit --no-fund
 
       - name: 定位 Chrome
         run: |

@@ -42,7 +42,8 @@ const { execFileSync } = require('child_process')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
-const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+const cssSrc = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }

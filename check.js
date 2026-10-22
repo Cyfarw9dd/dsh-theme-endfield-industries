@@ -1,14 +1,16 @@
 /**
- * check.js — guard rails for the theme's single-template-literal stylesheet.
+ * check.js — guard rails for the theme's stylesheet and client artifact.
  *
- * Why this exists: the whole theme stylesheet is ONE JavaScript template literal
- * passed to insertCss(`...`). A stray backtick anywhere inside it — including inside
- * a CSS comment — terminates the literal early and breaks the entire client bundle
- * at parse time, not just the rule being edited. That failure mode was hit twice
- * while editing comments, so it is now checked mechanically instead of by care.
+ * The stylesheet lives as REAL css files (src/styles/theme.css + generated.css)
+ * and is embedded into the built ./client.js by tsdown (see scripts/build-client.js).
+ * With real .css files the old template-literal failure modes (a stray backtick
+ * terminating the literal, ${...} interpolation) are structurally gone; what
+ * remains mechanical here is structural CSS invariants (comment/brace balance,
+ * palette blocks, token scoping), shape checks against the pre-bundle client
+ * source, and artifact sanity (the bundle parses and carries the css payload).
  *
- * Also verifies ${...} is absent: inside a template literal that is interpolation,
- * so a CSS snippet containing it would either throw or silently inject a value.
+ * Artifact FRESHNESS is a separate gate: scripts/build-client.js --check
+ * (wired into `npm run check` and CI) rebuilds and byte-compares client.js.
  *
  * Usage: node check.js [target.js]   (exit 0 = clean, 1 = problem found)
  *        The optional target exists so selftest.js can point the same logic at a
@@ -22,43 +24,47 @@ const file = process.argv[2]
   ? path.resolve(process.argv[2])
   : path.join(__dirname, 'client.js')
 const src = fs.readFileSync(file, 'utf8')
+/* CSS invariants read the stylesheet SOURCES: the build embeds them into the
+   artifact as escaped string literals, so layout (lines, selector blocks) only
+   exists pre-bundle. Shape checks that depend on JS quoting read the client
+   source for the same reason (the bundler re-quotes strings). */
+/* selftest.js redirects the source root into a temp copy so its mutations
+   never touch the working tree (same trick as the old argv target override). */
+const srcRoot = (process.env && process.env.DSH_CHECK_ROOT) || __dirname
+const cssPath = (n) => path.join(srcRoot, 'src', 'styles', n)
+const cssText = fs.readFileSync(cssPath('theme.css'), 'utf8')
+  + '\n' + fs.readFileSync(cssPath('generated.css'), 'utf8')
+const cssLines = cssText.split('\n')
+const clientSrcPath = path.join(srcRoot, 'src', 'client', 'index.js')
+const clientSrc = fs.readFileSync(clientSrcPath, 'utf8')
 const lines = src.split('\n')
 
 let failures = 0
 const fail = (msg) => { console.error('FAIL  ' + msg); failures++ }
 const pass = (msg) => console.log('ok    ' + msg)
 
-/* --- 1. locate the stylesheet template literal --- */
-const openIdx = src.indexOf('insertCss(`')
-if (openIdx < 0) {
-  fail('could not find insertCss(` — has the stylesheet been restructured?')
-} else {
-  const bodyStart = openIdx + 'insertCss(`'.length
-  const closeIdx = src.indexOf('`)', bodyStart)
-  if (closeIdx < 0) {
-    fail('stylesheet template literal is never closed with `)')
-  } else {
-    const body = src.slice(bodyStart, closeIdx)
-    const openLine = src.slice(0, bodyStart).split('\n').length
-    const closeLine = src.slice(0, closeIdx).split('\n').length
-
-    // Any backtick between the delimiters would have ended the literal early.
-    const stray = body.indexOf('`')
-    if (stray >= 0) {
-      const ln = src.slice(0, bodyStart + stray).split('\n').length
-      fail(`stray backtick inside the stylesheet at line ${ln}: `
-        + `${lines[ln - 1].trim().slice(0, 80)}\n      `
-        + `-> a backtick ends the template literal; use 'single quotes' in comments.`)
-    } else {
-      pass(`stylesheet literal is backtick-clean (lines ${openLine}-${closeLine})`)
-    }
-
-    if (body.includes('${')) {
-      const ln = src.slice(0, bodyStart + body.indexOf('${')).split('\n').length
-      fail(`'\${' inside the stylesheet at line ${ln} — that is template interpolation, not CSS`)
-    } else {
-      pass('stylesheet contains no ${...} interpolation')
-    }
+/* --- 1. stylesheet sources + generated fences ---
+   The sheet is the concatenation the client entry embeds (theme.css then
+   generated.css). The old template-literal guards (stray backtick, ${...})
+   are obsolete with real .css files; what stays mechanical is that the
+   generated fences exist, in order, in generated.css. */
+const body = cssText
+{
+  const fences = ['EDGE_TEX_BEGIN', 'EMBLEM_MASK_BEGIN', 'HERO_LOGO_BEGIN']
+  let last = -1
+  let okFences = true
+  for (const f of fences) {
+    const i = cssText.indexOf(f)
+    if (i < 0 || i < last) { okFences = false; break }
+    last = i
+  }
+  if (okFences) pass('generated fences present and ordered (EDGE_TEX / EMBLEM_MASK / HERO_LOGO)')
+  else fail('generated.css fences missing or out of order — run the build-*-texture/emblem/logo scripts')
+}
+/* two bare blocks keep the nesting depth the downstream sections were written
+   against (the old template-literal locator opened two else-blocks here) */
+{
+{
 
     /* --- 2. CSS comment balance ---
        A previously-fixed bug closed a comment early with a stray close-marker,
@@ -94,13 +100,13 @@ if (openIdx < 0) {
     }
     if (inComment) unterminated = commentStart
 
-    const lineOf = (offset) => src.slice(0, bodyStart + offset).split('\n').length
+    const lineOf = (offset) => cssText.slice(0, offset).split('\n').length
     if (unterminated >= 0) {
       fail(`unterminated CSS comment opened at line ${lineOf(unterminated)} `
         + `-> everything after it is swallowed as a comment`)
     } else if (strayClose >= 0) {
       fail(`stray '*/' outside any comment at line ${lineOf(strayClose)}: `
-        + `${lines[lineOf(strayClose) - 1].trim().slice(0, 70)}\n      `
+        + `${cssLines[lineOf(strayClose) - 1].trim().slice(0, 70)}\n      `
         + `-> a comment closed early; the prose after it becomes live CSS`)
     } else {
       pass('CSS comments balanced')
@@ -308,8 +314,8 @@ try {
 /* --- 4. the turn-status label must be recoloured via background-image ---
    A plain `color:` cannot win against upstream's transparent text fill, so an edit
    that "fixes" this rule with color: would silently do nothing. */
-if (src.includes("turnStatus")) {
-  const hasBg = /turnStatus[\s\S]{0,400}?background-image:\s*linear-gradient/.test(src)
+if (cssText.includes("turnStatus")) {
+  const hasBg = /turnStatus[\s\S]{0,400}?background-image:\s*linear-gradient/.test(cssText)
   if (hasBg) pass('turn-status label is recoloured through background-image (gradient text)')
   else fail('turn-status rules found but no background-image gradient — a plain color: cannot recolour gradient text')
 }
@@ -325,7 +331,7 @@ if (src.includes("turnStatus")) {
 {
   /* Re-derive the comment-stripped stylesheet: section 5 runs at top level,
      outside the scope that owns the section-1 local. */
-  const s2 = src.replace(/\/\*[\s\S]*?\*\//g, '')
+  const s2 = cssText.replace(/\/\*[\s\S]*?\*\//g, '')
   const need = [
     ['.endfield-select-trigger', 'endfield-select-trigger rule missing — the row control renders unstyled'],
     ['.endfield-select-menu', 'endfield-select-menu rule missing — opened menus render unstyled'],
@@ -366,7 +372,7 @@ if (src.includes("turnStatus")) {
       '选中底 = 预建斜纹层，只切 opacity（不创造几何）'],
     [/#ff00f0 0, #ff00f0 50%, #00ffa2 0/.test(ruleOf('.endfield-select-option-bg::before')), '选中行左缘 = 官方紫 #ff00f0 / 绿 #00ffa2 各半'],
     [/\[role='menuitemradio'\]\[aria-checked='true'\]:not\(\.endfield-select-option\)\s*,/.test(flat), '全局「菜单当前项」划词灰规则对本控件开洞（否则 !important 盖掉斜纹）'],
-    [src.includes("R.createElement('button', {\n              key: o.value, type: 'button', role: 'menuitemradio'"), '选项是 button[role=menuitemradio]（可聚焦，同应用菜单元素）'],
+    [clientSrc.includes("R.createElement('button', {\n              key: o.value, type: 'button', role: 'menuitemradio'"), '选项是 button[role=menuitemradio]（可聚焦，同应用菜单元素）'],
   ]
   for (const [ok, what] of shapeChecks) {
     if (ok) pass('统一下拉形制 · ' + what)
@@ -382,7 +388,7 @@ if (src.includes("turnStatus")) {
    palette-inverted twin. All four hosts are also in selector-guard's hook
    list. */
 {
-  const s3 = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
+  const s3 = cssText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*/g, ' ')
   const matRule = /(\[class\$='_newSession'\],[^{]*)\{([^}]*)\}/.exec(s3)
   const hosts = [
     ["[class$='_newSession'],", '新会话'],
@@ -410,7 +416,7 @@ if (src.includes("turnStatus")) {
       + '（hover 变体 ' + hoverVariants + '<3）——悬停时图层会被 background 简写清掉')
   }
   const decls = matRule ? matRule[2] : ''
-  const btnTexUri = (src.match(/--edge-btn-tex: url\("([^"]+)"\)/) || [])[1] || ''
+  const btnTexUri = (cssText.match(/--edge-btn-tex: url\("([^"]+)"\)/) || [])[1] || ''
   const materialChecks = [
     [/background-image:\s*var\(--edge-btn-tex\) !important/.test(decls), '图层读 --edge-btn-tex（官方原字节，由 build-texture.js 钉 sha）'],
     [/background-size:\s*auto calc\(100% \+ 2px\) !important/.test(decls), '上下各外溢 1px（calc(100%+2px)，被按钮裁掉），宽随内禀比例 320:72 向左延展'],
@@ -421,7 +427,7 @@ if (src.includes("turnStatus")) {
     [fs.readFileSync(path.join(__dirname, 'scripts', 'build-texture.js'), 'utf8').includes('stop-opacity')
       && fs.readFileSync(path.join(__dirname, 'scripts', 'build-texture.js'), 'utf8').includes('const wrapFadeSvg'),
       '左侧渐隐遮罩钉在构建脚本（x≤95 全隐 → x=165 全显，消除官方墨迹 x≈103 硬起笔的生硬左界）'],
-    [src.includes('body { --edge-btn-tex-inv: url("data:image/svg+xml;base64,'), '反相派生同样走 SVG 包装（原图 + 渐隐在同一管线，不会漂移）'],
+    [cssText.includes('body { --edge-btn-tex-inv: url("data:image/svg+xml;base64,'), '反相派生同样走 SVG 包装（原图 + 渐隐在同一管线，不会漂移）'],
     [/body\[data-ds-dark-theme\] \[data-question-key\] button\[class\*='_outline'\][^{]*\{[^}]*background-image:\s*var\(--edge-btn-tex-inv\) !important/.test(s3), '暗色跳过换反相墨 --edge-btn-tex-inv（官方 invert(1) 的数据版）'],
     [/\[class\$='_newSession'\]\s*\{[^}]*border-color:\s*transparent !important[^}]*\}/.test(s3)
       && /\[class\$='_newSession'\]:hover,\s*\[class\$='_newSession'\]:focus-visible\s*\{[^}]*border-color:\s*transparent !important[^}]*\}/.test(s3.replace(/\n\s*/g, ' ')),

@@ -68,7 +68,8 @@ All docs are written in Chinese.
 ## Development & verification
 
 ```bash
-node check.js        # fast static checks: template-string/CSS invariants, generated-asset pins, client.js compiles
+npm run build        # rebuild the client.js artifact after editing src/ (npm run watch in dev)
+npm run check        # artifact freshness + generated-asset pins + source-CSS invariants (fast)
 node selftest.js     # reverse-verifies that check.js actually catches those problems
 npm test             # all of the above + palette/settings/rendering/motion-performance suites
 ```
@@ -78,7 +79,9 @@ npm test             # all of the above + palette/settings/rendering/motion-perf
 ## Project layout
 
 ```text
-client.js          client-side theme implementation (the stylesheet is one JS template literal inside)
+client.js          client-side single-file artifact (bundled from src/ by tsdown; do not edit)
+src/client/         client-side source (IIFE shell + prefs engine + feature surfaces + settings panel)
+src/styles/         stylesheet sources: theme.css (hand-written) + generated.css (script-generated fences)
 index.js           host side: exports the volatile Config, declares the settings namespace and audio runtime
 lib/               audio notifications: slots.js (slot defs), tone.js (WAV synthesis), audio.js (playback runtime)
 sounds/            generated notification sounds (npm run sound:build regenerates; --check guards drift)
