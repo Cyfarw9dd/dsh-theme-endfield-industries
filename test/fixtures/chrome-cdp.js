@@ -111,15 +111,28 @@ async function launch(options = {}) {
       send,
       call: (method, params) => send(method, params || {}),
       evaluate, errors, close, sleep, setViewport,
-      async until(expression){
-        for(let i=0;i<100;i++){if(await evaluate(expression))return;await sleep(100)}
-        throw Error('Condition timed out: '+expression)
+      /* Poll a page-side predicate. The default ceiling is deliberately higher
+         than the old --virtual-time-budget tests needed: those compressed real
+         timers into virtual time, while here the wait is wall-clock. */
+      async until(expression, timeoutMs = 10000){
+        const deadline = Date.now() + timeoutMs
+        for(;;){
+          if(await evaluate(expression)) return
+          if(Date.now() > deadline) throw Error('Condition timed out after ' + timeoutMs + 'ms: ' + expression)
+          await sleep(100)
+        }
       },
       async navigate(target){ await send('Page.navigate',{url:target}); await sleep(60) },
       /** Screenshot and decode it in one step (device pixels). */
       async screenshot(){
         const r = await send('Page.captureScreenshot',{format:'png'})
         return decodePng(Buffer.from(r.data,'base64'))
+      },
+      /** Screenshot straight to a PNG file (for tests that compare images later). */
+      async screenshotTo(file){
+        const r = await send('Page.captureScreenshot',{format:'png'})
+        fs.writeFileSync(file, Buffer.from(r.data,'base64'))
+        return file
       },
     }
     if (url !== null) {

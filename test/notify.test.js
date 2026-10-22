@@ -19,19 +19,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-notify-'))
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86\\)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
-
 const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
   :root{--dsw-alias-bg-base:#e8e8e2;--dsw-alias-bg-layer-1:#f2f2ec;
@@ -120,19 +113,18 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
 const page = path.join(OUT, 'notify.html')
 fs.writeFileSync(page, HTML)
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'notify-prof-'))
-let dom = ''
-try {
-  dom = execFileSync(chrome, [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--virtual-time-budget=26000', '--window-size=1024,700',
-    '--user-data-dir=' + tmp, '--dump-dom',
-    'file:///' + page.replace(/\\/g, '/'),
-  ], { encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] })
-} catch (e) { console.error('FAIL  browser run failed: ' + e.message); process.exit(1) }
-const m = dom.match(/<title>NOTIFY (.*?)<\/title>/s)
-if (!m) { console.error('FAIL  notify page did not report results'); process.exit(1) }
-const results = JSON.parse(m[1].replace(/&quot;/g, '"'))
+;(async () => {
+  const browser = await launch({
+    url: 'file:///' + page.replace(/\\/g, '/'),
+    width: 1024, height: 700, dpr: 1, args: ['--hide-scrollbars'],
+  })
+  let results
+  try {
+    await browser.until("document.title.indexOf('NOTIFY ') === 0", 90000)
+    results = JSON.parse((await browser.evaluate('document.title')).slice(7))
+  } finally {
+    await browser.close()
+  }
 let failures = 0
 for (const r of results) {
   if (r.pass) console.log('ok    ' + r.name + (r.detail ? '  [' + r.detail + ']' : ''))
@@ -140,3 +132,4 @@ for (const r of results) {
 }
 if (failures) { console.error(failures + ' notify check(s) failed'); process.exit(1) }
 console.log('all notify checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })

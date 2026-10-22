@@ -29,19 +29,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-loader-late-'))
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 /* Chrome's virtual time makes every timer in this budget fire immediately in
    wall-clock terms, so the page below finishes (and titles itself) long before
@@ -102,56 +95,49 @@ function makePage({ initial, readyDelayMs, flip }) {
 </script></body></html>`
 }
 
-function run(label, spec) {
+async function run(label, spec) {
   const page = path.join(OUT, 'loader-' + label + '.html')
   fs.writeFileSync(page, makePage(spec))
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'loader-late-prof-'))
-  let dom = ''
+  const browser = await launch({ url: 'file:///' + page.replace(/\\/g, '/'), width: 334, height: 900, dpr: 1, args: ['--hide-scrollbars'] })
   try {
-    dom = execFileSync(chrome, [
-      '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-      '--virtual-time-budget=' + BUDGET_MS, '--window-size=334,900',
-      '--user-data-dir=' + tmp, '--dump-dom',
-      'file:///' + page.replace(/\\/g, '/'),
-    ], { encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] })
-  } catch (e) {
-    console.error('FAIL  [' + label + '] browser run failed: ' + e.message)
-    process.exit(1)
+    await browser.until("document.title.indexOf('LDR ') === 0", 40000)
+    return JSON.parse((await browser.evaluate('document.title')).slice(4))
+  } finally {
+    await browser.close()
   }
-  const m = dom.match(/<title>LDR (.*?)<\/title>/s)
-  if (!m) { console.error('FAIL  [' + label + '] page did not report results'); process.exit(1) }
-  return JSON.parse(m[1].replace(/&quot;/g, '"'))
 }
 
-fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
+;(async () => {
+  fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
 
-let failures = 0
-const ok = (s) => console.log('ok    ' + s)
-const fail = (s) => { console.error('FAIL  ' + s); failures++ }
+  let failures = 0
+  const ok = (s) => console.log('ok    ' + s)
+  const fail = (s) => { console.error('FAIL  ' + s); failures++ }
 
-const BASE = { enabled: '1', watermark: '0', thunder: '0' }
+  const BASE = { enabled: '1', watermark: '0', thunder: '0' }
 
-/* A — the reported bug: the section settles late and carries loader:"1". */
-const a = run('a', { initial: Object.assign({}, BASE, { loader: '1' }), readyDelayMs: 250 })
-if (a.seen) ok('A: plate plays when the stored loader:"1" arrives after apply() (' + a.seenAt + 'ms)')
-else fail('A: stored loader:"1" never played the plate — it was read before the section settled and never revisited')
-if (a.gone) ok('A: the plate still cleans itself up after playing')
-else fail('A: the plate was left on screen')
+  /* A — the reported bug: the section settles late and carries loader:"1". */
+  const a = await run('a', { initial: Object.assign({}, BASE, { loader: '1' }), readyDelayMs: 250 })
+  if (a.seen) ok('A: plate plays when the stored loader:"1" arrives after apply() (' + a.seenAt + 'ms)')
+  else fail('A: stored loader:"1" never played the plate — it was read before the section settled and never revisited')
+  if (a.gone) ok('A: the plate still cleans itself up after playing')
+  else fail('A: the plate was left on screen')
 
-/* B — the stored value is off: the late section must NOT start anything. */
-const b = run('b', { initial: Object.assign({}, BASE, { loader: '0' }), readyDelayMs: 250 })
-if (!b.seen) ok('B: no plate when the settled section says loader:"0"')
-else fail('B: a plate played even though the stored loader is "0"')
+  /* B — the stored value is off: the late section must NOT start anything. */
+  const b = await run('b', { initial: Object.assign({}, BASE, { loader: '0' }), readyDelayMs: 250 })
+  if (!b.seen) ok('B: no plate when the settled section says loader:"0"')
+  else fail('B: a plate played even though the stored loader is "0"')
 
-/* C — once-per-page-load: a LATER change to "1" is a runtime edit, not a boot
+  /* C — once-per-page-load: a LATER change to "1" is a runtime edit, not a boot
    read, and must not replay a startup animation over a running app. */
-const c = run('c', {
+  const c = await run('c', {
   initial: Object.assign({}, BASE, { loader: '0' }),
   readyDelayMs: 250,
   flip: { atMs: 1500, key: 'dsh-theme-endfield-loader', value: '1' },
-})
-if (!c.seen) ok('C: a later runtime switch to loader:"1" does not replay the boot plate')
-else fail('C: the boot plate replayed from a mid-session settings change')
+  })
+  if (!c.seen) ok('C: a later runtime switch to loader:"1" does not replay the boot plate')
+  else fail('C: the boot plate replayed from a mid-session settings change')
 
-if (failures) { console.error('\n' + failures + ' loader late-prefs check(s) failed'); process.exit(1) }
-console.log('\nall loader late-prefs checks passed')
+  if (failures) { console.error('\n' + failures + ' loader late-prefs check(s) failed'); process.exit(1) }
+  console.log('\nall loader late-prefs checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })

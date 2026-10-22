@@ -23,18 +23,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 
-const chrome = [process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-dismiss-'))
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(TMP, 'client.js'))
@@ -211,26 +205,15 @@ setTimeout(()=>{
 },3200)
 </script></body></html>`)
 
-let out = ''
-try {
-  out = execFileSync(chrome, ['--headless', '--disable-gpu', '--no-sandbox',
-    '--window-size=1280,720', '--virtual-time-budget=9000', '--dump-dom',
-    'file:///' + page.replace(/\\/g, '/')],
-    { encoding: 'utf8', maxBuffer: 1 << 26, timeout: 120000 })
-} catch (e) {
-  console.error('FAIL  chrome failed: ' + String(e.message).slice(0, 300))
-  process.exit(1)
-}
-
-const m = out.match(/<title>DONE ([\s\S]*?)<\/title>/)
-if (!m) {
-  console.error('FAIL  page produced no results')
-  const t = out.match(/<title>([\s\S]*?)<\/title>/)
-  if (t) console.error('      title was: ' + t[1].slice(0, 300))
-  process.exit(1)
-}
-const dec = (s) => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-const results = JSON.parse(dec(m[1]))
+;(async () => {
+  const browser = await launch({ url: 'file:///' + page.replace(/\\/g, '/'), width: 1280, height: 720, dpr: 1, args: ['--hide-scrollbars'] })
+  let results
+  try {
+    await browser.until("document.title.indexOf('DONE ') === 0", 40000)
+    results = JSON.parse((await browser.evaluate('document.title')).slice(5))
+  } finally {
+    await browser.close()
+  }
 
 let failures = 0
 for (const r of results) {
@@ -240,3 +223,4 @@ for (const r of results) {
 console.log('')
 if (failures) { console.error(failures + ' dismiss check(s) failed'); process.exit(1) }
 console.log('all click-to-dismiss checks passed (' + results.length + ' assertions)')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })
