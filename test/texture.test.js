@@ -18,7 +18,10 @@ const fs = require('fs')
 const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..')
-const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* CSS tier assertions read the source stylesheet (see palette-contrast). */
+const css = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'theme.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(ROOT, 'src', 'styles', 'generated.css'), 'utf8')
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
@@ -51,7 +54,7 @@ const blockWithLoose = (needle) => {
   /* Strip comments FIRST, then collapse whitespace: collapsing first leaves the
      prose intact, and prose contains '}', which truncates the block at the wrong
      place. */
-  const flat = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ')
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ')
   const i = flat.indexOf(needle.replace(/\s+/g, ' '))
   if (i < 0) return null
   const open = flat.indexOf('{', i)
@@ -70,12 +73,12 @@ const varIn = (block, name) => {
    the attribute's PRESENCE, and a stale 'off' value then painted the texture
    anyway (measured). The overlays are therefore gated on explicit values, and
    this assertion pins that: 'subtle' must name the overlay by value. */
-if (/body\[data-endfield-texture='subtle'\]:not\(:has\(> \[data-endfield-watermark\]\)\) \[class\$='_centerCol'\] \[class\$='_root'\]\[data-phase\]::before/.test(src)) {
+if (/body\[data-endfield-texture='subtle'\]:not\(:has\(> \[data-endfield-watermark\]\)\) \[class\$='_centerCol'\] \[class\$='_root'\]\[data-phase\]::before/.test(css)) {
   pass('叠加层按值命中会话根（后代匹配，容忍插槽包装层；水印挂 body 时让位）')
 } else {
   fail('叠加层没有按值匹配——属性残留 off 时纹理仍会画（按存在匹配的老写法）')
 }
-if (/data-endfield-texture='standard'/.test(src)) pass('CSS carries the standard tier')
+if (/data-endfield-texture='standard'/.test(css)) pass('CSS carries the standard tier')
 else fail('no CSS rules for tier standard')
 /* Collapse whitespace so the check is about the code, not its line breaks. */
 const oneLine = src.replace(/\s+/g, ' ')
@@ -100,7 +103,7 @@ else fail('index.js FIELD_DEFAULTS has no texture default — the switch would r
    fading downward, hatch as a bottom band fading upward, wave pinned top-right).
    These two tripwires stop exactly that regression from coming back. */
 {
-  const section = src.slice(src.indexOf('背景纹理：官网'), src.indexOf('The watermark is the Endfield Industries LOGO'))
+  const section = css.slice(css.indexOf('背景纹理：官网'), css.indexOf('The watermark is the Endfield Industries LOGO'))
   if (!/\[class\$='_frame'\]/.test(section) && !/\[class\$='_sidebarCol'\]/.test(section)) {
     pass('纹理不挂外框/侧栏（不整窗平铺，只锚定主内容列）')
   } else {
@@ -121,12 +124,12 @@ else fail('index.js FIELD_DEFAULTS has no texture default — the switch would r
 /* ---------- 2. the official assets are embedded, and only as data URIs ---------- */
 for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape']) {
   const re = new RegExp('body\\s*\\{\\s*' + prop + ':\\s*url\\("data:image\\/(svg\\+xml|png);base64,[A-Za-z0-9+/=]{100,}"\\)\\s*;\\s*\\}')
-  if (re.test(src)) pass(prop + ' is embedded inside a body rule')
+  if (re.test(css)) pass(prop + ' is embedded inside a body rule')
   else fail(prop + ' is not embedded as a body-scoped data URI — run: node scripts/build-texture.js')
 }
 /* No external asset may sneak into the texture: everything ships in the bundle. */
 {
-  const textureSection = src.slice(src.indexOf('背景纹理：官网'), src.indexOf('The watermark is the Endfield Industries LOGO'))
+  const textureSection = css.slice(css.indexOf('背景纹理：官网'), css.indexOf('The watermark is the Endfield Industries LOGO'))
   /* Only the embedded data URIs count: scan the section minus its comments, so a
      comment that explains the assets cannot trip this. */
   const external = [...textureSection.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/url\((?!")[^)]*\)/g)].map((m) => m[0])
@@ -179,7 +182,7 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
 
 /* ---------- 4. static: no motion, no layer promotion ---------- */
 {
-  const section = src.slice(src.indexOf('背景纹理：官网'), src.indexOf('The watermark is the Endfield Industries LOGO'))
+  const section = css.slice(css.indexOf('背景纹理：官网'), css.indexOf('The watermark is the Endfield Industries LOGO'))
   if (!/transition\s*:/.test(section) && !/@keyframes/.test(section)) {
     pass('纹理段是静态的（无 transition、无 @keyframes）——官网的底纹也是静态的')
   } else {
@@ -203,9 +206,10 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
 }
 
 /* ---------- 5. degradation is declared ---------- */
-if (/prefers-reduced-transparency: reduce/.test(src) && /prefers-contrast: more/.test(src)) {
-  const i = src.indexOf('@media (prefers-reduced-transparency: reduce)')
-  const block = src.slice(i, i + 400)
+if (/prefers-reduced-transparency: reduce/.test(css) && /prefers-contrast: more/.test(css)) {
+  const i = css.indexOf('@media (prefers-reduced-transparency: reduce)')
+  /* strip comments first: the window may open inside the section's prose */
+  const block = css.slice(i, i + 700).replace(/\/\*[\s\S]*?\*\//g, '')
   if (/background-image:\s*none/.test(block)) pass('减少透明/更高对比偏好下纹理整段关闭')
   else fail('降级媒体查询存在，但没有把 background-image 关掉')
 } else {
@@ -221,10 +225,10 @@ if (/prefers-reduced-transparency: reduce/.test(src) && /prefers-contrast: more/
 {
   const official = 'linear-gradient(90deg,#ff00f0 16.6667%,#fffa00 0,#fffa00 33.4259%,#00ffa2 0)'
   const compact = official.replace(/\s+/g, '')
-  const found = src.replace(/\s+/g, '').split(compact).length - 1
+  const found = css.replace(/\s+/g, '').split(compact).length - 1
   if (found >= 2) pass('两条三色线（设置分组标题 + 已编辑文件卡片底栏）都用官方比例停靠（绿占 2/3）')
   else fail('三色线数量 ' + found + '（应 ≥2：设置分组标题 + 已编辑文件卡片底栏）')
-  if (/11\.25\/67\.5/.test(src)) pass('比例换算的推导留在源码注释里')
+  if (/11\.25\/67\.5/.test(css)) pass('比例换算的推导留在源码注释里')
   else fail('缺少 11.25/67.5 的换算推导注释——没人能再把比例改回均分而不被问')
 }
 

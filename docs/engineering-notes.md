@@ -208,6 +208,12 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 
 ## 样式表是一整个模板字符串
 
+> **（已演进）** 本节描述的形态已成为历史：样式表现在是真 CSS 源文件
+> （`src/styles/theme.css` + `generated.css`），由 tsdown 构建内嵌进
+> `client.js` 单文件产物——反引号/插值两类失败模式就此**结构性消失**，
+> check.js 的守卫对象也随之改为源文件结构不变量与产物新鲜度
+> （`scripts/build-client.js --check`）。下文保留为决策档案。
+
 整份样式表是一个传给 `insertCss()` 的模板字符串（反引号包裹）。有三类改动会在「文件仍能解析」的情况下静默破坏效果，因此固化为 `check.js`：
 
 1. **反引号**。字符串里出现一个反引号（哪怕写在 CSS 注释里）会提前结束模板字符串，整个 client bundle 解析失败。注释里要引用代码请用单引号。

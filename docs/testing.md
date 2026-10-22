@@ -16,12 +16,12 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 
 ## check.js — 样式表静态不变量
 
-主题样式表是**一整个 JavaScript 模板字符串**，有几类改动会在「文件仍能解析」的情况下悄悄破坏效果。检查项：
+主题样式表是**真 CSS 源文件**（`src/styles/theme.css` + `generated.css`，经 tsdown 内嵌进 `client.js` 产物——产物新鲜度由 `scripts/build-client.js --check` 单独把关）。源文件层面有几类改动会在「文件仍能解析」的情况下悄悄破坏效果。检查项：
 
 | 检查 | 守的是什么 |
 | --- | --- |
-| 模板字符串内无反引号 | 写在 CSS 注释里也会提前闭合，整个 client bundle 解析失败 |
-| 无 `${...}` | 在模板字符串里那是插值，不是 CSS |
+| 生成围栏区齐全有序 | `generated.css` 的 EDGE_TEX / EMBLEM_MASK / HERO_LOGO 围栏缺失即脚本漂移 |
+| 产物可解析 | `client.js`（tsdown IIFE 产物）必须能被 vm.Script 解析 |
 | CSS 注释成对、花括号配平 | 花括号在剥离注释后再统计 |
 | 顶层没有漏进散文 | 抓「注释提前闭合」——注释本身仍是配平的，真正的破坏是残留文字落到顶层、与下一条选择器黏在一起 |
 | `--edge-word` / `--edge-gap` 在**实际生效的 CSS** 里有定义 | 注释里提到不算 |
@@ -116,7 +116,7 @@ node test/motion-check.js            # 真实浏览器 + 真实指针，验证 D
 node test/perf-motion.test.js        # 量「流畅」：静态守卫 + layout/帧间隔/主线程 + 停留不做事
 ```
 
-**`motion-check.js`** 把 `client.js` 里那一整条 `insertCss()` 模板字符串抽出来注入一张夹具页，再用 DevTools 协议的 `Input.dispatchMouseEvent` **真的把鼠标移到按钮上并按下**，然后读计算样式、必要时**解码截图数像素**。它守的是「选择器写了但没生效」这一类静默失败：
+**`motion-check.js`** 把样式源（theme.css + generated.css）注入一张夹具页，再用 DevTools 协议的 `Input.dispatchMouseEvent` **真的把鼠标移到按钮上并按下**，然后读计算样式、必要时**解码截图数像素**。它守的是「选择器写了但没生效」这一类静默失败：
 
 - 属性钩子：`data-endfield-motion` 是 `<body>` 上的一个值，写错值等于整套规则不存在；
 - 层叠：应用自己有 `button { transition: none !important }`，主题的过渡必须赢过它；

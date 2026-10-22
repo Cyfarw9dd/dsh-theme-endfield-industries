@@ -38,7 +38,12 @@
 const fs = require('fs')
 const path = require('path')
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'client.js'), 'utf8')
+/* Hooks live in the client JS and the stylesheet sources; the built artifact
+   re-quotes double-quoted selectors as \" (JSON escaping), so includes()
+   only works against the pre-bundle sources. */
+const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'index.js'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(__dirname, '..', 'src', 'styles', 'theme.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(__dirname, '..', 'src', 'styles', 'generated.css'), 'utf8')
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)
