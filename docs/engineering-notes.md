@@ -57,7 +57,7 @@
 ### Host ↔ Client 数据流
 
 1. **声明**（Host `index.js`）：0.1.7-rc.1 导出 `Config`（`z.object({ 每个字段: z.string().default(...).volatile() })`）；同时用 `ctx.inject(['settings'], sctx => sctx.effect(() => sctx.settings.configure({ auto: false }, ctx.fiber)))` 关掉自动生成的设置页（本插件自带四组页面）。旧宿主则在 `settings.register` 存在时执行 `register('dsh-theme-endfield', schema, { applies:'live' })`。schema 每个字段都是**字符串**字段并带 `.default(...)`：default-ON 存 `'1'`（读作 `!== '0'`），default-OFF 存 `'0'`（读作 `=== '1'`）；palette/radius/fps/speed 各存一个文档里写明的字面量。字符串化让三代存盘点位的值模型完全一致，client 的键表、面板与测试都不必随 transport 改动。
-2. **写**（浏览器 `client.js`）：设置面板每个 toggle 调用内部 `prefsSet(field, value)` → 只有当快照是 **durably served**（`mode:'host' && status:'ready' && writable`）时才调用 transport 的 `set(field, value)`，Host 收到后原子写盘。只凭 `writable` 判写是一个坑：host 模式的快照即便本命名空间**尚未被 served** 也会返回 `writable:true` 与 `status:'unavailable'`（`commit radius = round … status= unavailable` 就是这么打出来的）——旧代码照写不误、清了脏标记但什么都没落盘，刷新即丢。现在这种写被**拦下并标脏**（页面内仍生效），等快照在后续 ready 回相（Host 文档提交、镜像重载）时由 subscription 自动补写；`configForms.set()` 明确返回 `false`（Host 拒绝/跳过）时同样重新标脏等待下次回相，而不是假装写成功。
+2. **写**（浏览器 `client.js`）：设置面板每个 toggle 调用内部 `prefsSet(field, value)` → 只有当快照是 **durably served**（`mode` 缺失或为 `'host'`，且 `status:'ready' && writable`——缺 `mode` 为什么算 durable 见下文「DSH 0.2.1-rc.2 删掉了快照里的 `mode` 字段」）时才调用 transport 的 `set(field, value)`，Host 收到后原子写盘。只凭 `writable` 判写是一个坑：host 模式的快照即便本命名空间**尚未被 served** 也会返回 `writable:true` 与 `status:'unavailable'`（`commit radius = round … status= unavailable` 就是这么打出来的）——旧代码照写不误、清了脏标记但什么都没落盘，刷新即丢。现在这种写被**拦下并标脏**（页面内仍生效），等快照在后续 ready 回相（Host 文档提交、镜像重载）时由 subscription 自动补写；`configForms.set()` 明确返回 `false`（Host 拒绝/跳过）时同样重新标脏等待下次回相，而不是假装写成功。
 3. **读 / 生效**：transport 的 `getSnapshot().value` 就是已由 schema 校验并合并默认值的整段（client 再经 `prefsResolveSection()` 归一化到 16 个声明字段）；主题层的 `isEnabled()` 与其它 getter 每次调用都 `prefsGet(field)` 现读本段，天然随值变化。
 4. **订阅同步**：`form.subscribe(...)` / `scope.subscribe(...)` 在每次落盘/镜像变化时唤醒，client 再跑一遍 `reconcileFromPrefs()`，把主题开关（enabled → mount/unmount token+样式表）、圆角/配色 class、水印、雷霆大字重新对齐。这样同 profile 里**另一个窗口/设备**编辑落盘文件（或本轮写入被 Host 回相确认）都不需要刷新即可热生效。订阅返回的 disposer 现在会被保存并在 run 拆除时调用：`ConfigForm` 是 provider 拥有、跨插件共享的实例，漏掉它会把这一个监听器泄漏给同页面的下一次 run。
 5. **启动恢复**：`apply()` 早于 transport 就绪时，读 schema 默认值（内存镜像），一旦 `status:'ready'` 的第一个真值镜像到达就切换到持久值——即使 Desktop 在随机端口上启动，也能立刻恢复到上次的设置。
@@ -144,6 +144,16 @@ const field = PREFS_KEY_TO_FIELD[rawKey] || rawKey.slice(PREFS_NS.length + 1)
 ### 脏标记只能由「写成功」或「宿主已有该值」清除
 
 `prefsReplayDirty()` 曾在本地值**等于出厂默认**时就直接清掉脏标记。若宿主仍存着非默认值，用户「改回默认」这一操作就永远不会落盘，下次刷新旧的（非默认）值又回来了。同步地，本地值等于**宿主当前值**也不能直接清：宿主视图可能还是旧的，而用户刚刚把它改成同一个值——那也是一次真实编辑。现在只有两种情况清标记：写出去了，或者宿主取回的 section 确实已经持有该值。
+
+### DSH 0.2.1-rc.2 删掉了快照里的 `mode` 字段（字段级契约要用「缺失语义」读）
+
+**变更**：0.2.1-rc.2 的 `configForms` 快照不再携带 `mode`（连带 `persistence` 也删了），形状变为 `{ status, value, base, user, revision, writable }`；每一次被接受的 `set()` 都是对 Host 文档的 `remote.settings.mutate()`。这是 0.1.7 大改之后设置 seam 的又一次字段级变更。
+
+**为什么坏得无声**。持久写入门控写的是 `snap.mode === 'host'`（逐字匹配），而 JS 读不存在的字段得到 `undefined`——不抛错、不告警，门只是**永远打不开**。于是 0.2.1 宿主上每个开关都被挂进脏队列、在有界 settle 窗口里空转重试、然后放弃；页面内一切正常（韧性设计反而掩护了症状），刷新即复位——与「解析不到 schemastery」「绑错 entry 拼写」等现象完全同形。上游（ymh0000123/dsh-theme-endfield）在同一坑里独立踩过并修复（其 v1.2.2 的 desktop 症状、commit f231bb1），本仓库的 v0.2.1-rc.2 带着同样的判定发布。
+
+**修法是读缺失语义，不是放宽拼写**：`mode` 是 **0.1.7 独有**的字段——缺了它说明是 0.2.1+ 的镜像，而那个镜像只存在于 Host 连接之上，天然 durable；只有**显式** `mode:'memory'`（0.1.7 非回环页面，永不落盘）才否决写入。判定改为 `snap.mode === undefined || snap.mode === 'host'`，boot report 的 healthy 判定同改（否则健康的 0.2.1 页面会打误导性的「未达持久段」报告）。
+
+**测试侧的教训**：浏览器夹具（`test/fixtures/settings-scope.browser.js`）当时永远输出 `mode:'host'`，等于把 0.1.7 的快照形状冻结进了测试套件——真机契约已变，套件照样全绿。这和当年「测试桩复述 slice 去前缀」是同一类病：**桩必须建模生产契约的每一代形状**。夹具新增 `omitMode` 选项建模 0.2.1 快照；`test/settings-mode-gate.test.js` 用三个只差 `mode` 键的 ready+writable 快照钉死契约三边（缺失＝可写、显式 `host`＝可写、显式 `memory`＝拒写），并对修复前的判定做过变异验证（场景 A 必失败）。
 
 ## 变量必须声明在 body 而不是 :root
 

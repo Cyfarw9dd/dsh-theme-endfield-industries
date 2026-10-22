@@ -422,6 +422,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                       writable, mode }. set() returns Promise<boolean>: false
                       means the Host refused or SKIPPED the write (the classic
                       case being memory mode on a non-loopback page).
+                      0.2.1-rc.2 keeps this seam but DELETED `mode` (and
+                      `persistence`): the snapshot is { status, value, base,
+                      user, revision, writable } and every accepted set() is a
+                      remote.settings.mutate() against the Host document —
+                      treat a missing mode as durable (see the durable write
+                      gate below); only an explicit mode:'memory' (0.1.7 on a
+                      non-loopback page) refuses.
          <=0.1.5-rc.2 binder = ctx.get('settingsScope') / ctx.settingsScope
                       binder.bind({ namespace, decode }) -> scope with the same
                       snapshot fields, and a fire-and-forget set().
@@ -602,8 +609,18 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     /* --- Durable write gate -----------------------------------------------
        A scope snapshot from @deepseek-ai/dsh-client-ui-settings carries three
        flags that must ALL hold before a scope.set can durably land:
-         mode    === 'host'   loopback page syncing the Host document.
-                              'memory' (non-loopback) never persists.
+         mode    === 'host'   OPTIONAL since DSH 0.2.1-rc.2, which DELETED the
+                              field (and `persistence`) from the snapshot: the
+                              shape is { status, value, base, user, revision,
+                              writable } and every accepted set() is a
+                              remote.settings.mutate() against the Host
+                              document. A missing mode therefore means durable;
+                              only an explicit 'memory' — 0.1.7-rc.* on a
+                              non-loopback page, which never persists — refuses.
+                              (Requiring mode==='host' verbatim on 0.2.1 held
+                              every write, retried it inside the bounded settle
+                              window and then dropped it: toggles worked for
+                              the page session and reset on reload.)
          status  === 'ready'  the Host's describe view actually SERVES this
                               namespace and a decoded value stands. It stays
                               'loading' before the first accepted section and
@@ -627,7 +644,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       if (!scope) return null
       try { return scope.getSnapshot() } catch (e) { return null }
     }
-    const prefsDurablyServed = (snap) => !!snap && snap.mode === 'host' && snap.status === 'ready' && !!snap.writable
+    const prefsDurablyServed = (snap) => !!snap && (snap.mode === undefined || snap.mode === 'host') && snap.status === 'ready' && !!snap.writable
     /* One field write through the bound transport, with one settlement contract
        for both generations. The legacy scope.set() is fire-and-forget; a
        ConfigForm's set() returns Promise<boolean>, where false means the Host
@@ -1036,7 +1053,10 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        it to guesswork. */
     const prefsReportBoot = () => {
       const snap = prefsSnapshotOf(prefsScope)
-      const healthy = snap !== null && snap.status === 'ready' && snap.mode === 'host'
+      /* Same absence semantics as prefsDurablyServed: a 0.2.1 snapshot has no
+         `mode` at all and is durable, so it must count as healthy here too —
+         otherwise every healthy 0.2.1 page logs a misleading boot report. */
+      const healthy = snap !== null && snap.status === 'ready' && (snap.mode === undefined || snap.mode === 'host')
         && snap.writable === true && prefsDirty.size === 0
       if (healthy) return
       dbg('boot report (preferences did NOT reach a durable section):',
