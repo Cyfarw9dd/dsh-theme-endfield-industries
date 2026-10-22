@@ -12,6 +12,8 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 
 **浏览器测试共用一套夹具**：`test/fixtures/chrome-cdp.js` 负责 Chrome 发现、启动、CDP 传输、截图解码与视口切换（`launch({ width, height, dpr, args, url })` → `evaluate` / `until` / `screenshot` / `setViewport` / `send`）；测试只写断言。需要别的 Chrome flags 或视口就传参，**不要再复制启动代码或手搓 WebSocket/PNG 解码**——同一份逻辑曾经在三个测试里各存一份，改一次要改三处。
 
+同理**不要再给测试挂 `Chrome --dump-dom` / `--virtual-time-budget`**：那条通道的等待语义是「页面空闲」，既不能表达显式条件，又会在部分 Linux/Chrome 组合上直接超时（12 个测试曾因此在 CI 之外全红）；统一用 `until(条件)` 等真正的状态，写完结果再 `evaluate`/`screenshot` 取走。
+
 > **运行环境。** 带「真实浏览器」字样的脚本会 spawn 本机 Chrome 做无头渲染，需要本机安装 Chrome。以下脚本是**纯进程内**的，任何环境都能跑：`check.js`、`selftest.js`、`palette-contrast`、`settings-rows`、`settings-locale`、`thunder-edges`。
 
 ---
