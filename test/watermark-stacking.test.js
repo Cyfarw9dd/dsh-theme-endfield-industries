@@ -35,19 +35,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = process.env.ENDFIELD_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-stack-'))
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 const W = 1440
 const H = 900
@@ -214,33 +207,35 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
 
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
 
-const run = (alpha, shot) => {
+;(async () => {
+const run = async (alpha, shot) => {
   const page = path.join(OUT, 'stack-' + (alpha === '0' ? 'off' : 'on') + '.html')
   fs.writeFileSync(page, mk(alpha))
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stk-'))
-  const args = [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--force-device-scale-factor=1', '--virtual-time-budget=5000',
-    '--window-size=' + W + ',' + H, '--user-data-dir=' + tmp,
-  ]
-  if (shot) args.push('--screenshot=' + shot)
-  else args.push('--dump-dom')
-  const o = execFileSync(chrome, args.concat(['file:///' + page.replace(/\\/g, '/')]),
-    { encoding: 'utf8', timeout: 120000, stdio: ['ignore', shot ? 'ignore' : 'pipe', 'ignore'] })
-  return o
+  const browser = await launch({
+    url: 'file:///' + page.replace(/\\/g, '/'),
+    width: W, height: H, dpr: 1, args: ['--hide-scrollbars'],
+  })
+  try {
+    /* Wait for the page's own settle beat (it reports after its 700ms layout
+       timer) BEFORE grabbing pixels: the old --screenshot flag captured at the
+       end of the virtual-time budget, which is the same moment. */
+    await browser.until("document.title.indexOf('STACK ') === 0", 20000)
+    if (shot) { await browser.screenshotTo(shot); return null }
+    return JSON.parse((await browser.evaluate('document.title')).slice('STACK '.length))
+  } finally {
+    await browser.close()
+  }
 }
 
 // 1) geometry, read from the SAME page the screenshots come from
-const dom = run('', null)
-const m = dom.match(/<title>STACK (.*?)<\/title>/s)
-if (!m) { console.error('no geometry report -- the page did not run'); process.exit(1) }
-const g = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+const g = await run('', null)
+if (!g) { console.error('no geometry report -- the page did not run'); process.exit(1) }
 
 // 2) two renders that differ ONLY in the mark's alpha
 const shotOn = path.join(OUT, 'on.png')
 const shotOff = path.join(OUT, 'off.png')
-run('', shotOn)
-run('0', shotOff)
+await run('', shotOn)
+await run('0', shotOff)
 
 /* Compare the two PNGs. Decoding happens in headless Chrome itself so this test
    needs no image dependency: both files are drawn to a canvas and read back. */
@@ -331,16 +326,22 @@ Promise.all([load('on.png'),load('off.png')]).then(([a,b])=>{
   document.title='CMP '+JSON.stringify(out)
 })
 </script></body>`)
-const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cmp-'))
-const cmpDom = execFileSync(chrome, [
-  '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-  '--allow-file-access-from-files', '--virtual-time-budget=8000',
-  '--user-data-dir=' + tmp2, '--dump-dom',
-  'file:///' + cmpPage.replace(/\\/g, '/'),
-], { encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] })
-const cm = cmpDom.match(/<title>CMP (.*?)<\/title>/s)
-if (!cm) { console.error('pixel comparison did not report'); process.exit(1) }
-const c = JSON.parse(cm[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+/* The comparison page loads both PNGs from disk into a canvas, so Chrome needs
+   file:// read access — the one flag this fixture cannot infer. */
+const cmpHtml = fs.readFileSync(cmpPage, 'utf8')
+const cmpBrowser = await launch({
+  url: 'file:///' + cmpPage.replace(/\\/g, '/'),
+  width: W, height: H, dpr: 1,
+  args: ['--hide-scrollbars', '--allow-file-access-from-files'],
+})
+let c
+try {
+  void cmpHtml
+  await cmpBrowser.until("document.title.indexOf('CMP ') === 0", 30000)
+  c = JSON.parse((await cmpBrowser.evaluate('document.title')).slice('CMP '.length))
+} finally {
+  await cmpBrowser.close()
+}
 
 let failures = 0
 const scheme = DARK ? 'dark' : 'light'
@@ -432,3 +433,4 @@ if (c.ratio !== null && c.ratio !== undefined) {
 console.log('')
 if (failures) { console.error(failures + ' check(s) failed'); process.exit(1) }
 console.log('all checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })

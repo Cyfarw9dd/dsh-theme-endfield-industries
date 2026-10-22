@@ -27,20 +27,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = process.env.ENDFIELD_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-herologo-'))
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
@@ -220,19 +212,23 @@ const page = (dark, generation, hero) => `<!doctype html><html><head><meta chars
 
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
 
-const run = (name, dark, generation, hero) => {
+;(async () => {
+const run = async (name, dark, generation, hero) => {
   const file = path.join(OUT, name + '.html')
   fs.writeFileSync(file, page(dark, generation, hero))
   const shot = path.join(OUT, name + '.png')
-  const dom = execFileSync(chrome, [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--user-data-dir=' + path.join(OUT, 'profile-' + name),
-    '--window-size=1440,900', '--virtual-time-budget=3000',
-    '--screenshot=' + shot, '--dump-dom', 'file:///' + file.replace(/\\\\/g, '/'),
-  ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  const m = dom.match(/<title>HEROLOGO ([^<]*)<\/title>/)
-  if (!m) throw new Error('the fixture never reported — chrome output had no HEROLOGO title')
-  const out = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+  const browser = await launch({
+    url: 'file:///' + file.replace(/\\/g, '/'),
+    width: 1440, height: 900, dpr: 1, args: ['--hide-scrollbars'],
+  })
+  let out
+  try {
+    await browser.until("document.title.indexOf('HEROLOGO ') === 0", 30000)
+    out = JSON.parse((await browser.evaluate('document.title')).slice('HEROLOGO '.length))
+    await browser.screenshotTo(shot)
+  } finally {
+    await browser.close()
+  }
   out.shot = shot
   return out
 }
@@ -244,7 +240,7 @@ const scenarios = [
   ['light-legacy', false, '01', true],
 ]
 const results = {}
-for (const [name, dark, gen, hero] of scenarios) results[name] = run(name, dark, gen, hero)
+for (const [name, dark, gen, hero] of scenarios) results[name] = await run(name, dark, gen, hero)
 
 /* ---------- 1. it is there, above the headline, centred on it ---------- */
 for (const [name, , gen] of scenarios) {
@@ -304,3 +300,4 @@ else fail('the hero mark appeared on phase=' + active.phase + ' — it belongs t
 console.log('\nshots: ' + scenarios.map(([n]) => results[n].shot).join(' · '))
 if (failures) { console.error('\n' + failures + ' hero-logo check(s) failed'); process.exit(1) }
 console.log('all hero-logo checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })
