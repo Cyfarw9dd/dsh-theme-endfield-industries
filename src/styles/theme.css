@@ -2846,124 +2846,6 @@
       body[data-ds-dark-theme] .endfield-settings-group-title {
         color: var(--edge-status-dark);
       }
-      /* ================= 雷霆大字 (娱乐模式) =================
-         The task-boundary announcement. Fixed, centred, above the shell overlay
-         layer and the app's own dialogs but BELOW the boot plate (2147483000), so
-         a boot animation still wins the screen it owns.
-
-         WHITE, EXPLICITLY. The request asks for white text, and white is the one
-         thing this theme's own tokens cannot promise: --dsw-alias-label-primary is
-         INK (#101110) in light mode, so inheriting it would print the word in near
-         black on cream. The glyph colour is therefore a literal #fff in both
-         schemes, and legibility over unknown page content is bought by the plate's
-         own scrim plus a dark text shadow rather than by the page background.
-
-         THE SCRIM ALPHA IS MEASURED, NOT PICKED BY EYE — and the first value was
-         WRONG. Shipping 0.28 looked fine in dark mode (18.92:1) and was almost
-         invisible in light: white on ink-over-cream measured 2.29:1 on bg-base and
-         2.11:1 on bg-layer-1, i.e. the same "on cream, #fff500 is not a colour
-         choice, it is an erasure" failure this theme already documents for the
-         watermark and the turn-status label — except here it was pure white. Caught
-         by rendering the plate and measuring the pixels (test/thunder-shot.js), not
-         by reading the CSS.
-
-         Measured white-vs-scrimmed-surface, ink #101110 over each light surface:
-             alpha   bg-base #e8e8e2   bg-layer-1 #f2f2ec   dark #101110
-             0.28         2.29:1            2.11:1            18.92:1
-             0.40         3.13:1            2.90:1            18.92:1
-             0.50         4.17:1            3.89:1            18.92:1
-             0.55         4.85:1            4.55:1            18.92:1
-         0.55 is the first step where BOTH light surfaces clear 4.5:1 — the AA bar
-         for ordinary body text, which is deliberate headroom for a word whose own
-         bar is only the 3:1 large-text floor. Dark mode is unaffected either way
-         (ink over near-black is the same colour), so the light surfaces are what
-         set this number.
-
-         pointer-events:none on both layers keeps every click, selection and scroll
-         underneath working while the word is up — the plate is a caption, not a
-         modal. Click-to-dismiss does NOT change that: the listener lives on the
-         DOCUMENT in the capture phase (see showThunder), so a press both clears the
-         word and reaches whatever the user aimed at. Giving this layer
-         'pointer-events: auto' to catch the click itself would turn it into a
-         full-screen click-eater for 3 seconds — verified by injecting exactly that
-         and watching test/thunder-dismiss.test.js fail on hit-testing. */
-      [data-endfield-thunder] {
-        position: fixed;
-        inset: 0;
-        z-index: 2147482000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        pointer-events: none;
-        background: rgba(16, 17, 16, 0.55);
-        animation: endfield-thunder-plate 3000ms linear 1 both;
-      }
-      [data-endfield-thunder-word] {
-        /* 大字: heavy, oversized, and scaled off the viewport so it stays a
-           screen-filling statement at any window size rather than a fixed 48px that
-           looks large on a phone and small on a 4K panel. Same clamp discipline as
-           --edge-word on the boot plate. */
-        font-family: "Arial Black", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-        font-size: clamp(44px, 13vw, 176px);
-        font-weight: 900;
-        line-height: 1;
-        letter-spacing: 0.12em;
-        /* The trailing letter-spacing would otherwise push the word off-centre. */
-        text-indent: 0.12em;
-        color: #fff;
-        white-space: nowrap;
-        text-align: center;
-        /* Ink halo: what makes white type survive on cream paper, where a pure
-           white glyph would otherwise have almost no edge. */
-        text-shadow:
-          0 0 2px rgba(16, 17, 16, 0.55),
-          0 4px 18px rgba(16, 17, 16, 0.65),
-          0 0 46px rgba(var(--edge-accent-rgb), 0.45);
-        animation: endfield-thunder-word 3000ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
-      }
-      /* The slam: overshoot in, hold, then fade. Keyframe percentages are the 3s
-         hold expressed as one timeline, so a single animation covers entry, hold and
-         exit and nothing has to be re-timed in JS. */
-      @keyframes endfield-thunder-word {
-        0%   { opacity: 0; transform: scale(2.4); }
-        7%   { opacity: 1; transform: scale(0.94); }
-        12%  { transform: scale(1); }
-        80%  { opacity: 1; transform: scale(1); }
-        100% { opacity: 0; transform: scale(1.06); }
-      }
-      @keyframes endfield-thunder-plate {
-        0%   { opacity: 0; }
-        5%   { opacity: 1; }
-        80%  { opacity: 1; }
-        100% { opacity: 0; }
-      }
-      /* The STATIC path: the word appears at full size and opacity, holds its 3s,
-         then the JS timer removes it. Two independent reasons reach this attribute
-         (see showThunder): the 动画 sub-switch being off — which is the DEFAULT — and
-         the OS asking for reduced motion. Driving it from an attribute rather than a
-         media query alone is what makes the default state testable in a browser that
-         cannot toggle the OS preference from script.
-
-         'opacity: 1' is load-bearing, not redundant: the animated rules start at
-         'opacity: 0' and rely on the keyframes to bring the word in, so cancelling
-         only 'animation' would leave a permanently invisible plate. */
-      [data-endfield-thunder][data-endfield-thunder-still],
-      [data-endfield-thunder][data-endfield-thunder-still] [data-endfield-thunder-word] {
-        animation: none;
-        opacity: 1;
-        transform: none;
-      }
-      /* Belt-and-braces for reduced motion: the attribute above already covers it,
-         but this keeps the guarantee in CSS even if a future edit reaches the DOM
-         without going through showThunder(). */
-      @media (prefers-reduced-motion: reduce) {
-        [data-endfield-thunder],
-        [data-endfield-thunder] [data-endfield-thunder-word] {
-          animation: none;
-          opacity: 1;
-          transform: none;
-        }
-      }
       /* ================= 终末地工业风通知 =================
          The toast stack: bottom-right column of square industrial cards.
          Design language: paper fill, 2px ink border, ZERO radius, a signal-colour
@@ -2978,7 +2860,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        /* Above the app's own chrome but below the thunder plate; the stack is
+        /* Above the app's own chrome but below the boot plate; the stack is
            interactive (dismiss buttons), so it must not be pointer-events:none. */
         pointer-events: none;
         max-width: min(340px, calc(100vw - 32px));

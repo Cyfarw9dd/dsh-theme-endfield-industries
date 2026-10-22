@@ -113,8 +113,6 @@ const FIELD_DEFAULTS = {
   watermark: '1',           // 背景水印 —— default on
   watermarkPersist: '0',    // 水印保持显示 —— default off
   loader: '0',              // 启动加载动画 —— default off
-  thunder: '0',             // 雷霆大字 —— default off
-  thunderAnim: '0',         // 大字入场动画 —— default off
   // --- 工业风通知 ---------------------------------------------------------
   notify: '1',              // 通知主开关 —— default on
   notifyDone: '1',          // 任务完成通知 —— default on

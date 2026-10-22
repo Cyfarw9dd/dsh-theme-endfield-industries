@@ -57,9 +57,9 @@
 
 ### 4. ConversationSnapshot.running（低风险，数据粒度）
 
-雷霆/通知的回合边缘依赖 `ConversationSnapshot.running` 布尔位。这是应用的**权威状态**——turn-status 标签和 stop 按钮都读同一个字段。只要 DSH 还有「回合」这个概念，这个字段就存在。
+通知回执的回合边缘依赖 `ConversationSnapshot.running` 布尔位。这是应用的**权威状态**——turn-status 标签和 stop 按钮都读同一个字段。只要 DSH 还有「回合」这个概念，这个字段就存在。
 
-如果未来换成别的形式（比如流式状态枚举）：`thunderReadRunning()` 是唯一需要改的函数（一处），且没有降级会导致崩溃——只是不触发。
+如果未来换成别的形式（比如流式状态枚举）：`turnReadRunning()` 是唯一需要改的函数（一处），且没有降级会导致崩溃——只是不触发。
 
 ### 5. `window.__ModuleLoader__` 加载约定（低风险）
 

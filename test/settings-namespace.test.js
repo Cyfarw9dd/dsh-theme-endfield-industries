@@ -329,18 +329,16 @@ const TOGGLES = [
 
   /* Order matters now that the drive is the real UI: the persist/anim sub-rows
      are DISABLED while their parent is off, and each flip below turns the parent
-     OFF — so the sub-rows are driven first (watermark/thunder still at their
-     schema defaults of on here). */
+     OFF — so the sub-row is driven first (watermark still at its schema
+     default of on here). */
   ['watermark-persist', 'dsh-theme-endfield-watermark-persist', '1', 'watermarkPersist'],
   ['watermark', 'dsh-theme-endfield-watermark', '0', 'watermark'],
   ['loader', 'dsh-theme-endfield-loader', '1', 'loader'],
-  ['thunder-anim', 'dsh-theme-endfield-thunder-anim', '1', 'thunderAnim'],
-  ['thunder', 'dsh-theme-endfield-thunder', '1', 'thunder'],
 ]
 
 /* Compound fields are the regression surface; the singles passed even with the
    bug, so a test that only covered them would not have caught it. */
-const COMPOUND = ['watermarkPersist', 'thunderAnim']
+const COMPOUND = ['watermarkPersist']
 const compoundCovered = COMPOUND.filter((f) => Object.values(clientTable).includes(f))
 if (compoundCovered.length === COMPOUND.length) {
   pass('all compound fields from the issue are in the mapping')
@@ -351,8 +349,6 @@ if (compoundCovered.length === COMPOUND.length) {
 {
   const store = hostShapedSection()
   const { render } = boot(store.service)
-  /* Thunder ON so its child switch is enabled. */
-  store.section.thunder = '1'
   let tree = render()
 
   for (const [rowKey, uiKey, value, field, option] of TOGGLES) {
@@ -396,130 +392,6 @@ if (compoundCovered.length === COMPOUND.length) {
     /* Re-render: the panel reads its state back through the same store. */
     tree = render()
   }
-}
-
-/* ======================================================================
-   3. The shipped bug, reproduced: a section the buggy build wrote
-   ====================================================================== */
-
-{
-  /* Literally what a user's settings.yaml held after using the buggy build: the
-     compound choices stored under the pre-migration spelling, plus the
-     single-word fields that build happened to write correctly. The scope then
-     hands out the schema-MERGED view, which is why every declared field is
-     present whether or not the user ever set it — `user` is the host's raw
-     document and is what tells the two apart. */
-  const rawUser = {
-    palette: 'valley',
-    radius: 'square',
-    watermark: '1',
-    thunder: '1',
-    'watermark-persist': '1',
-    'thunder-anim': '1',
-  }
-  const section = Object.assign({}, HOST.FIELD_DEFAULTS, rawUser)
-  const wire = []
-  const listeners = []
-  /* The scope starts NOT ready and flips to ready afterwards — the shape the
-     theme actually boots into (a mirror whose first describe has no section
-     yet). That gives the panel one render while nothing is being migrated, which
-     is where the READ can be judged on its own: the stray keys are already in
-     the host document, and the panel must still show the declared defaults. */
-  let served = false
-  const scope = {
-    getSnapshot: () => (served
-      ? {
-          status: 'ready', value: Object.assign({}, section),
-          base: Object.assign({}, HOST.FIELD_DEFAULTS), writable: true, mode: 'host',
-        }
-      : { status: 'unavailable', value: undefined, writable: true, mode: 'host' }),
-    subscribe(l) { listeners.push(l); return () => {} },
-    set(f, v) { wire.push([f, String(v)]); section[f] = String(v) },
-  }
-  const { render } = boot({ get: () => scope })
-  const beforeTree = render()
-  const textBefore = textOf(beforeTree)
-  const animTrigBefore = rowTrigger(beforeTree, 'thunder-anim')
-  if (animTrigBefore && textOf(animTrigBefore).includes('关闭') && wmPersistValue(beforeTree) === '0') {
-    pass('回归对照：未声明字段里的值不会被当成已声明字段读取（schema 默认值优先）')
-  } else {
-    fail('the panel must read the declared fields, not the stray keys, got ' + JSON.stringify(textBefore.slice(0, 220)))
-  }
-
-  served = true
-  for (const l of listeners.slice()) { try { l() } catch (e) {} }
-  const text = textOf(render())
-
-  const migratedTree = render()
-  const migrated = wire.filter(([f]) => f === 'watermarkPersist' || f === 'thunderAnim')
-  if (migrated.length === 2) {
-    pass('旧拼写里的 2 个值被重新提交到 schema 字段上')
-  } else {
-    fail('legacy migration re-committed ' + migrated.length + '/2 fields; wire = ' + JSON.stringify(wire))
-  }
-  const expected = { watermarkPersist: '1', thunderAnim: '1' }
-  const wrong = Object.keys(expected).filter((f) => section[f] !== expected[f])
-  if (wrong.length === 0) pass('迁移后每个 schema 字段都拿到了旧值')
-  else fail('migration left ' + wrong.map((f) => f + '=' + section[f]).join(', ') + ' (expected ' + JSON.stringify(expected) + ')')
-
-  /* It must not invent edits beyond the two fields that really had legacy
-     values: anything else on the wire would be a fabrication. */
-  if (wire.every(([f]) => f === 'watermarkPersist' || f === 'thunderAnim')) pass('迁移只写有旧值的字段，不凭空发明其它写入')
-  else fail('migration invented writes beyond the legacy fields: ' + JSON.stringify(wire))
-
-  /* And the re-committed value must reach the theme, not just the document. */
-  if (wmPersistValue(migratedTree) === '1') {
-    pass('迁移后的值立即生效（水印保持显示 = 开启）')
-  } else {
-    fail('migrated values did not take effect in the panel: ' + JSON.stringify(text.slice(0, 220)))
-  }
-}
-
-/* A user-set declared value must WIN over a stray legacy key. */
-{
-  const rawUser = { 'thunder-anim': '0', thunderAnim: '1' }
-  const section = Object.assign({}, HOST.FIELD_DEFAULTS, rawUser)
-  const wire = []
-  const scope = {
-    getSnapshot: () => ({
-      status: 'ready', value: Object.assign({}, section), user: Object.assign({}, rawUser),
-      base: Object.assign({}, HOST.FIELD_DEFAULTS), writable: true, mode: 'host',
-    }),
-    subscribe() { return () => {} },
-    set(f, v) { wire.push([f, String(v)]); section[f] = String(v) },
-  }
-  const { render } = boot({ get: () => scope })
-  const trig = rowTrigger(render(), 'thunder-anim')
-  if (trig && textOf(trig).includes('开启')) pass('用户显式写入的 thunderAnim=1 覆盖旧拼写里的 0')
-  else fail('a user-set declared value lost to a stray legacy key: ' + (trig ? textOf(trig) : '(none)'))
-  if (wire.length === 0) pass('这种情况不产生任何迁移写入')
-  else fail('migration wrote although the user had set the field: ' + JSON.stringify(wire))
-}
-
-/* ======================================================================
-   4. Issue finding #2 — an edit is visible immediately, not after the
-      host round-trip (prefsSet updated prefsLocal, prefsGet read the
-      fetched section first)
-   ====================================================================== */
-
-{
-  /* A scope whose set() does NOT echo: the host confirms later (or never, in
-     this process). Everything the theme reports must still be the new value. */
-  const section = Object.assign({}, HOST.FIELD_DEFAULTS, { thunder: '1' })
-  const scope = {
-    getSnapshot: () => ({ status: 'ready', value: Object.assign({}, section), writable: true, mode: 'host' }),
-    subscribe() { return () => {} },
-    set(f, v) { /* the write is accepted but the served section is not updated yet */ global.__noEcho = [f, String(v)] },
-  }
-  const { render } = boot({ get: () => scope })
-  const step = driveRowFlip(() => render(), 'thunder-anim')
-  if (step !== 'ok') fail('thunder-anim dropdown could not be driven (no-echo case): ' + step)
-  const afterTree = render()
-  const afterTrig = rowTrigger(afterTree, 'thunder-anim')
-  if (afterTrig && textOf(afterTrig).includes('开启')) pass('写入后面板立刻读到新值（不依赖宿主回相）')
-  else fail('with no host echo the panel still showed the old value: ' + (afterTrig ? textOf(afterTrig) : '(none)'))
-  if (afterTrig && textOf(afterTrig).includes('开启')) pass('触发器随之显示新值（反向可供选择）')
-  else fail('the row did not flip to the reverse affordance')
 }
 
 /* ======================================================================

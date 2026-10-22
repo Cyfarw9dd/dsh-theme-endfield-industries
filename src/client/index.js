@@ -19,7 +19,7 @@ import {
  *   1) theme.overrideTokens —— 覆盖主题令牌（亮/暗双色），映射终末地官网色板；
  *   2) insertCss —— 注入字体栈、强调色、直角化、去蓝、hover 反色等全局样式。
  *      （动态插件环境走 styles.insert；安装为独立 bundle 时直接注入 <style> 到 head。）
- *   3) 设置页「终末地主题设置」—— 设置项按四组分类（主题 / 背景 / 动画 / 娱乐），
+ *   3) 设置页「终末地主题设置」—— 设置项按五组分类（主题 / 背景 / 动画 / 通知 / 音频），
  *      默认值 / 语义标记通过 DSH 的设置命名空间随 profile 落盘：client 走
  *      `ctx.configForms`（host index.js 导出的 volatile `Config`，命名空间
  *      = profile entry id `theme-endfield`）。兼容下限 DSH 0.2.0（peerDependencies
@@ -659,8 +659,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       return out
     }
     /* Sections written by the BUILD THAT SHIPPED THE FIELD-NAME BUG still carry
-       the pre-migration spelling of a compound field ('thunderAnim' written as
-       'thunder-anim'), because that write landed on an undeclared key the schema
+       the pre-migration spelling of a compound field ('watermarkPersist' written as
+       'watermark-persist'), because that write landed on an undeclared key the schema
        passes through instead of storing it into the declared field. Without this
        pass the user's stored choice is ignored and the field default silently
        wins — for them the switch would look like it reset again after the fix.
@@ -1418,13 +1418,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
 
     /* ---------- scheme + motion + frame helpers ------------------------------
        These three used to live inside the contour engine; the feature is gone
-       but the watermark, loader and thunder code still read them. */
+       but the watermark and loader code still read them. */
     const isDarkScheme = () => typeof document !== 'undefined'
       && document.body
       && document.body.hasAttribute('data-ds-dark-theme')
 
     /* Someone who asked the OS for less motion gets the pattern without the motion.
-       The boot plate and the thunder entrance both honour this; checked live
+       The boot plate honours this; checked live
        rather than cached so changing the OS setting takes effect on the next
        reconciliation. */
     const prefersReducedMotion = () => typeof window !== 'undefined'
@@ -1780,141 +1780,31 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       runLoader()
     }
 
-    /* ---------- 雷霆大字 (娱乐模式, default OFF) ----------
-       A task-boundary announcement: when a turn starts, 「任务开始」 slams into the
-       middle of the screen in heavy white type; when it ends, 「任务完成」 does the
-       same. Each stays for exactly 3s and removes itself.
-
-       WHERE THE SIGNAL COMES FROM. This is turn-level state, not tool-level, so it
-       reads the ONE authoritative bit: ConversationSnapshot.running on the current
-       session (@deepseek-ai/dsh-client-runtime — the same field the app's own
-       turn-status label and stop button switch on). No DOM sniffing: the class
-       hashes those surfaces carry are not a contract, and a spinner appearing is
-       not the same event as a turn starting.
-
-       Reached through services.sessions(), NOT inject: the theme must still mount
-       when the sessions service is absent (the in-process settings tests supply a
-       ctx with only theme/slots), and a missing service means "no announcements",
-       not "no theme".
-
-       EDGES, NOT LEVELS. Only a false->true / true->false transition announces. The
-       first readable value of a session is recorded as a BASELINE and stays silent,
-       which is what stops 「任务开始」 from firing merely because the user switched
-       into a session that was already running. */
-    const THUNDER_KEY = 'dsh-theme-endfield-thunder'
-    /* The slam-in animation is its OWN switch, default OFF — same shape as
-       等高线背景 → 动态等高线: the layer is one decision, animating it is another.
-       With it off the word still appears instantly, holds 3s and leaves; only the
-       scale punch and the fade are dropped. */
-    const THUNDER_ANIM_KEY = 'dsh-theme-endfield-thunder-anim'
-    const THUNDER_START = '任务开始'
-    const THUNDER_DONE = '任务完成'
-    // Hold time, per the request: visible for 3s, then gone.
-    const THUNDER_MS = 3000
-    // Default OFF (=== '1' rather than !== '0'): opt-in, like the boot animation.
-    const isThunderOn = () => prefsGet(THUNDER_KEY) === '1'
-    // Default OFF for the same reason, and read independently of the parent switch.
-    const isThunderAnimOn = () => prefsGet(THUNDER_ANIM_KEY) === '1'
-    /* The OS preference still wins over an enabled animation switch. Checked
-       live rather than cached, so changing the OS setting takes effect on the
-       next announcement. */
-    const thunderWantsAnim = () => isThunderAnimOn() && !prefersReducedMotion()
-    let thunderEl = null
-    let thunderTimer = null
-    // Detaches the click-to-dismiss listener; null when none is armed.
-    let thunderDismiss = () => {}
-    /** Remove the plate and release its timer and listener. Idempotent. */
-    const destroyThunder = () => {
-      if (thunderTimer !== null && typeof clearTimeout === 'function') clearTimeout(thunderTimer)
-      thunderTimer = null
-      /* Detach BEFORE removing the node, and reset the handle first so the listener
-         calling back into here cannot re-enter this line. */
-      const detach = thunderDismiss
-      thunderDismiss = () => {}
-      detach()
-      if (thunderEl && thunderEl.parentNode) thunderEl.parentNode.removeChild(thunderEl)
-      thunderEl = null
-    }
-    /* Announce one word. A second call inside the 3s window REPLACES the first
-       (turn/end immediately followed by a queued turn/start is a real sequence), so
-       the node is rebuilt rather than reused — that restarts the CSS animation,
-       which merely re-setting textContent would not. */
-    const showThunder = (text) => {
-      if (!isEnabled() || !isThunderOn()) return
-      if (typeof document === 'undefined' || !document.body) return
-      destroyThunder()
-      const el = document.createElement('div')
-      el.setAttribute('data-endfield-thunder', '')
-      // Pure decoration over content the user is already reading: never announced,
-      // never hit-tested (pointer-events:none lives in the stylesheet).
-      el.setAttribute('aria-hidden', 'true')
-      /* No animation: the word appears at full size and full opacity, holds, then is
-         removed by the timer below. Two independent reasons land on this same static
-         path — the animation switch being off (the default) and the OS asking for
-         reduced motion — so both go through thunderWantsAnim(). */
-      if (!thunderWantsAnim()) el.setAttribute('data-endfield-thunder-still', '')
-      const word = document.createElement('span')
-      word.setAttribute('data-endfield-thunder-word', '')
-      word.textContent = text
-      el.appendChild(word)
-      document.body.appendChild(el)
-      thunderEl = el
-      /* CLICK ANYWHERE TO DISMISS EARLY, without waiting out the 3s.
-
-         Listening on the DOCUMENT rather than on the plate is the whole point. The
-         plate is pointer-events:none on purpose (it is a caption laid over text the
-         user may be mid-sentence in, not a modal), and making it clickable would turn
-         it into a full-screen click-eater for 3 seconds: the dismissing click would
-         be swallowed instead of reaching whatever the user actually aimed at. With a
-         document listener the click BOTH dismisses the word and lands normally, so
-         clicking blank space costs nothing and clicking a control still works.
-
-         pointerdown, not click, for two reasons: it covers mouse/touch/pen in one
-         event, and it fires on press so the word disappears the instant the user
-         acts. It also cannot self-dismiss when 预览 triggers this from a button's
-         click handler — that interaction's pointerdown has already been dispatched
-         before this listener exists, and a later click event does not re-fire it.
-
-         Capture phase so an app handler calling stopPropagation cannot make the word
-         undismissable. */
-      if (typeof document.addEventListener === 'function' && typeof document.removeEventListener === 'function') {
-        const onPointerDown = () => { destroyThunder() }
-        document.addEventListener('pointerdown', onPointerDown, true)
-        thunderDismiss = () => { document.removeEventListener('pointerdown', onPointerDown, true) }
-      }
-      // No timer available (a stripped test host) must not leave the plate up.
-      if (typeof setTimeout === 'function') thunderTimer = setTimeout(destroyThunder, THUNDER_MS)
-      else destroyThunder()
-    }
-
-    /* Resolved LAZILY, never cached at apply() time. The web boot mounts every
-       plugin row concurrently (`Promise.all` over the manifest in dsh-web-frontend)
-       and this theme declares no `inject`, so apply() can legitimately run before
-       dsh-client-runtime has provided `sessions`. A one-shot `const sessions =
-       services.sessions()` here would capture undefined for the whole session and
-       the feature would be permanently dead depending on load order — the exact
-       kind of race that only shows up on a slow or cold page load.
-
-       Declaring inject: ['sessions'] is the other valid fix, but it would put the
-       WHOLE THEME into cordis' pending state until that service appears, which
-       would delay the token/stylesheet mount that everything else here depends on.
-       A theme must paint even if the announcement feature never gets its service,
-       so the lookup is deferred instead and re-tried on the retry timer below. */
+    /* ---------- 回合边沿 → 任务完成回执 ----------
+       The 任务完成 receipt's trigger is the authoritative ConversationSnapshot.running
+       bit, NOT the DOM: one subscription on the session face, and the first
+       readable value is a baseline so enabling mid-turn stays silent. Started and
+       stopped from the same reconcile points as the other features (mount, master
+       switch, teardown); the notification module self-guards its own switch. */
+    /* Late-bound on purpose: the sessions service may arrive after apply() (the
+       runtime provides it asynchronously and this theme declares no `inject`), so
+       a one-shot const would capture undefined for the whole session and the
+       receipt would be permanently dead depending on load order. */
     const getSessions = () => services.sessions()
-    let thunderUnsubList = null
-    let thunderUnsubSession = null
-    let thunderRebindTimer = null
-    /* Retry budget for thunderRebind, bounded like every other retry in this
+    let turnUnsubList = null
+    let turnUnsubSession = null
+    let turnRetryTimer = null
+    /* Retry budget for turnRebind, bounded like every other retry in this
        file (rebindPrefs 40, settle watch 20): a permanently absent sessions
        service must not leave a 120 ms poll running for the life of the page.
-       A settings change re-runs syncThunder -> thunderRebind, which restarts
+       A settings change re-runs syncTurnWatch -> turnRebind, which restarts
        the budget. */
-    let thunderRebindAttempts = 0
-    let thunderWatchedId = null
+    let turnRetryAttempts = 0
+    let turnWatchedId = null
     // null = nothing readable observed yet, so the next value is a baseline.
-    let thunderLastRunning = null
+    let turnLastRunning = null
     /** The running bit of one session face, or null when it cannot be read. */
-    const thunderReadRunning = (face) => {
+    const turnReadRunning = (face) => {
       try {
         const snap = face.getSnapshot()
         if (snap === null || typeof snap !== 'object') return null
@@ -1923,20 +1813,20 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         return null
       }
     }
-    const thunderDetach = () => {
-      if (thunderUnsubSession !== null) {
-        try { thunderUnsubSession() } catch (e) { /* already torn down */ }
-        thunderUnsubSession = null
+    const turnDetach = () => {
+      if (turnUnsubSession !== null) {
+        try { turnUnsubSession() } catch (e) { /* already torn down */ }
+        turnUnsubSession = null
       }
-      thunderWatchedId = null
-      thunderLastRunning = null
+      turnWatchedId = null
+      turnLastRunning = null
     }
     /** Subscribe to selection changes once; idempotent. */
-    const thunderSubscribeList = (sessions) => {
-      if (thunderUnsubList !== null) return
+    const turnSubscribeList = (sessions) => {
+      if (turnUnsubList !== null) return
       let unsub = null
-      try { unsub = sessions.list.subscribe(() => { thunderRebind() }) } catch (e) { unsub = null }
-      thunderUnsubList = (typeof unsub === 'function') ? unsub : null
+      try { unsub = sessions.list.subscribe(() => { turnRebind() }) } catch (e) { unsub = null }
+      turnUnsubList = (typeof unsub === 'function') ? unsub : null
     }
     /* Follow the CURRENT session. `sessions.list` publishes the selection, and the
        runtime's own list subscriber (registered at construction, so it runs first)
@@ -1944,25 +1834,25 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        ordinary timing rather than an error, so it retries on a short timer instead
        of giving up — that single deferred retry is also what covers the very first
        reconcile during boot, before any session is staged. */
-    const thunderRebind = () => {
+    const turnRebind = () => {
       const sessions = getSessions()
-      if (thunderRebindTimer !== null && typeof clearTimeout === 'function') clearTimeout(thunderRebindTimer)
-      thunderRebindTimer = null
+      if (turnRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(turnRetryTimer)
+      turnRetryTimer = null
       /* Service not there yet: keep retrying rather than giving up for good, since
          the only reason to be here is that the feature is switched on — but only
          within the budget above. */
       if (sessions === undefined) {
-        if (thunderRebindAttempts >= 100) {
-          dbg('thunder rebind gave up: no sessions service after', thunderRebindAttempts, 'tries')
+        if (turnRetryAttempts >= 100) {
+          dbg('turn rebind gave up: no sessions service after', turnRetryAttempts, 'tries')
           return
         }
-        thunderRebindAttempts += 1
-        if (typeof setTimeout === 'function') thunderRebindTimer = setTimeout(thunderRebind, 120)
+        turnRetryAttempts += 1
+        if (typeof setTimeout === 'function') turnRetryTimer = setTimeout(turnRebind, 120)
         return
       }
       // The list subscription may have been skipped earlier (no service then), so
       // attach it as soon as one exists.
-      thunderSubscribeList(sessions)
+      turnSubscribeList(sessions)
       let id
       try {
         const snap = sessions.list.getSnapshot()
@@ -1971,7 +1861,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         return
       }
       if (id === undefined || id === null) {
-        thunderDetach()
+        turnDetach()
         return
       }
       /* Already watching this one: skip the detach/resubscribe churn. `sessions.list`
@@ -1984,8 +1874,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          would land on the value it already held. Verified by removing this line —
          the edge assertions still pass. It is a cost guard, and it is honest about
          being one. */
-      if (id === thunderWatchedId && thunderUnsubSession !== null) return
-      thunderDetach()
+      if (id === turnWatchedId && turnUnsubSession !== null) return
+      turnDetach()
       let face = null
       try {
         const binding = sessions.binding(id)
@@ -1994,27 +1884,26 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         face = null
       }
       if (face === null || typeof face.subscribe !== 'function' || typeof face.getSnapshot !== 'function') {
-        if (thunderRebindAttempts >= 100) {
-          dbg('thunder rebind gave up: session face never became bindable for', id)
+        if (turnRetryAttempts >= 100) {
+          dbg('turn rebind gave up: session face never became bindable for', id)
           return
         }
-        thunderRebindAttempts += 1
-        if (typeof setTimeout === 'function') thunderRebindTimer = setTimeout(thunderRebind, 120)
+        turnRetryAttempts += 1
+        if (typeof setTimeout === 'function') turnRetryTimer = setTimeout(turnRebind, 120)
         return
       }
-      thunderRebindAttempts = 0
-      thunderWatchedId = id
-      thunderLastRunning = thunderReadRunning(face)
+      turnRetryAttempts = 0
+      turnWatchedId = id
+      turnLastRunning = turnReadRunning(face)
       let unsub = null
       try {
         unsub = face.subscribe(() => {
-          const next = thunderReadRunning(face)
-          if (next === null || next === thunderLastRunning) return
-          const prev = thunderLastRunning
-          thunderLastRunning = next
+          const next = turnReadRunning(face)
+          if (next === null || next === turnLastRunning) return
+          const prev = turnLastRunning
+          turnLastRunning = next
           // First readable value is the baseline, not an edge — see the note above.
           if (prev === null) return
-          showThunder(next ? THUNDER_START : THUNDER_DONE)
           // Falling edge is also the notification module's 任务完成 trigger:
           // the SAME authoritative bit, one subscription, two consumers.
           if (!next) showNotify('done')
@@ -2022,34 +1911,31 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       } catch (e) {
         unsub = null
       }
-      thunderUnsubSession = (typeof unsub === 'function') ? unsub : null
-      if (thunderUnsubSession === null) thunderWatchedId = null
+      turnUnsubSession = (typeof unsub === 'function') ? unsub : null
+      if (turnUnsubSession === null) turnWatchedId = null
     }
-    const thunderStopWatch = () => {
-      if (thunderRebindTimer !== null && typeof clearTimeout === 'function') clearTimeout(thunderRebindTimer)
-      thunderRebindTimer = null
-      thunderRebindAttempts = 0
-      if (thunderUnsubList !== null) {
-        try { thunderUnsubList() } catch (e) { /* already torn down */ }
-        thunderUnsubList = null
+    const turnStopWatch = () => {
+      if (turnRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(turnRetryTimer)
+      turnRetryTimer = null
+      turnRetryAttempts = 0
+      if (turnUnsubList !== null) {
+        try { turnUnsubList() } catch (e) { /* already torn down */ }
+        turnUnsubList = null
       }
-      thunderDetach()
+      turnDetach()
     }
-    /* Switched off costs nothing: no subscription, no timer, no plate — an off
-       switch must not leave a listener behind that wakes on every streamed
-       token just to return early. The watch is now shared with the notify
-       module's 任务完成 trigger, so it stays armed while EITHER feature is on
-       (showThunder and showNotify both self-guard, so the idle consumer is a
-       no-op call, not a second subscription). */
-    const syncThunder = () => {
-      if (!(isEnabled() && (isThunderOn() || isNotifyDoneOn()))) {
-        thunderStopWatch()
-        destroyThunder()
+    /* Switched off costs nothing: no subscription, no timer — an off switch must
+       not leave a listener behind that wakes on every streamed token just to
+       return early. Only the notification module consumes this now, and it
+       self-guards its own switch, so being switched on is the whole condition. */
+    const syncTurnWatch = () => {
+      if (!(isEnabled() && isNotifyDoneOn())) {
+        turnStopWatch()
         return
       }
-      // thunderRebind() resolves the service itself and re-arms its own retry, so
+      // turnRebind() resolves the service itself and re-arms its own retry, so
       // there is nothing to check here — being switched on is the whole condition.
-      thunderRebind()
+      turnRebind()
     }
 
     /* ---------- 需要你回应 watcher ----------
@@ -2156,7 +2042,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
 
     /* ---------- 终末地工业风通知 ----------------------------------------------
        Three triggers, one visual language: 任务完成 (turn end, from the SAME
-       ConversationSnapshot.running edge the thunder announcement reads) and
+       ConversationSnapshot.running edge the toasts derive from) and
        提问 / 索权 (the attention watcher's question / approval / plan-review
        kinds). Sound is NOT re-implemented: the existing audio slots already fire
        for exactly these moments (attention via reportAttention above, turn end
@@ -2170,7 +2056,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                    these need a human decision, and a receipt-style fade could
                    hide exactly the moment the user was being called for.
 
-       The stack is plain DOM (same decision as thunder/watermark): the panel's
+       The stack is plain DOM (same decision as the watermark): the panel's
        mini-React owns settings, not page chrome, and a fixed-position stack has
        no interaction with the app's layout. */
     const NOTIFY_KEY = 'dsh-theme-endfield-notify'
@@ -2193,7 +2079,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     let notifyStack = null
     const notifyTimers = new Map() // kind -> dismissal timeout (done only)
     /** The industrial card: square, 2px ink border, paper fill, signal rail. */
-    /** Copy per kind. Hardcoded zh like the thunder words: page chrome, not a
+    /** Copy per kind. Hardcoded zh like the rest of the page chrome, not a
         settings string, and the theme's face is bilingual-unfriendly by design. */
     const notifyCopy = (kind) => ({
       done: { title: '任务完成', body: '回合已结束，可以继续。' },
@@ -2414,8 +2300,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          in-flight word would become an unstyled, un-positioned block of text in the
          document flow. Stop watching as well: with the theme off there is nothing to
          announce into. */
-      thunderStopWatch()
-      destroyThunder()
+      /* With the theme off there is nobody to notify: drop the session subscription. */
+      turnStopWatch()
       /* The watermark must go with the stylesheet too, and it cannot wait for
          syncWatermarkVisibility(): with the sheet torn down its
          `opacity: var(--edge-wm-alpha)` computes invalid and falls back to 1,
@@ -2445,9 +2331,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       // Boot animation: only on a real page load, only when switched on, and only
       // after the stylesheet above exists (mount() inserted it).
       if (isLoaderOn()) runLoader()
-      // Task announcements: subscribes only while switched on, and the first value
-      // it reads is a baseline, so enabling mid-turn stays silent.
-      syncThunder()
+      // 任务完成回执: subscribes only while that switch is on; its first read is a
+      // baseline, so enabling mid-turn stays silent.
+      syncTurnWatch()
       // 需要你回应: starts only while the theme and the audio feature are both on.
       syncAudioAttentionWatch()
     }
@@ -2460,7 +2346,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        or the host reverts a value). It mirrors the initial mount block above so a
        runtime change re-paints exactly the live surfaces it can: the master switch mounts/unmounts
        the token + stylesheet layers, then radius/palette/watermark/
-       thunder re-derive from the new value. The boot loader is deliberately not
+       the notification cards re-derive from the new value. The boot loader is deliberately not
        replayed here: it is a once-per-page-load plate, so a mid-session section
        change must not slam a startup animation over a running app. The one thing
        that DOES start it outside apply() is the first authoritative settle
@@ -2482,7 +2368,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         syncPaletteClass()
         syncWatermarkVisibility()
         syncHeroLogo()
-        syncThunder()
+        syncTurnWatch()
         // Same reason: it re-reads both switches and starts or stops the poll.
         syncAudioAttentionWatch()
       } else {
@@ -2507,7 +2393,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        silently fall back to the raw key string in the UI, which is why the test suite
        compares the two key sets rather than trusting review.
 
-       Naming: keys are grouped by row (`theme*`, `palette*`, `thunder*`) so a row's
+       Naming: keys are grouped by row (`theme*`, `palette*`, `notify*`) so a row's
        copy stays discoverable next to its switch. */
     const ENDFIELD_NS = 'settings.theme-endfield'
     const LOCALE_ZH = {
@@ -2523,7 +2409,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       groupTheme: '主题',
       groupBg: '背景',
       groupAnim: '动画',
-      groupFun: '娱乐',
       groupNotify: '通知',
       themeRow: '终末地主题',
       paletteRow: '主题配色',
@@ -2548,13 +2433,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       loaderHintOff: '默认关闭；开启后每次刷新页面播放一次',
       loaderNeed: '请先开启启动加载动画',
       preview: '预览',
-      thunderRow: '雷霆大字',
-      thunderHintOn: '任务开始/结束时，在屏幕中央用白色粗体大字显示「任务开始」/「任务完成」，3 秒后自动隐藏；点击屏幕任意处可立即关闭',
-      thunderHintOff: '默认关闭；开启后任务开始/结束时在屏幕中央显示「任务开始」/「任务完成」白色大字，3 秒后自动隐藏，点击任意处可立即关闭',
-      thunderNeed: '请先开启雷霆大字',
-      thunderAnimRow: '大字入场动画',
-      thunderAnimHintOn: '大字由大缩小砸入并淡出（关闭后为直接显示，仍保持 3 秒）',
-      thunderAnimHintOff: '默认关闭；大字直接出现、3 秒后消失，不做缩放与淡入淡出',
       glassRow: '磨砂玻璃',
       glassHint: '只作用于输入卡片：轻微/标准/强 = 8/14/22px 有界局部模糊；右侧面板保持不透明，侧栏仅静态着色',
       glassOff: '关闭',
@@ -2578,10 +2456,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       notifyQuestionHint: '助手提问时弹出常驻卡片，回答后自动消失',
       notifyApproveRow: '索权通知',
       notifyApproveHint: '操作授权与方案审阅时弹出常驻卡片，处理完自动消失',
-      thunderAnimHintReduced: '系统已开启「减少动态效果」，当前直接显示',
       /* 音频通知：播放发生在宿主进程（lib/audio.js），所以这里的每一行都在
          说明「什么时候响」而不是「怎么响」；各槽位的「预览」按钮走宿主真实
-         播放链路（与加载动画/雷霆大字行的预览同一个词，不再单用「试听」）。 */
+         播放链路（与加载动画行的预览同一个词，不再单用「试听」）。 */
       groupAudio: '音频',
       audioRow: '音频通知',
       audioHintOn: '由宿主进程播放，页面最小化或切到别的应用时同样能听到',
@@ -2633,7 +2510,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       groupTheme: 'THEME',
       groupBg: 'BACKGROUND',
       groupAnim: 'ANIMATION',
-      groupFun: 'ENTERTAINMENT',
       groupNotify: 'NOTIFY',
       themeRow: 'Endfield theme',
       paletteRow: 'Accent palette',
@@ -2658,13 +2534,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       loaderHintOff: 'Off by default; plays once on every page reload when enabled',
       loaderNeed: 'Turn on the boot animation first',
       preview: 'Preview',
-      thunderRow: 'Task announcement',
-      thunderHintOn: 'Slams 任务开始 / 任务完成 across the screen centre in heavy white type for 3s; click anywhere to dismiss',
-      thunderHintOff: 'Off by default; shows 任务开始 / 任务完成 in heavy white type at the screen centre for 3s, dismissable by clicking anywhere',
-      thunderNeed: 'Turn on the task announcement first',
-      thunderAnimRow: 'Announcement entry animation',
-      thunderAnimHintOn: 'The word punches in from oversized and fades out (appears instantly when off, still held 3s)',
-      thunderAnimHintOff: 'Off by default; the word appears instantly and leaves after 3s, with no scaling or fading',
       glassRow: 'Frosted glass',
       glassHint: 'Composer card only: subtle/standard/strong = 8/14/22px bounded blur; the docked right panel stays opaque, the sidebar gets a static tint only',
       glassOff: 'Off',
@@ -2688,7 +2557,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       notifyQuestionHint: 'A sticky card when the assistant asks; clears when answered',
       notifyApproveRow: 'Approval',
       notifyApproveHint: 'A sticky card for approvals and plan reviews; clears when decided',
-      thunderAnimHintReduced: 'Your system asks for reduced motion, so it appears instantly',
       groupAudio: 'AUDIO',
       audioRow: 'Audio notifications',
       audioHintOn: 'Played by the host process, so a minimized page or another app in front still gets the sound',
@@ -2784,8 +2652,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const [wmOn, setWmOn] = R.useState(isWatermarkOn())
           const [wmPersist, setWmPersist] = R.useState(isWatermarkPersistOn())
           const [loaderOn, setLoaderOn] = R.useState(isLoaderOn())
-          const [thunderOn, setThunderOn] = R.useState(isThunderOn())
-          const [thunderAnim, setThunderAnim] = R.useState(isThunderAnimOn())
           const [palette, setPalette] = R.useState(readPalette())
           const [glass, setGlass] = R.useState(readGlass())
           const [texture, setTexture] = R.useState(readTexture())
@@ -2850,8 +2716,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
               setWmOn(isWatermarkOn())
               setWmPersist(isWatermarkPersistOn())
               setLoaderOn(isLoaderOn())
-              setThunderOn(isThunderOn())
-              setThunderAnim(isThunderAnimOn())
               setNotifyOn(isNotifyOn())
               setNotifyDone(isNotifyDoneOn())
               setNotifyQuestion(isNotifyQuestionOn())
@@ -2974,7 +2838,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                to be reconciled here. unmount() already stops it, but turning the
                theme back ON must restart it — otherwise the feature would stay dead
                until the next page load. */
-            syncThunder()
           }
           /* Palette selection via <select>. Everything visual is carried by the
              class flip inside syncPaletteClass(); a select fires onChange with
@@ -3024,14 +2887,12 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
             prefsSet(NOTIFY_KEY, next ? '1' : '0')
             setNotifyOn(next)
             syncAudioAttentionWatch()
-            syncThunder()
             if (!next) destroyNotify()
           }
           const toggleNotifyDone = () => {
             const next = !isNotifyDoneOn()
             prefsSet(NOTIFY_DONE_KEY, next ? '1' : '0')
             setNotifyDone(next)
-            syncThunder()
           }
           const toggleNotifyQuestion = () => {
             const next = !isNotifyQuestionOn()
@@ -3058,30 +2919,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
             loaderDone = false
             destroyLoader()
             runLoader()
-          }
-          const toggleThunder = () => {
-            const next = !isThunderOn()
-            prefsSet(THUNDER_KEY, next ? '1' : '0')
-            setThunderOn(next)
-            /* syncThunder() reads the pref store, so the write above is what it acts
-               on. Turning it ON also shows the word once: a switch whose effect only
-               appears at some unpredictable later moment gives the user no way to
-               tell whether it worked. The preview runs BEFORE the watcher attaches,
-               so it cannot be mistaken for a real edge. */
-            if (next) showThunder(THUNDER_START)
-            else destroyThunder()
-            syncThunder()
-          }
-          const previewThunder = () => { showThunder(THUNDER_DONE) }
-          const toggleThunderAnim = () => {
-            const next = !isThunderAnimOn()
-            prefsSet(THUNDER_ANIM_KEY, next ? '1' : '0')
-            setThunderAnim(next)
-            /* Nothing to reconcile: the next showThunder() reads the switch and marks
-               the plate accordingly. Replaying now is what makes the change legible —
-               the difference between the two modes is only visible during the entry,
-               so a silent toggle would look like it did nothing. */
-            showThunder(THUNDER_START)
           }
           /* Radius as a select (was a cycle button): the same shape as the
              palette row — the current value preselects, onChange writes through. */
@@ -3112,7 +2949,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           }
           const playPreview = (slot) => { previewSlot(slot).then(showPreviewNote) }
           /* One spelling for every action button in the panel: 「预览」, the same
-             word the loader/thunder rows use. The row label already names the
+             word the loader row uses. The row label already names the
              slot, so a per-slot suffix would only repeat it. */
           const audioTestButton = (slot) => R.createElement('button', {
             key: 'audio-test-' + slot,
@@ -3187,8 +3024,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const setThemeValue = boolSelect(toggleTheme, isEnabled)
           const setWmValue = boolSelect(toggleWm, isWatermarkOn)
           const setLoaderValue = boolSelect(toggleLoader, isLoaderOn)
-          const setThunderValue = boolSelect(toggleThunder, isThunderOn)
-          const setThunderAnimValue = boolSelect(toggleThunderAnim, isThunderAnimOn)
           const setNotifyValue = boolSelect(toggleNotify, isNotifyOn)
           const setNotifyDoneValue = boolSelect(toggleNotifyDone, isNotifyDoneOn)
           const setNotifyQuestionValue = boolSelect(toggleNotifyQuestion, isNotifyQuestionOn)
@@ -3241,8 +3076,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const pageStyle = { maxWidth: '640px', padding: '4px 0 16px' }
           /* The ten switches are grouped into four concerns so the page can be
              scanned instead of read as a flat list: 主题 (master switch +
-             appearance), 背景 (watermark), 动画 (boot loader),
-             娱乐 (雷霆大字 announcements + their entry animation).
+             appearance), 背景 (watermark), 动画 (boot loader), 通知 and 音频.
              Each group is an editorial numbered header; rows keep their stable
              React keys. The last row of each group drops its divider so the next
              group header's own rule is the only line between groups.
@@ -3481,54 +3315,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                     onChange: setLoaderValue,
                   })
                 )
-              ]),
-            ]),
-            /* --- 04 娱乐：雷霆大字（主开关 + 入场动画子开关） --- */
-            R.createElement('div', { key: 'group-fun' }, [
-              groupTitle('04', 'groupFun', false),
-              row('thunder', false, [
-                R.createElement('span', { style: labelStyle },
-                  t('thunderRow'),
-                  R.createElement('span', { style: hintStyle },
-                    t(thunderOn ? 'thunderHintOn' : 'thunderHintOff')
-                  )
-                ),
-                R.createElement('span', { style: { display: 'flex', gap: '8px', flex: '0 0 auto', alignItems: 'center' } },
-                  // Same affordance as the boot animation: let the user see the
-                  // effect now instead of waiting for the next task boundary.
-                  R.createElement('button', {
-                    type: 'button',
-                    onClick: previewThunder,
-                    style: btnStyleFor(false, !thunderOn),
-                    disabled: !thunderOn,
-                    title: thunderOn ? '' : t('thunderNeed'),
-                  }, t('preview')),
-                  endfieldSelect({
-                    value: thunderOn ? '1' : '0', ariaLabel: t('thunderRow'),
-                    options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
-                    onChange: setThunderValue,
-                  })
-                )
-              ]),
-              row('thunder-anim', true, [
-                R.createElement('span', { style: labelStyle },
-                  t('thunderAnimRow'),
-                  R.createElement('span', { style: hintStyle },
-                    // Say so when the OS preference is overriding the switch, rather
-                    // than letting it look like the toggle is broken.
-                    (thunderAnim && prefersReducedMotion())
-                      ? t('thunderAnimHintReduced')
-                      : t(thunderAnim ? 'thunderAnimHintOn' : 'thunderAnimHintOff')
-                  )
-                ),
-                endfieldSelect({
-                  value: thunderAnim ? '1' : '0', ariaLabel: t('thunderAnimRow'),
-                  options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
-                  // Only meaningful while the announcement itself is on.
-                  disabled: !thunderOn,
-                  title: thunderOn ? '' : t('thunderNeed'),
-                  onChange: setThunderAnimValue,
-                })
               ]),
             ]),
             /* --- 05 通知：工业风卡片，三触发 --- */
@@ -3787,8 +3573,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          a hide timeout, all of which outlive the DOM node — unmount() covers the
          switched-off path, but a fiber unload while the theme is ON must release
          them here too, or the callbacks keep firing against a dead run. */
-      thunderStopWatch()
-      destroyThunder()
+      turnStopWatch()
       // The notification stack owns DOM nodes and dismissal timers; both go here.
       destroyNotify()
       // Same reason as the announcement watcher: a poll that outlives its fiber

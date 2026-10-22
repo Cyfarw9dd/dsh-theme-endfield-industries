@@ -260,8 +260,6 @@ else fail('the page rendered identically in both languages')
 const CHECKS = [
   ['themeRow', 'Endfield theme'],
   ['paletteRow', 'Accent palette'],
-  ['thunderRow', 'Task announcement'],
-  ['thunderAnimRow', 'Announcement entry animation'],
   ['preview', 'Preview'],
 ]
 for (const [key, expect] of CHECKS) {
@@ -269,16 +267,16 @@ for (const [key, expect] of CHECKS) {
   else fail('en render is missing the copy for ' + key + ' (expected "' + expect + '")')
 }
 // And the group headers must not print the latin line twice under English.
-const dupEn = (enText.match(/ENTERTAINMENT/g) || []).length
+const dupEn = (enText.match(/BACKGROUND/g) || []).length
 if (dupEn === 1) pass('en 下分组标题不重复打印拉丁行')
 else fail('the English group header printed its latin line ' + dupEn + ' times (expected 1)')
 // Under Chinese, the latin line IS the editorial second line and must be present.
-if (zhText.includes('ENTERTAINMENT') && zhText.includes('娱乐')) pass('zh 下分组标题保留中文名 + 拉丁行')
+if (zhText.includes('BACKGROUND') && zhText.includes('背景')) pass('zh 下分组标题保留中文名 + 拉丁行')
 else fail('the Chinese group header lost either its name or its latin line')
 
 /* ============ 4. an unknown locale must fall back, not print raw keys ============ */
 const fbText = renderIn('de')
-if (!/\bthunderRow\b|\bpaletteRow\b|\bgroupFun\b/.test(fbText)) pass('未知语言回退到 en，不会漏出原始键名')
+if (!/\bpaletteRow\b|\bgroupFun\b/.test(fbText)) pass('未知语言回退到 en，不会漏出原始键名')
 else fail('an unknown locale leaked raw dictionary keys into the UI')
 locale.setActive('zh')
 
@@ -317,7 +315,7 @@ else {
     const txt = textOf(tree)
     if (HAS_CJK.test(txt)) pass('无 locale 服务时回退为中文，页面照常可用')
     else fail('without a locale service the page did not fall back to Chinese')
-    if (!/\bthunderRow\b|\bgroupFun\b/.test(txt)) pass('无 locale 服务时不会漏出原始键名')
+    if (!/\bgroupFun\b/.test(txt)) pass('无 locale 服务时不会漏出原始键名')
     else fail('the no-locale fallback leaked raw dictionary keys')
     // The label thunk must be callable in this mode too (the nav row still needs text).
     const lbl = m2.registerOpts && m2.registerOpts.label
