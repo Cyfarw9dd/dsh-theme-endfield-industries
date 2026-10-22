@@ -35,14 +35,20 @@
   不缓存）、`locale`（缺席退回中文）、`slots`（设置页挂载点），以及把清理
   钩子登记到 run 生命周期的 `effect()`。DSH 升级时先看这个文件；它也是测试
   打桩服务的接缝（不必伪造整个 cordis 上下文）
-- **偏好层开始拆模块**：`src/client/prefs/keys.js` 放 schema 字段、UI/存储键
-  与两者映射（`prefsFieldOf()` 是读写两条路径唯一的入口）；`src/client/prefs/legacy.js`
+- **偏好层已拆成四个模块**：`src/client/prefs/keys.js` 放 schema 字段、UI/存储键
+  与两者映射（`prefsFieldOf()` 是读写两条路径唯一的入口）；`prefs/legacy.js`
   放旧字段拼写的修复规则（纯函数 `prefsLegacyFields` + 只跑一次的
-  `createLegacyMigrator`，依赖以 thunk 注入，不碰 ctx/DOM/存储）。两者都是纯逻辑，
-  入口只 import；读键表的测试（settings-namespace / settings-config-forms / texture）
-  直接对源文件断言。**下一步**是把 store（读写门 + 挂起队列）与 transport
-  （候选拼写、迟到重试、settle watch）也搬进来——需要先把闭包状态显式化成
-  `createPrefsStore(services)`，这是拆这个文件的真正成本
+  `createLegacyMigrator`，依赖以 thunk 注入，不碰 ctx/DOM/存储）；`prefs/store.js`
+  是**值 + 持久写入门控 + 挂起队列**（`createPrefsStore({ debug })`：对主题面
+  `get/set/listen/commit/wasEdited`，对 transport 是
+  `adopt/flush/migrate/notify/markSettled/needsSettlePass/...` 协议）；`prefs/transport.js`
+  是**设置表单的发现与绑定**（候选 entry 拼写、迟到重试、有界 settle watch、一行
+  boot report；`createPrefsTransport({ services, debug, store })`）。两模块互不
+  import：store 只认 transport 用 `bindTransport()` 装进来的 port（snapshot / 一次
+  字段写 / describe 列表），transport 只认 store 的协议，依赖全部显式注入、debug
+  由入口传入。入口因此退化成组合根：建两个对象 + 一个
+  `services.effect(() => () => prefs.dispose())` 收尾。读键表的测试
+  （settings-namespace / settings-config-forms / texture）直接对源文件断言
 - **样式源怎么拼，只有一个定义**：`scripts/lib/sources.js` 的 `STYLE_FILES`
   是层清单（顺序 = 级联顺序），`concatCss()` 就是客户端入口嵌进
   `insertCss()` 的那串字节。构建检查、`check.js`、`selftest.js` 的临时树、

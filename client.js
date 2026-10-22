@@ -211,6 +211,572 @@
 		} };
 	}
 
+// src/client/prefs/store.js
+/**
+	* prefs/store.js — the durable preference store: values, the durable write
+	* gate and the held-edit queue.
+	*
+	* The theme's switches used to persist through `localStorage`, which DSH
+	* Desktop broke on every restart: Desktop binds a fresh random localhost
+	* port per launch, so the origin (and thus the browser storage scope)
+	* changed and the saved settings silently reset to defaults.
+	*
+	* The durable authority is DSH's own settings service, and DSH 0.1.7-rc.1
+	* moved it once more. The whole pre-0.1.7 seam — a host
+	* `ctx.settings.register(namespace, schema)` persisted by
+	* `@deepseek-ai/dsh-settings-file` to `<dshHome>/settings.yaml`, mirrored
+	* to the browser as the `ctx.settingsScope` service — is GONE: the package
+	* is not in the distribution any more, `settings.yaml` is not the settings
+	* carrier, and the client has no `settingsScope` service at all.
+	*
+	* What replaced it (see index.js for the host side):
+	*
+	*   host    the plugin entry exports a schemastery `Config` whose fields
+	*           are `.volatile()`. `ctx.settings` projects it into a form and
+	*           persists user edits into the PROFILE PATCH
+	*           (<profile>/cordis.patch.yml) through `ctx.configEditor`,
+	*           i.e. a path owned by DSH and independent of the web origin.
+	*   client  `services.configForms()` (src/client/services.js) — the
+	*           settings domain's shared-form service — `.get(<profile entry id>)` returns that entry's
+	*           ConfigForm: getSnapshot() / subscribe() / set() / unset() /
+	*           mutate().
+	*
+	* The namespace is now the PROFILE ENTRY ID, not a plugin-chosen string:
+	* this package's cordis.patch.yml inserts `id: theme-endfield`, and
+	* index.js exports that same id as SETTINGS_ENTRY. Both halves still speak
+	* the old namespace string for the legacy fallback and as the prefix of
+	* every UI key in the tables below.
+	*
+	* The >=0.2.0 floor dropped the legacy seam entirely (peerDependencies
+	* enforces it): a host without `configForms` is not a supported
+	* configuration, and pages that have none (an out-of-DSH page,
+	* in-process tests) run on memory defaults below. Either way the values
+	* live host-side, so:
+	*
+	*   dsh web     (browser, fixed loopback port)  -> host persistence
+	*   DSH Desktop (browser, random loopback port) -> host persistence
+	*
+	* Both are loopback pages, so DSH resolves the connection to 'host' mode
+	* and the values land on disk; a change of port does not move them because
+	* nothing lives in browser storage any more.
+	*
+	* Value model. Namespace fields are the tails of the old localStorage keys
+	* and are stored as the same strings, so the semantics (and any older
+	* <settings.yaml> section from a prior build) keep scanning identically:
+	*   default-ON switches store  '1'  and read as  !== '0'
+	*   default-OFF switches store '0'  and read as  === '1'
+	*   palette/radius/fps/speed  store one of their documented literals.
+	* FIELD_DEFAULTS is the shipped fallback and mirrors index.js.
+	*
+	* Resilience. Before the transport hands us a section (boot), or in an
+	* environment with neither settings service at all (an out-of-DSH page,
+	* in-process tests), the store falls back to FIELD_DEFAULTS overlaid with
+	* any in-page overrides made this session. Writes are committed to the
+	* settings transport only when it is ready + writable; otherwise they are
+	* kept session-local so toggles still work in place but do not persist
+	* (there is no durable backend to persist to — and no localStorage).
+	*
+	* Transport selection, candidate spellings, the bounded settle watch and the
+	* boot report live in prefs/transport.js. This module never imports it: the
+	* two halves meet at the small port installed by bindTransport() (a snapshot,
+	* one field write, and the describe-view list for the diagnostics lines), and
+	* the entry is the composition root that injects { debug } here and
+	* { services, debug, store } there.
+	*/
+	function createPrefsStore({ debug: dbg }) {
+		const prefsListeners = [];
+		const prefsLocal = Object.assign({}, PREFS_FIELD_DEFAULTS);
+		const prefsLocalEdited = /* @__PURE__ */ new Set();
+		const prefsDirty = /* @__PURE__ */ new Set();
+		const prefsEdited = /* @__PURE__ */ new Set();
+		let prefsFieldValue = null;
+		let prefsRetryTimer = null;
+		const PREFS_RETRY_LIMIT = 20;
+		let prefsRetryCount = 0;
+		let prefsReplayBusy = false;
+		let reconciler = null;
+		let prefsSettledOnce = false;
+		let settledHook = null;
+		let panelMounted = false;
+		let prefsOverlayCache = null;
+		const prefsGetValue = () => {
+			const base = prefsFieldValue || PREFS_FIELD_DEFAULTS;
+			if (prefsLocalEdited.size === 0) return base;
+			if (prefsOverlayCache !== null && prefsOverlayCache.base === base) return prefsOverlayCache.out;
+			const out = Object.assign({}, base);
+			for (const field of prefsLocalEdited) out[field] = prefsLocal[field];
+			prefsOverlayCache = {
+				base,
+				out
+			};
+			return out;
+		};
+		/** read one field as its raw stored string: <stored-or-default>, never null. */
+		const prefsGet = (rawKey) => {
+			const field = prefsFieldOf(rawKey);
+			const sec = prefsGetValue();
+			if (sec && Object.prototype.hasOwnProperty.call(sec, field)) return String(sec[field]);
+			return PREFS_FIELD_DEFAULTS[field];
+		};
+		/** subscribe to any change of the whole namespace (transport or local). */
+		const prefsSubscribe = (listener) => {
+			prefsListeners.push(listener);
+			return () => {
+				const i = prefsListeners.indexOf(listener);
+				if (i >= 0) prefsListeners.splice(i, 1);
+			};
+		};
+		const prefsEmit = () => {
+			for (const l of prefsListeners.slice()) try {
+				l();
+			} catch (e) {}
+			if (reconciler) try {
+				reconciler();
+			} catch (e) {}
+		};
+		const prefsMarkSettled = () => {
+			if (prefsSettledOnce) return;
+			prefsSettledOnce = true;
+			if (settledHook) try {
+				settledHook();
+			} catch (e) {}
+		};
+		let transport = null;
+		const prefsSnap = () => transport === null ? null : transport.snapshot();
+		const prefsDurablyServed = (snap) => !!snap && (snap.mode === void 0 || snap.mode === "host") && snap.status === "ready" && !!snap.writable;
+		const prefsWriteField = (field, value) => {
+			if (transport === null || typeof transport.write !== "function") return false;
+			if (typeof transport.canWrite === "function" && !transport.canWrite()) return false;
+			let result = null;
+			try {
+				result = transport.write(field, String(value));
+			} catch (e) {
+				dbg("set threw", field, e && e.message);
+				prefsDirty.add(field);
+				return false;
+			}
+			if (result && typeof result.then === "function") result.then((ok) => {
+				if (ok === false) {
+					dbg("set REFUSED by the host", field, value);
+					prefsDirty.add(field);
+					prefsScheduleRetry();
+				} else prefsDirty.delete(field);
+			}, (e) => {
+				dbg("set REJECTED", field, value, String(e && e.message || e));
+				prefsDirty.add(field);
+			});
+			else prefsDirty.delete(field);
+			return true;
+		};
+		const prefsReplayDirty = () => {
+			if (prefsReplayBusy) return;
+			if (prefsDirty.size === 0) return;
+			prefsReplayBusy = true;
+			try {
+				const snap = prefsSnap();
+				const durable = prefsDurablyServed(snap);
+				for (const field of Array.from(prefsDirty)) {
+					const local = prefsLocal[field];
+					if (local === (snap && snap.value ? Object.prototype.hasOwnProperty.call(snap.value, field) ? String(snap.value[field]) : void 0 : void 0) && !prefsEdited.has(field)) {
+						prefsDirty.delete(field);
+						continue;
+					}
+					if (!durable) continue;
+					if (prefsWriteField(field, local)) {
+						dbg("replayed held", field, "=", local);
+						prefsDirty.delete(field);
+					}
+				}
+			} finally {
+				prefsReplayBusy = false;
+			}
+		};
+		const prefsStopRetry = () => {
+			if (prefsRetryTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsRetryTimer);
+			prefsRetryTimer = null;
+			prefsRetryCount = 0;
+		};
+		const prefsScheduleRetry = () => {
+			if (prefsDirty.size === 0) {
+				prefsStopRetry();
+				return;
+			}
+			if (prefsDurablyServed(prefsSnap())) {
+				prefsStopRetry();
+				return;
+			}
+			if (prefsRetryTimer !== null) return;
+			if (typeof setTimeout !== "function") return;
+			prefsRetryCount = 0;
+			const tick = () => {
+				prefsRetryTimer = null;
+				prefsRetryCount += 1;
+				if (prefsRetryCount > PREFS_RETRY_LIMIT) {
+					prefsStopRetry();
+					return;
+				}
+				if (prefsDirty.size === 0) {
+					prefsStopRetry();
+					return;
+				}
+				if (prefsDurablyServed(prefsSnap())) {
+					prefsStopRetry();
+					return;
+				}
+				prefsReplayDirty();
+				if (prefsDirty.size > 0) prefsRetryTimer = setTimeout(tick, 500);
+				else prefsStopRetry();
+			};
+			prefsRetryTimer = setTimeout(tick, 500);
+		};
+		const prefsCommit = (field, encoded) => {
+			if (transport !== null && transport.bound()) {
+				const snap = prefsSnap();
+				if (prefsDurablyServed(snap)) {
+					const binding = transport.binding();
+					dbg("commit", field, "=", encoded, "via", binding.kind, binding.ns, "status=", snap.status, "mode=", snap.mode);
+					prefsWriteField(field, encoded);
+					return true;
+				}
+				dbg("held (namespace not durably served yet)", field, "=", encoded, "snap=", snap === null ? null : {
+					status: snap.status,
+					writable: snap.writable,
+					mode: snap.mode
+				}, "hostServes=", transport.served());
+			} else dbg("commit with NO settings transport bound (page-local only)", field, encoded, "hostServes=", transport === null ? null : transport.served());
+			prefsDirty.add(field);
+			prefsScheduleRetry();
+			return false;
+		};
+		/** write one field with the exact stored-string value the UI derives. */
+		const prefsSet = (rawKey, encoded) => {
+			const field = prefsFieldOf(rawKey);
+			prefsLocal[field] = String(encoded);
+			prefsLocalEdited.add(field);
+			prefsEdited.add(field);
+			prefsOverlayCache = null;
+			prefsCommit(field, prefsLocal[field]);
+		};
+		const prefsResolveSection = (section) => {
+			const out = Object.assign({}, PREFS_FIELD_DEFAULTS);
+			if (section === null || typeof section !== "object") return out;
+			for (const field of Object.keys(PREFS_FIELD_DEFAULTS)) if (Object.prototype.hasOwnProperty.call(section, field)) out[field] = String(section[field]);
+			return out;
+		};
+		const prefsMigrateLegacy = createLegacyMigrator({
+			commit: (field, value) => prefsSet(field, value),
+			debug: (...a) => dbg(...a)
+		}).migrate;
+		const bindTransport = (port) => {
+			transport = port;
+		};
+		const adopt = (section) => {
+			prefsFieldValue = prefsResolveSection(section);
+		};
+		const flush = () => prefsReplayDirty();
+		const migrate = (section) => prefsMigrateLegacy(section);
+		const notify = () => prefsEmit();
+		const needsSettlePass = () => prefsFieldValue === null || prefsDirty.size > 0;
+		const pendingFields = () => Array.from(prefsDirty);
+		const settled = () => prefsSettledOnce;
+		const panelMountedState = () => panelMounted;
+		const dispose = () => {
+			prefsListeners.length = 0;
+			settledHook = null;
+			if (transport !== null && typeof transport.dispose === "function") transport.dispose();
+			prefsFieldValue = null;
+			if (prefsRetryTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsRetryTimer);
+			prefsRetryTimer = null;
+		};
+		return {
+			get: prefsGet,
+			set: prefsSet,
+			commit: prefsCommit,
+			listen: prefsSubscribe,
+			wasEdited: (field) => prefsEdited.has(field),
+			ready: () => prefsSettledOnce,
+			setReconciler: (fn) => {
+				reconciler = fn;
+			},
+			onSettled: (fn) => {
+				settledHook = fn;
+			},
+			markPanelMounted: () => {
+				panelMounted = true;
+			},
+			markSettled: prefsMarkSettled,
+			bindTransport,
+			adopt,
+			flush,
+			migrate,
+			notify,
+			needsSettlePass,
+			pendingFields,
+			settled,
+			panelMounted: panelMountedState,
+			dispose
+		};
+	}
+
+// src/client/prefs/transport.js
+/**
+	* prefs/transport.js — the durable-preference transport: which settings entry
+	* spelling this install is bound to, when to re-select it, and the bounded
+	* safety nets for a host that answers late.
+	*
+	* WHY IT IS SEPARATE. The >=0.2.0 floor made the settings domain's shared-form
+	* service (services.configForms(), src/client/services.js) the only durable
+	* seam, and the awkward half of using it is discovery: a ConfigForm is a lazy
+	* view over a shared mirror keyed by the PROFILE ENTRY ID, which the patch
+	* layer assigns. This package ships `id: theme-endfield`, but a hand-written
+	* insert may use the package name and the loader tree path prefixes groups
+	* with `include:`, so the module probes the candidate spellings, prefers the
+	* one the Host actually SERVES, and self-heals when the right one is served
+	* later. Everything here is about WHEN the section can be read — never about
+	* what the values mean (that is prefs/store.js).
+	*
+	* THREE SAFETY NETS, each for a different real failure:
+	*   rebind retry (40 x 250ms)  the settings service itself settles after
+	*                              apply() — DSH mounts plugin rows concurrently.
+	*   settle watch (20 x 500ms)  a bound form whose mirror never emitted the
+	*                              ready transition (bounded replacement for the
+	*                              pre-0.1.7 250ms binder poll).
+	*   boot report (one line)     explains an unhealthy outcome once, instead of
+	*                              leaving "the switches reset on reload" to
+	*                              guesswork: boundNs / status / mode / writable /
+	*                              valueKeys / settled / dirty / panelMounted /
+	*                              hostServes / candidates.
+	*
+	* DEPENDENCIES ARE INJECTED: { services, debug, store }. The store is driven
+	* through its documented protocol (adopt / flush / migrate / notify /
+	* markSettled / needsSettlePass / pendingFields / settled / panelMounted);
+	* this module installs the reverse port with store.bindTransport() and the
+	* entry only composes the two.
+	*/
+	function createPrefsTransport({ services, debug: dbg, store }) {
+		let prefsScope = null;
+		let prefsScopeKind = null;
+		let prefsScopeNs = null;
+		let prefsUnsubscribe = null;
+		let prefsBindTimer = null;
+		let prefsSettleTimer = null;
+		const PREFS_ENTRY_CANDIDATES = [
+			PREFS_ENTRY,
+			"include:" + PREFS_ENTRY,
+			PREFS_NS,
+			"include:" + PREFS_NS
+		];
+		const getConfigForms = () => {
+			return services.configForms();
+		};
+		const prefsServedNamespaces = () => {
+			try {
+				const forms = getConfigForms();
+				if (forms === void 0 || typeof forms.describe !== "function") return null;
+				const mirrored = forms.describe().getSnapshot();
+				const view = mirrored && mirrored.view;
+				if (!view || !Array.isArray(view.namespaces)) return null;
+				return view.namespaces.map((row) => row && row.ns);
+			} catch (e) {
+				return null;
+			}
+		};
+		const prefsSnapshotOf = (scope) => {
+			if (!scope || typeof scope.getSnapshot !== "function") return null;
+			try {
+				return scope.getSnapshot();
+			} catch (e) {
+				return null;
+			}
+		};
+		const prefsFindReadyForm = () => {
+			const forms = getConfigForms();
+			if (forms === void 0) return null;
+			for (const ns of PREFS_ENTRY_CANDIDATES) {
+				let form = null;
+				try {
+					form = forms.get(ns);
+				} catch (e) {
+					form = null;
+				}
+				if (!form || typeof form.getSnapshot !== "function") continue;
+				const snap = prefsSnapshotOf(form);
+				if (snap !== null && snap.status === "ready") return {
+					scope: form,
+					kind: "configForms",
+					ns
+				};
+			}
+			return null;
+		};
+		const acquirePrefsScope = () => {
+			const ready = prefsFindReadyForm();
+			if (ready !== null) return ready;
+			const forms = getConfigForms();
+			if (forms !== void 0) for (const ns of PREFS_ENTRY_CANDIDATES) {
+				let form = null;
+				try {
+					form = forms.get(ns);
+				} catch (e) {
+					form = null;
+				}
+				if (form && typeof form.getSnapshot === "function") return {
+					scope: form,
+					kind: "configForms",
+					ns
+				};
+			}
+			return null;
+		};
+		const prefsReleaseSubscription = () => {
+			if (typeof prefsUnsubscribe === "function") try {
+				prefsUnsubscribe();
+			} catch (e) {}
+			prefsUnsubscribe = null;
+		};
+		const prefsOnScopeChange = (scope) => {
+			const snap = prefsSnapshotOf(scope);
+			if (snap === null) return;
+			if ((snap.status === "unavailable" || snap.status === "loading") && prefsScopeKind === "configForms") {
+				const ready = prefsFindReadyForm();
+				if (ready !== null && ready.ns !== prefsScopeNs) {
+					dbg("re-selecting settings entry", prefsScopeNs, "->", ready.ns);
+					prefsReleaseSubscription();
+					prefsScope = null;
+					prefsScopeKind = null;
+					prefsScopeNs = null;
+					prefsBindScope(ready);
+					store.notify();
+					return;
+				}
+			}
+			if (snap.status !== "ready" && snap.status !== "unavailable" && snap.status !== "loading") return;
+			if (snap.status === "ready" && snap.value !== void 0) store.adopt(snap.value);
+			store.flush();
+			store.migrate(snap.value);
+			store.flush();
+			store.notify();
+			if (snap.status === "ready" && snap.value !== void 0) store.markSettled();
+		};
+		const prefsBindScope = (acquired) => {
+			const scope = acquired.scope;
+			prefsScope = scope;
+			prefsScopeKind = acquired.kind;
+			prefsScopeNs = acquired.ns;
+			const initial = prefsSnapshotOf(scope);
+			if (initial) dbg("bound", acquired.kind, "ns=", acquired.ns, "; initial status=", initial.status, "writable=", initial.writable, "mode=", initial.mode, "valueKeys=", initial.value ? Object.keys(initial.value).length : 0);
+			if (initial && initial.status === "ready" && initial.value !== void 0) store.adopt(initial.value);
+			if (typeof scope.subscribe === "function") try {
+				const unsubscribe = scope.subscribe(() => prefsOnScopeChange(scope));
+				if (typeof unsubscribe === "function") prefsUnsubscribe = unsubscribe;
+			} catch (e) {
+				dbg("subscribe threw", e && e.message);
+			}
+			store.flush();
+			store.migrate(initial && initial.value);
+			store.flush();
+			if (initial && initial.status === "ready" && initial.value !== void 0) store.markSettled();
+			prefsStartSettleWatch(0);
+		};
+		const PREFS_SETTLE_LIMIT = 20;
+		const prefsStartSettleWatch = (attempt) => {
+			if (prefsScope === null) return;
+			if (prefsSettleTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsSettleTimer);
+			prefsSettleTimer = null;
+			const snap = prefsSnapshotOf(prefsScope);
+			if (snap !== null && snap.status === "ready") {
+				if (store.needsSettlePass()) prefsOnScopeChange(prefsScope);
+				return;
+			}
+			if (attempt >= PREFS_SETTLE_LIMIT) {
+				const finalSnap = prefsSnapshotOf(prefsScope);
+				dbg("settle watch gave up after", attempt, "attempts; preferences stay page-local. boundNs=", prefsScopeNs, "status=", finalSnap === null ? null : finalSnap.status, "mode=", finalSnap === null ? null : finalSnap.mode, "hostServes=", prefsServedNamespaces());
+				return;
+			}
+			const ready = prefsFindReadyForm();
+			if (ready !== null && ready.ns !== prefsScopeNs) {
+				dbg("settle watch re-selecting settings entry", prefsScopeNs, "->", ready.ns);
+				prefsReleaseSubscription();
+				prefsScope = null;
+				prefsScopeKind = null;
+				prefsScopeNs = null;
+				prefsBindScope(ready);
+				store.notify();
+				return;
+			}
+			if (typeof setTimeout !== "function") return;
+			prefsSettleTimer = setTimeout(() => prefsStartSettleWatch(attempt + 1), 500);
+		};
+		const prefsReportBoot = () => {
+			const snap = prefsSnapshotOf(prefsScope);
+			if (snap !== null && snap.status === "ready" && (snap.mode === void 0 || snap.mode === "host") && snap.writable === true && store.pendingFields().length === 0) return;
+			dbg("boot report (preferences did NOT reach a durable section):", "boundNs=", prefsScopeNs, "kind=", prefsScopeKind, "status=", snap === null ? null : snap.status, "mode=", snap === null ? null : snap.mode, "writable=", snap === null ? null : snap.writable, "valueKeys=", snap && snap.value ? Object.keys(snap.value).length : 0, "settled=", store.settled(), "dirty=", store.pendingFields(), "panelMounted=", store.panelMounted(), "hostServes=", prefsServedNamespaces(), "candidates=", PREFS_ENTRY_CANDIDATES);
+		};
+		let prefsBootReportTimer = null;
+		if (typeof setTimeout === "function") prefsBootReportTimer = setTimeout(prefsReportBoot, 10500);
+		const rebindPrefs = (attempt) => {
+			if (prefsScope !== null) return;
+			if (attempt > 40) {
+				dbg("gave up binding a settings transport after retries; staying in-memory", "hostServes=", prefsServedNamespaces());
+				return;
+			}
+			let acquired = null;
+			try {
+				acquired = acquirePrefsScope();
+			} catch (e) {
+				dbg("acquisition threw", e && e.message);
+				acquired = null;
+			}
+			if (acquired === null) {
+				if (typeof setTimeout === "function") {
+					if (attempt % 8 === 0) dbg("waiting for a settings transport (attempt", attempt, ")");
+					prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250);
+				}
+				return;
+			}
+			try {
+				prefsBindScope(acquired);
+			} catch (e) {
+				prefsScope = null;
+				prefsScopeKind = null;
+				prefsScopeNs = null;
+				dbg("bind failed", e && e.message);
+				if (typeof setTimeout === "function") prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250);
+			}
+		};
+		const dispose = () => {
+			prefsReleaseSubscription();
+			prefsScope = null;
+			prefsScopeKind = null;
+			prefsScopeNs = null;
+			if (prefsBindTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBindTimer);
+			prefsBindTimer = null;
+			if (prefsSettleTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsSettleTimer);
+			prefsSettleTimer = null;
+			if (prefsBootReportTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBootReportTimer);
+			prefsBootReportTimer = null;
+		};
+		const port = {
+			snapshot: () => prefsSnapshotOf(prefsScope),
+			bound: () => prefsScope !== null,
+			binding: () => ({
+				kind: prefsScopeKind,
+				ns: prefsScopeNs
+			}),
+			canWrite: () => prefsScope !== null && typeof prefsScope.set === "function",
+			write: (field, value) => {
+				const scope = prefsScope;
+				if (!scope || typeof scope.set !== "function") return false;
+				return scope.set(field, String(value));
+			},
+			served: () => prefsServedNamespaces(),
+			dispose
+		};
+		store.bindTransport(port);
+		rebindPrefs(0);
+		return { dispose };
+	}
+
 // src/client/index.js
 /**
 	* dsh-theme-endfield — Edge Intelligence Theme (browser client bundle)
@@ -252,437 +818,23 @@
 					if (el.parentNode) el.parentNode.removeChild(el);
 				};
 			}
-			function createPrefsStore(services) {
-				const prefsListeners = [];
-				const prefsLocal = Object.assign({}, PREFS_FIELD_DEFAULTS);
-				const prefsLocalEdited = /* @__PURE__ */ new Set();
-				const prefsDirty = /* @__PURE__ */ new Set();
-				const prefsEdited = /* @__PURE__ */ new Set();
-				let prefsFieldValue = null;
-				let prefsScope = null;
-				let prefsScopeKind = null;
-				let prefsScopeNs = null;
-				let prefsUnsubscribe = null;
-				let prefsBindTimer = null;
-				let prefsRetryTimer = null;
-				let prefsSettleTimer = null;
-				const PREFS_RETRY_LIMIT = 20;
-				let prefsRetryCount = 0;
-				let prefsReplayBusy = false;
-				let reconciler = null;
-				let prefsSettledOnce = false;
-				let settledHook = null;
-				let panelMounted = false;
-				const PREFS_ENTRY_CANDIDATES = [
-					PREFS_ENTRY,
-					"include:" + PREFS_ENTRY,
-					PREFS_NS,
-					"include:" + PREFS_NS
-				];
-				const getConfigForms = () => {
-					return services.configForms();
-				};
-				const prefsServedNamespaces = () => {
-					try {
-						const forms = getConfigForms();
-						if (forms === void 0 || typeof forms.describe !== "function") return null;
-						const mirrored = forms.describe().getSnapshot();
-						const view = mirrored && mirrored.view;
-						if (!view || !Array.isArray(view.namespaces)) return null;
-						return view.namespaces.map((row) => row && row.ns);
-					} catch (e) {
-						return null;
-					}
-				};
-				const prefsSnapshotOf = (scope) => {
-					if (!scope || typeof scope.getSnapshot !== "function") return null;
-					try {
-						return scope.getSnapshot();
-					} catch (e) {
-						return null;
-					}
-				};
-				const prefsFindReadyForm = () => {
-					const forms = getConfigForms();
-					if (forms === void 0) return null;
-					for (const ns of PREFS_ENTRY_CANDIDATES) {
-						let form = null;
-						try {
-							form = forms.get(ns);
-						} catch (e) {
-							form = null;
-						}
-						if (!form || typeof form.getSnapshot !== "function") continue;
-						const snap = prefsSnapshotOf(form);
-						if (snap !== null && snap.status === "ready") return {
-							scope: form,
-							kind: "configForms",
-							ns
-						};
-					}
-					return null;
-				};
-				const acquirePrefsScope = () => {
-					const ready = prefsFindReadyForm();
-					if (ready !== null) return ready;
-					const forms = getConfigForms();
-					if (forms !== void 0) for (const ns of PREFS_ENTRY_CANDIDATES) {
-						let form = null;
-						try {
-							form = forms.get(ns);
-						} catch (e) {
-							form = null;
-						}
-						if (form && typeof form.getSnapshot === "function") return {
-							scope: form,
-							kind: "configForms",
-							ns
-						};
-					}
-					return null;
-				};
-				let prefsOverlayCache = null;
-				const prefsGetValue = () => {
-					const base = prefsFieldValue || PREFS_FIELD_DEFAULTS;
-					if (prefsLocalEdited.size === 0) return base;
-					if (prefsOverlayCache !== null && prefsOverlayCache.base === base) return prefsOverlayCache.out;
-					const out = Object.assign({}, base);
-					for (const field of prefsLocalEdited) out[field] = prefsLocal[field];
-					prefsOverlayCache = {
-						base,
-						out
-					};
-					return out;
-				};
-				/** read one field as its raw stored string: <stored-or-default>, never null. */
-				const prefsGet = (rawKey) => {
-					const field = prefsFieldOf(rawKey);
-					const sec = prefsGetValue();
-					if (sec && Object.prototype.hasOwnProperty.call(sec, field)) return String(sec[field]);
-					return PREFS_FIELD_DEFAULTS[field];
-				};
-				/** subscribe to any change of the whole namespace (transport or local). */
-				const prefsSubscribe = (listener) => {
-					prefsListeners.push(listener);
-					return () => {
-						const i = prefsListeners.indexOf(listener);
-						if (i >= 0) prefsListeners.splice(i, 1);
-					};
-				};
-				const prefsEmit = () => {
-					for (const l of prefsListeners.slice()) try {
-						l();
-					} catch (e) {}
-					if (reconciler) try {
-						reconciler();
-					} catch (e) {}
-				};
-				const prefsMarkSettled = () => {
-					if (prefsSettledOnce) return;
-					prefsSettledOnce = true;
-					if (settledHook) try {
-						settledHook();
-					} catch (e) {}
-				};
-				const dbg = (...a) => {
-					try {
-						if (typeof console !== "undefined" && console.warn) console.warn("[dsh-theme-endfield:prefs]", ...a);
-					} catch (e) {}
-				};
-				const prefsSnap = () => {
-					const scope = prefsScope;
-					if (!scope) return null;
-					try {
-						return scope.getSnapshot();
-					} catch (e) {
-						return null;
-					}
-				};
-				const prefsDurablyServed = (snap) => !!snap && (snap.mode === void 0 || snap.mode === "host") && snap.status === "ready" && !!snap.writable;
-				const prefsWriteField = (field, value) => {
-					const scope = prefsScope;
-					if (!scope || typeof scope.set !== "function") return false;
-					let result = null;
-					try {
-						result = scope.set(field, String(value));
-					} catch (e) {
-						dbg("set threw", field, e && e.message);
-						prefsDirty.add(field);
-						return false;
-					}
-					if (result && typeof result.then === "function") result.then((ok) => {
-						if (ok === false) {
-							dbg("set REFUSED by the host", field, value);
-							prefsDirty.add(field);
-							prefsScheduleRetry();
-						} else prefsDirty.delete(field);
-					}, (e) => {
-						dbg("set REJECTED", field, value, String(e && e.message || e));
-						prefsDirty.add(field);
-					});
-					else prefsDirty.delete(field);
-					return true;
-				};
-				const prefsReplayDirty = () => {
-					if (prefsReplayBusy) return;
-					if (prefsDirty.size === 0) return;
-					prefsReplayBusy = true;
-					try {
-						const snap = prefsSnap();
-						const durable = prefsDurablyServed(snap);
-						for (const field of Array.from(prefsDirty)) {
-							const local = prefsLocal[field];
-							if (local === (snap && snap.value ? Object.prototype.hasOwnProperty.call(snap.value, field) ? String(snap.value[field]) : void 0 : void 0) && !prefsEdited.has(field)) {
-								prefsDirty.delete(field);
-								continue;
-							}
-							if (!durable) continue;
-							if (prefsWriteField(field, local)) {
-								dbg("replayed held", field, "=", local);
-								prefsDirty.delete(field);
-							}
-						}
-					} finally {
-						prefsReplayBusy = false;
-					}
-				};
-				const prefsStopRetry = () => {
-					if (prefsRetryTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsRetryTimer);
-					prefsRetryTimer = null;
-					prefsRetryCount = 0;
-				};
-				const prefsScheduleRetry = () => {
-					if (prefsDirty.size === 0) {
-						prefsStopRetry();
-						return;
-					}
-					if (prefsDurablyServed(prefsSnap())) {
-						prefsStopRetry();
-						return;
-					}
-					if (prefsRetryTimer !== null) return;
-					if (typeof setTimeout !== "function") return;
-					prefsRetryCount = 0;
-					const tick = () => {
-						prefsRetryTimer = null;
-						prefsRetryCount += 1;
-						if (prefsRetryCount > PREFS_RETRY_LIMIT) {
-							prefsStopRetry();
-							return;
-						}
-						if (prefsDirty.size === 0) {
-							prefsStopRetry();
-							return;
-						}
-						if (prefsDurablyServed(prefsSnap())) {
-							prefsStopRetry();
-							return;
-						}
-						prefsReplayDirty();
-						if (prefsDirty.size > 0) prefsRetryTimer = setTimeout(tick, 500);
-						else prefsStopRetry();
-					};
-					prefsRetryTimer = setTimeout(tick, 500);
-				};
-				const prefsCommit = (field, encoded) => {
-					const scope = prefsScope;
-					if (scope) {
-						const snap = prefsSnapshotOf(scope);
-						if (prefsDurablyServed(snap)) {
-							dbg("commit", field, "=", encoded, "via", prefsScopeKind, prefsScopeNs, "status=", snap.status, "mode=", snap.mode);
-							prefsWriteField(field, encoded);
-							return true;
-						}
-						dbg("held (namespace not durably served yet)", field, "=", encoded, "snap=", snap === null ? null : {
-							status: snap.status,
-							writable: snap.writable,
-							mode: snap.mode
-						}, "hostServes=", prefsServedNamespaces());
-					} else dbg("commit with NO settings transport bound (page-local only)", field, encoded, "hostServes=", prefsServedNamespaces());
-					prefsDirty.add(field);
-					prefsScheduleRetry();
-					return false;
-				};
-				/** write one field with the exact stored-string value the UI derives. */
-				const prefsSet = (rawKey, encoded) => {
-					const field = prefsFieldOf(rawKey);
-					prefsLocal[field] = String(encoded);
-					prefsLocalEdited.add(field);
-					prefsEdited.add(field);
-					prefsOverlayCache = null;
-					prefsCommit(field, prefsLocal[field]);
-				};
-				const prefsResolveSection = (section) => {
-					const out = Object.assign({}, PREFS_FIELD_DEFAULTS);
-					if (section === null || typeof section !== "object") return out;
-					for (const field of Object.keys(PREFS_FIELD_DEFAULTS)) if (Object.prototype.hasOwnProperty.call(section, field)) out[field] = String(section[field]);
-					return out;
-				};
-				const prefsMigrateLegacy = createLegacyMigrator({
-					commit: (field, value) => prefsSet(field, value),
-					debug: (...a) => dbg(...a)
-				}).migrate;
-				const prefsReleaseSubscription = () => {
-					if (typeof prefsUnsubscribe === "function") try {
-						prefsUnsubscribe();
-					} catch (e) {}
-					prefsUnsubscribe = null;
-				};
-				const prefsOnScopeChange = (scope) => {
-					const snap = prefsSnapshotOf(scope);
-					if (snap === null) return;
-					if ((snap.status === "unavailable" || snap.status === "loading") && prefsScopeKind === "configForms") {
-						const ready = prefsFindReadyForm();
-						if (ready !== null && ready.ns !== prefsScopeNs) {
-							dbg("re-selecting settings entry", prefsScopeNs, "->", ready.ns);
-							prefsReleaseSubscription();
-							prefsScope = null;
-							prefsScopeKind = null;
-							prefsScopeNs = null;
-							prefsBindScope(ready);
-							prefsEmit();
-							return;
-						}
-					}
-					if (snap.status !== "ready" && snap.status !== "unavailable" && snap.status !== "loading") return;
-					if (snap.status === "ready" && snap.value !== void 0) prefsFieldValue = prefsResolveSection(snap.value);
-					prefsReplayDirty();
-					prefsMigrateLegacy(snap.value);
-					prefsReplayDirty();
-					prefsEmit();
-					if (snap.status === "ready" && snap.value !== void 0) prefsMarkSettled();
-				};
-				const prefsBindScope = (acquired) => {
-					const scope = acquired.scope;
-					prefsScope = scope;
-					prefsScopeKind = acquired.kind;
-					prefsScopeNs = acquired.ns;
-					const initial = prefsSnapshotOf(scope);
-					if (initial) dbg("bound", acquired.kind, "ns=", acquired.ns, "; initial status=", initial.status, "writable=", initial.writable, "mode=", initial.mode, "valueKeys=", initial.value ? Object.keys(initial.value).length : 0);
-					if (initial && initial.status === "ready" && initial.value !== void 0) prefsFieldValue = prefsResolveSection(initial.value);
-					if (typeof scope.subscribe === "function") try {
-						const unsubscribe = scope.subscribe(() => prefsOnScopeChange(scope));
-						if (typeof unsubscribe === "function") prefsUnsubscribe = unsubscribe;
-					} catch (e) {
-						dbg("subscribe threw", e && e.message);
-					}
-					prefsReplayDirty();
-					prefsMigrateLegacy(initial && initial.value);
-					prefsReplayDirty();
-					if (initial && initial.status === "ready" && initial.value !== void 0) prefsMarkSettled();
-					prefsStartSettleWatch(0);
-				};
-				const PREFS_SETTLE_LIMIT = 20;
-				const prefsStartSettleWatch = (attempt) => {
-					if (prefsScope === null) return;
-					if (prefsSettleTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsSettleTimer);
-					prefsSettleTimer = null;
-					const snap = prefsSnapshotOf(prefsScope);
-					if (snap !== null && snap.status === "ready") {
-						if (prefsFieldValue === null || prefsDirty.size > 0) prefsOnScopeChange(prefsScope);
-						return;
-					}
-					if (attempt >= PREFS_SETTLE_LIMIT) {
-						const finalSnap = prefsSnapshotOf(prefsScope);
-						dbg("settle watch gave up after", attempt, "attempts; preferences stay page-local. boundNs=", prefsScopeNs, "status=", finalSnap === null ? null : finalSnap.status, "mode=", finalSnap === null ? null : finalSnap.mode, "hostServes=", prefsServedNamespaces());
-						return;
-					}
-					const ready = prefsFindReadyForm();
-					if (ready !== null && ready.ns !== prefsScopeNs) {
-						dbg("settle watch re-selecting settings entry", prefsScopeNs, "->", ready.ns);
-						prefsReleaseSubscription();
-						prefsScope = null;
-						prefsScopeKind = null;
-						prefsScopeNs = null;
-						prefsBindScope(ready);
-						prefsEmit();
-						return;
-					}
-					if (typeof setTimeout !== "function") return;
-					prefsSettleTimer = setTimeout(() => prefsStartSettleWatch(attempt + 1), 500);
-				};
-				const prefsReportBoot = () => {
-					const snap = prefsSnapshotOf(prefsScope);
-					if (snap !== null && snap.status === "ready" && (snap.mode === void 0 || snap.mode === "host") && snap.writable === true && prefsDirty.size === 0) return;
-					dbg("boot report (preferences did NOT reach a durable section):", "boundNs=", prefsScopeNs, "kind=", prefsScopeKind, "status=", snap === null ? null : snap.status, "mode=", snap === null ? null : snap.mode, "writable=", snap === null ? null : snap.writable, "valueKeys=", snap && snap.value ? Object.keys(snap.value).length : 0, "settled=", prefsSettledOnce, "dirty=", Array.from(prefsDirty), "panelMounted=", panelMounted, "hostServes=", prefsServedNamespaces(), "candidates=", PREFS_ENTRY_CANDIDATES);
-				};
-				let prefsBootReportTimer = null;
-				if (typeof setTimeout === "function") prefsBootReportTimer = setTimeout(prefsReportBoot, 10500);
-				const rebindPrefs = (attempt) => {
-					if (prefsScope !== null) return;
-					if (attempt > 40) {
-						dbg("gave up binding a settings transport after retries; staying in-memory", "hostServes=", prefsServedNamespaces());
-						return;
-					}
-					let acquired = null;
-					try {
-						acquired = acquirePrefsScope();
-					} catch (e) {
-						dbg("acquisition threw", e && e.message);
-						acquired = null;
-					}
-					if (acquired === null) {
-						if (typeof setTimeout === "function") {
-							if (attempt % 8 === 0) dbg("waiting for a settings transport (attempt", attempt, ")");
-							prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250);
-						}
-						return;
-					}
-					try {
-						prefsBindScope(acquired);
-					} catch (e) {
-						prefsScope = null;
-						prefsScopeKind = null;
-						prefsScopeNs = null;
-						dbg("bind failed", e && e.message);
-						if (typeof setTimeout === "function") prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250);
-					}
-				};
-				rebindPrefs(0);
-				const dispose = () => {
-					prefsListeners.length = 0;
-					prefsReleaseSubscription();
-					prefsScope = null;
-					prefsScopeKind = null;
-					prefsScopeNs = null;
-					prefsFieldValue = null;
-					settledHook = null;
-					if (prefsBindTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBindTimer);
-					prefsBindTimer = null;
-					if (prefsRetryTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsRetryTimer);
-					prefsRetryTimer = null;
-					if (prefsSettleTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsSettleTimer);
-					prefsSettleTimer = null;
-					if (prefsBootReportTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBootReportTimer);
-					prefsBootReportTimer = null;
-				};
-				return {
-					get: prefsGet,
-					set: prefsSet,
-					commit: prefsCommit,
-					listen: prefsSubscribe,
-					wasEdited: (field) => prefsEdited.has(field),
-					ready: () => prefsSettledOnce,
-					setReconciler: (fn) => {
-						reconciler = fn;
-					},
-					onSettled: (fn) => {
-						settledHook = fn;
-					},
-					markPanelMounted: () => {
-						panelMounted = true;
-					},
-					markSettled: prefsMarkSettled,
-					dispose
-				};
-			}
 			function apply(ctx) {
 				if (typeof window !== "undefined" && window.__dshThemeEndfieldApplied) return;
 				const services = createServices(ctx);
 				const theme = services.theme();
 				if (theme === void 0) return;
 				if (typeof window !== "undefined") window.__dshThemeEndfieldApplied = true;
-				const prefs = createPrefsStore(services);
+				const dbg = (...a) => {
+					try {
+						if (typeof console !== "undefined" && console.warn) console.warn("[dsh-theme-endfield:prefs]", ...a);
+					} catch (e) {}
+				};
+				const prefs = createPrefsStore({ debug: (...a) => dbg(...a) });
+				createPrefsTransport({
+					services,
+					debug: (...a) => dbg(...a),
+					store: prefs
+				});
 				services.effect(() => () => prefs.dispose());
 				const AUDIO_ENABLED_KEY = "audioEnabled";
 				const AUDIO_BOOT_KEY = "audioBoot";
