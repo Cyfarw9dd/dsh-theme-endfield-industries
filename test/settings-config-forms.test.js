@@ -664,7 +664,7 @@ async function main() {
      ======================================================================= */
   {
     const stub = configFormsStub(
-      { 'theme-endfield': { palette: 'wuling', radius: 'round', thunder: '1' } },
+      { 'theme-endfield': { palette: 'wuling', radius: 'round' } },
       { served: [], loading: ['theme-endfield'] },
     )
     const client = bootClient({ configForms: stub.service })
@@ -688,7 +688,9 @@ async function main() {
     // bug ("the panel's state never moved off its boot defaults") and it cannot
     // be confused by anything in the render helper.
     const hooks = client.hooks()
-    const paletteSlot = hooks[6] // 0-indexed: the 7th useState is `palette` (enabled, wmOn, wmPersist, loader, thunder, thunderAnim, palette)
+    /* 0-indexed: the 5th useState is `palette` (enabled, wmOn, wmPersist, loader, palette).
+       Keep this list in step with the panel's useState order in src/client/index.js. */
+    const paletteSlot = hooks[4]
     if (paletteSlot === 'wuling') {
       pass('panel hook state adopted the served palette (slot moved off its default)')
     } else {

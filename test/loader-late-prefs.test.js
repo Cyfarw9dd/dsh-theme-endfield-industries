@@ -10,7 +10,7 @@
  * schema default '0' ("default off"). The plate therefore never started, and the
  * preference reconciler deliberately refuses to replay the boot loader, so the
  * user's stored loader:"1" was read but never acted on. Every other prefs-driven
- * surface recovers on the later ready transition (mount/syncThunder
+ * surface recovers on the later ready transition (mount/syncNotifications
  * all re-derive there); the loader was the only one whose boot read could not.
  *
  * The existing loader tests all miss this because the fixture scope answers
@@ -114,7 +114,7 @@ async function run(label, spec) {
   const ok = (s) => console.log('ok    ' + s)
   const fail = (s) => { console.error('FAIL  ' + s); failures++ }
 
-  const BASE = { enabled: '1', watermark: '0', thunder: '0' }
+  const BASE = { enabled: '1', watermark: '0' }
 
   /* A — the reported bug: the section settles late and carries loader:"1". */
   const a = await run('a', { initial: Object.assign({}, BASE, { loader: '1' }), readyDelayMs: 250 })

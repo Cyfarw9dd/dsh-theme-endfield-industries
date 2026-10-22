@@ -29,8 +29,6 @@ export const PREFS_FIELD_DEFAULTS = {
   watermark: '1',
   watermarkPersist: '0',
   loader: '0',
-  thunder: '0',
-  thunderAnim: '0',
   /* 通知模块：主开关 + 三触发（默认随主开关开启）。 */
   notify: '1',
   notifyDone: '1',
@@ -76,8 +74,8 @@ export const prefsFieldFromKey = (rawKey) => {
    THEY ARE NOT THE SAME STRING for any compound field, and deriving one
    from the other by stripping the namespace prefix — the old
    `k.slice(PREFS_NS.length + 1)` — is the bug this table exists to kill: it
-   turned 'dsh-theme-endfield-thunder-anim' into 'thunder-anim', while the
-   schema declares 'thunderAnim'. Two fields were affected (thunderAnim,
+   turned 'dsh-theme-endfield-watermark-persist' into 'watermark-persist',
+   while the schema declares 'watermarkPersist'. Two fields were affected (that
    watermarkPersist): the write landed on an UNDECLARED key, schemastery
    kept it (it validates declared fields and passes extras through) but the
    declared field stayed at its default, so the switch worked for the page
@@ -95,8 +93,6 @@ export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-watermark': 'watermark',
   'dsh-theme-endfield-watermark-persist': 'watermarkPersist',
   'dsh-theme-endfield-loader': 'loader',
-  'dsh-theme-endfield-thunder': 'thunder',
-  'dsh-theme-endfield-thunder-anim': 'thunderAnim',
   'dsh-theme-endfield-notify': 'notify',
   'dsh-theme-endfield-notify-done': 'notifyDone',
   'dsh-theme-endfield-notify-question': 'notifyQuestion',
@@ -119,7 +115,7 @@ export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-audio-diag': 'audioDiag',
 }
 /* The pre-migration spelling of a compound field, for the sections that the
-   buggy build already wrote: 'thunderAnim' -> 'thunder-anim'. Derived from
+   buggy build already wrote: 'watermarkPersist' -> 'watermark-persist'. Derived from
    the table (not from the schema, which cannot know it) so the two can never
    drift, and only for fields that really do have a distinct legacy double:
    every single-word field maps to itself and is skipped. */

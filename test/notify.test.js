@@ -36,7 +36,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
 <script src="./client.js"></script>
 <script>
   ${BROWSER_SETTINGS_SCOPE_SNIPPET}
-  var __prefs=__endfieldSettingsScope({ enabled:'1', notify:'1', notifyDone:'1', notifyQuestion:'1', notifyApprove:'1', watermark:'0', loader:'0', thunder:'0', audioEnabled:'0' })
+  var __prefs=__endfieldSettingsScope({ enabled:'1', notify:'1', notifyDone:'1', notifyQuestion:'1', notifyApprove:'1', watermark:'0', loader:'0', audioEnabled:'0' })
   /* Fake sessions service so the DONE trigger runs through its REAL path: the
      theme binds to the current session and fires on ConversationSnapshot.running
      EDGES, exactly as it does against the live runtime. */

@@ -14,7 +14,6 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 
 同理**不要再给测试挂 `Chrome --dump-dom` / `--virtual-time-budget`**：那条通道的等待语义是「页面空闲」，既不能表达显式条件，又会在部分 Linux/Chrome 组合上直接超时（12 个测试曾因此在 CI 之外全红）；统一用 `until(条件)` 等真正的状态，写完结果再 `evaluate`/`screenshot` 取走。
 
-> **运行环境。** 带「真实浏览器」字样的脚本会 spawn 本机 Chrome 做无头渲染，需要本机安装 Chrome。以下脚本是**纯进程内**的，任何环境都能跑：`check.js`、`selftest.js`、`palette-contrast`、`settings-rows`、`settings-locale`、`thunder-edges`。
 
 ---
 
@@ -157,7 +156,6 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 
 **`settings-rows.test.js`** 不用浏览器也不用 React：以**记录型 `React` / `slots` + 假的设置 transport**（`test/fixtures/settings-scope.js`）在进程内跑一次真实 `apply()`，抓下设置面板真正的元素树。设置页是用户唯一能碰到这些开关的入口，而那里的错误（抛异常、漏 key、开关写错了 DSH 设置的字段）check.js 与画布测试都看不见。
 
-> 说明：这个插件从 **`localStorage` 迁移到了 DSH 的持久化设置服务**（见 features.md / engineering-notes.md）。因此设置类测试不再往浏览器存储里塞值，而是驱动假的 transport：所有用例走 `ctx.configForms`（fixture 的 `configFormsStub` / 便捷封装 `formStub`，命名空间 = profile entry id；旧世代 `settingsScopeStub` 已随 0.2.0 下限移除）。断言 27 行齐全且归入 5 个分组容器、key 唯一、分组标题（01 主题 / 02 背景 / 03 动画 / 04 娱乐 / 05 音频）与配色样式规则都在、配色行默认显示谷地黄且按钮提供「切换武陵青」、点击把 `palette` 写成 `wuling`、存了 `wuling` 时反向提供「切换谷地黄」并标注 `#14d0d0`、图层关闭时子开关为 disabled、开启后恢复可用，雷霆大字与大字入场动画均默认为关、说明文字包含「任务开始」/「任务完成」与 3 秒、**子开关只写自己的字段而不误写主开关的**，以及点击确实写入文档里那个 DSH 设置字段。
 
 **`settings-durable-hold.test.js`**（两代皆适用的写入 gate / 补写契约）用**两阶段假 `ctx.configForms`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 武陵青」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
 
@@ -185,7 +183,6 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 >
 > 另有一条纯命令行的等价验证（在仓库根目录跑）：`node test/settings-config-forms.test.js` —— 它 `require` 的正是真实 `index.js`，路径解析与 Host 进程完全一致，因此它能直接回答「这台机器上 `Config` 到底能不能构建出来」（拿不到 schemastery 时该断言自动跳过并打印原因）；`node test/settings-config-fallback.test.js` 进一步**不依赖本机 schemastery**，无条件断言字段契约与选择顺序。
 
-**`settings-namespace.test.js`** 守的是 issue #15：**存进命名空间的字段名必须与 Host schema 一致**。它不信任任何一侧的字面量，而是三份交叉验证——从 `src/client/prefs/keys.js` 里读出的 `PREFS_KEY_TO_FIELD`、Host `index.js` 的 `FIELD_DEFAULTS`、以及设置面板**真实渲染出来的**每个开关（点击后断言出线的字段名是声明字段，且没有任何未声明字段的写入）。六条复合字段（`contourAnim` / `contourFps` / `contourSpeed` / `contourScrollPause` / `watermarkPersist` / `thunderAnim`）逐条覆盖——**只测单字段的用例抓不到这个 bug**，因为它们新旧写法恰好同名。
 
 随后用它复现线上存档的形状（声明字段在默认值旁多出一行旧拼写键），断言这些值被搬回声明字段、且**不会**凭空给没记录过的字段写值；再断言反过来的一条：用户真的在声明字段上设过非默认值时，旧拼写的键**不得**覆盖它。
 
@@ -210,7 +207,7 @@ node test/loader-late-prefs.test.js    # 设置节晚于 apply() 到达时，动
 
 **`loader-late-prefs.test.js`** 守的是「开关明明写着开，启动动画却再也不出现」。加载屏在 `apply()` 里**同步读一次** `loader` 就决定播不播，而真实页面上设置节是**走线上拉的**：`settingsScope` 快照此刻还是 `{ status:'loading', value: undefined }`（见 `dsh-client-ui-settings` 的 `SettingsScopeSnapshot` 契约），于是这次读落到 schema 默认值 `'0'`——默认关——加载屏永远不播；而 `reconcileFromPrefs` 又**刻意不重放**启动屏（它是「每次页面加载只播一次」的片子），所以它再没有第二次机会。
 
-这正是它比别的开关更脆的地方：其余每个由偏好驱动的表面都会在稍后的 ready 转变里重新推导（`mount` / `syncContour` / `syncThunder` / 圆角 / 配色…），**只有加载屏那次读取无从恢复**。修复由存储层的**首次权威节**（`prefsMarkSettled` → `onPrefsSettled`）回调启动屏，并仍然只播一次。
+这正是它比别的开关更脆的地方：其余每个由偏好驱动的表面都会在稍后的 ready 转变里重新推导（`mount` / `syncContour` / `syncTurnWatch` / 圆角 / 配色…），**只有加载屏那次读取无从恢复**。修复由存储层的**首次权威节**（`prefsMarkSettled` → `onPrefsSettled`）回调启动屏，并仍然只播一次。
 
 测试给 `__endfieldSettingsScope(initial, { readyDelayMs })` 传延迟，让假 scope 先答 `loading` 再翻 `ready`，三个场景各起一页真实浏览器（真实 `apply()` + 真实 DOM，轮询整个片子生命周期）：
 
@@ -221,29 +218,6 @@ node test/loader-late-prefs.test.js    # 设置节晚于 apply() 到达时，动
 > 变异验证 2 类，都必须报错：删掉订阅里的首次节回调（回到原 bug，A 立刻红）、去掉 `prefsSettledOnce` 一次性护栏（运行期改动会重放，C 立刻红）。
 
 ---
-
-## 雷霆大字
-
-```bash
-node test/thunder-edges.test.js     # 边沿/生命周期/样式契约
-node test/thunder-shot.js           # 真实渲染截图 + 像素对比度断言
-node test/thunder-dismiss.test.js   # 点击关闭：真实指针事件 + 命中测试 + 监听器核账
-```
-
-**`thunder-edges.test.js`** 在进程内跑真实 `client.js`，配一个按运行时契约造形的假 `sessions` 服务和一个**可控时钟**，因此 3 秒窗口是被断言的而不是被等待的。覆盖：关闭时**不订阅**（零开销）；`false→true` 播「任务开始」、`true→false` 播「任务完成」；**同值连续推送 25 次不重复播报**；2999ms 仍在、3000ms 已隐藏；入场动画默认关闭时大字带静态标记、开启后不带，且两种状态下 3 秒时长都不变；系统「减少动态效果」压过已开启的动画开关；切进已在运行的会话不误报、但其结束仍播报；离开的会话被退订；关闭主题会移除大字并退订、重新开启会恢复；**服务迟到后仍能自动接上**；`ctx.effect` 拆除时释放全部订阅与节点。
-
-另有 14 条**样式契约**断言（固定定位、居中、`pointer-events: none`、`font-weight: 900`、`clamp()` 字号、白色字面量、层级低于加载屏、`prefers-reduced-motion`、静态分支取消动画并强制 `opacity: 1`）——这些是本机无布局引擎时看不见、却最容易被后续重构悄悄改掉的视觉事实。
-
-> 变异验证共 19 类：默认改成 opt-out、边沿退化成电平、去掉基线、时长改成 5s、两个词对调、不自动隐藏、去掉 `aria-hidden`、切换会话不退订、拆除不退订、白色换成令牌、粗体改成 400、层级盖过加载屏、服务缓存不重试、动画默认改成 opt-out、静态标记永不打 / 永远打、系统偏好不再覆盖、子开关误写主开关的键、子开关未禁用、静态分支丢掉 `opacity: 1`。
-
-**`thunder-shot.js`** 补的是结构断言看不见的那一半：**像素**。它在真实浏览器里跑真实 `client.js`，通过主题自己的订阅路径触发播报，输出亮 / 暗 × 开始 / 完成共四张截图，然后解码 PNG 并断言：中央带的近白像素占比（字形确实出现）、压暗底确实压暗（亮色）或仍为近黑（暗色）、以及白字对压暗后表面的**合成对比度 ≥ 3**。
-
-**`thunder-dismiss.test.js`** 守「点击任意处立即关闭」——这条只能在真实浏览器里验，因为它本质是个**命中测试**问题。18 条断言覆盖：大字在屏幕上时空白处与被覆盖按钮的顶层元素**仍是页面自己的元素**；点空白处大字立即消失且**这一次点击照常抵达**；点真实按钮则**既关掉大字又触发按钮**；控件调 `stopPropagation` 时仍能关闭（捕获阶段）而该控件自己的处理器照常收到事件；关闭后再点不报错、大字不复活；提前关闭会取消 3 秒定时器；以及**监听器收支平衡**——显示中恰好持有 1 个，关闭后归零。
-
-> 变异验证 6 种写错的实现：不挂监听、**挂在遮罩上（点击黑洞）**、不摘监听、不取消定时器、用冒泡阶段、用 `click` 代替 `pointerdown`。
-
----
-
 
 ## 字体作用域
 

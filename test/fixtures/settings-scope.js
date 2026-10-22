@@ -22,11 +22,11 @@
  * THE SECTION IS KEYED BY SCHEMA FIELD NAME, NOT BY UI KEY. This is the whole
  * point of these tests and it is worth stating explicitly, because getting it
  * wrong here hides the bug that shipped: the host declares camelCase fields
- * (`thunderAnim`, `watermarkPersist`, …) in index.js FIELD_DEFAULTS, so a scope.set
+ * (`watermarkPersist`, `watermarkPersist`, …) in index.js FIELD_DEFAULTS, so a scope.set
  * or form.set can only ever store those names. An earlier version of this
  * fixture stripped the `dsh-theme-endfield-` prefix off the UI key instead —
- * the same wrong mapping the client had — so `setField('thunder-anim', …)` and
- * the client's `prefsGet('dsh-theme-endfield-thunder-anim')` agreed on a name
+ * the same wrong mapping the client had — so `setField('watermark-persist', …)` and
+ * the client's `prefsGet('dsh-theme-endfield-watermark-persist')` agreed on a name
  * that does not exist in the schema, both sides passed, and every compound
  * switch silently reset on reload. KEY_TO_FIELD below is the fixture's copy of
  * that mapping and must stay in step with client.js PREFS_KEY_TO_FIELD.
@@ -57,8 +57,6 @@ const FIELD_DEFAULTS = {
   watermark: '1',
   watermarkPersist: '0',
   loader: '0',
-  thunder: '0',
-  thunderAnim: '0',
   notify: '1',
   notifyDone: '1',
   notifyQuestion: '1',
@@ -92,8 +90,6 @@ const KEY_TO_FIELD = {
   'dsh-theme-endfield-watermark': 'watermark',
   'dsh-theme-endfield-watermark-persist': 'watermarkPersist',
   'dsh-theme-endfield-loader': 'loader',
-  'dsh-theme-endfield-thunder': 'thunder',
-  'dsh-theme-endfield-thunder-anim': 'thunderAnim',
   'dsh-theme-endfield-notify': 'notify',
   'dsh-theme-endfield-notify-done': 'notifyDone',
   'dsh-theme-endfield-notify-question': 'notifyQuestion',
@@ -113,12 +109,12 @@ const KEY_TO_FIELD = {
   'dsh-theme-endfield-audio-diag': 'audioDiag',
 }
 
-/** Accept a UI key ('dsh-theme-endfield-thunder-anim'), a bare schema field
- *  ('thunderAnim'), or a namespaced schema field ('dsh-theme-endfield-thunderAnim'
+/** Accept a UI key ('dsh-theme-endfield-watermark-persist'), a bare schema field
+ *  ('watermarkPersist'), or a namespaced schema field ('dsh-theme-endfield-watermarkPersist'
  *  — the spelling the upstream tests seed with, written against the older fixture
  *  that stripped the prefix instead of mapping it). All three name a DECLARED
  *  field. Anything else — in particular the legacy pre-migration spelling
- *  'thunder-anim' — is handed back unchanged, exactly as a scope.set of an
+ *  'watermark-persist' — is handed back unchanged, exactly as a scope.set of an
  *  undeclared field behaves in production: stored, but never read as a declared
  *  field. Resolving that legacy tail here would hide the very bug these tests
  *  exist to catch, so a test that needs it must build the section through
@@ -159,7 +155,7 @@ function formStub(initial = {}, options = {}) {
     setField: (key, value) => { section[fieldName(key)] = String(value); backing.touch(NS) },
     /** Write a section key VERBATIM — no key->field mapping. This is how a test
      *  reproduces a document a buggy build wrote (e.g. the undeclared
-     *  'thunder-anim' next to a defaulted 'thunderAnim'). */
+     *  'watermark-persist' next to a defaulted 'watermarkPersist'). */
     setSection: (key, value) => { section[key] = String(value); backing.touch(NS) },
     getSnapshot: () => backing.service.get(NS).getSnapshot(),
     reset() { for (const k of Object.keys(FIELD_DEFAULTS)) section[k] = FIELD_DEFAULTS[k]; backing.touch(NS) },

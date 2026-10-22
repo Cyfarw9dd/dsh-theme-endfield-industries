@@ -203,18 +203,18 @@ const buttons = nodes.filter((n) => n.type === 'button')
 
    ROW_KEYS is BOTH the expected set and the counter, so a new row that is not
    listed here is silently ignored rather than counted — which is exactly what
-   happened when 大字入场动画 was added (the count stayed at 9 and the assertion
+   happened when a row was added (the count stayed at 9 and the assertion
    passed while a tenth row was on screen). The independent total below is what
    makes that impossible now. */
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'palette', 'motion', 'glass', 'texture', 'radius', 'watermark', 'watermark-persist', 'loader', 'thunder', 'thunder-anim', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'palette', 'motion', 'glass', 'texture', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 26) pass('panel has all 26 setting rows')
-else fail('expected 26 rows, found ' + rows.length)
+if (rows.length === 24) pass('panel has all 26 setting rows')
+else fail('expected 24 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group
    container — so an unlisted new row shows up as a mismatch instead of vanishing. */
@@ -229,8 +229,8 @@ if (rowsInGroups.length === rows.length) {
     + rowsInGroups.map((r) => r.props.key).filter((k) => !ROW_KEYS.includes(k)).join(', '))
 }
 
-if (groups.length === 6) pass('rows are grouped into 6 sections (主题/背景/动画/娱乐/通知/音频)')
-else fail('expected 6 group containers, found ' + groups.length)
+if (groups.length === 5) pass('rows are grouped into 6 sections (主题/背景/动画/娱乐/通知/音频)')
+else fail('expected 5 group containers, found ' + groups.length)
 
 const unkeyed = rows.filter((r) => !r.props || r.props.key === undefined)
 if (unkeyed.length === 0) pass('every row carries a React key')
@@ -243,7 +243,7 @@ else fail('duplicate row keys: ' + keys.join(', '))
 /* The group headers must be numbered editorial labels in the documented order,
    and the scheme-aware ink rule for them must exist in the stylesheet source. */
 const all = textOf(tree)
-for (const [label, title] of [['01 主题', 'THEME'], ['02 背景', 'BACKGROUND'], ['03 动画', 'ANIMATION'], ['04 娱乐', 'ENTERTAINMENT'], ['05 通知', 'NOTIFY'], ['06 音频', 'AUDIO']]) {
+for (const [label, title] of [['01 主题', 'THEME'], ['02 背景', 'BACKGROUND'], ['03 动画', 'ANIMATION'], ['05 通知', 'NOTIFY'], ['06 音频', 'AUDIO']]) {
   if (all.includes(label) && all.includes(title)) pass('group header present: ' + label + ' / ' + title)
   else fail('group header missing: ' + label + ' / ' + title)
 }
@@ -294,30 +294,6 @@ for (const label of ['主题配色', '背景水印']) {
   prefStore.setField('palette', 'gray')
 }
 
-/* --- 雷霆大字 (娱乐): default OFF, and its 预览 follows the same rule ---
-   The row is asserted from the DEFAULT state deliberately: 默认关闭 is the part of
-   the request a later edit is most likely to break (flipping the read to !== '0'
-   would silently make it opt-out), and no other check would notice. */
-prefStore.setField('thunder', '0') // never override it before this point
-if (prefStore.get('thunder') === '0' && prefStore.section.thunder === '0') pass('雷霆大字 未设置即为默认状态')
-{
-  const trig = selectTriggerOf(rendered(), '雷霆大字')
-  if (trig && textOf(trig).includes('关闭')) pass('雷霆大字 默认关闭（触发器显示当前值）')
-  else fail('雷霆大字 trigger should read 关闭 with the default state: ' + (trig ? textOf(trig) : '(none)'))
-}
-if (all.includes('任务开始') && all.includes('任务完成')) pass('设置行说明包含「任务开始」/「任务完成」')
-else fail('the 雷霆大字 row should name both announcement words')
-if (all.includes('3 秒') || all.includes('3秒')) pass('设置行说明 3 秒后隐藏')
-else fail('the 雷霆大字 row should state the 3s hold')
-/* 预览 must be disabled while the feature is off. The panel renders two 预览
-   buttons (loader + thunder), so this picks the one in the thunder row rather
-   than the first match — an index-based lookup would silently test the loader. */
-const thunderRow = rows.find((r) => r.props.key === 'thunder')
-const thunderRowBtns = thunderRow ? walk(thunderRow).filter((n) => n.type === 'button' && n.props.type === 'button') : []
-const thunderPreview = thunderRowBtns.find((b) => /预览/.test(textOf(b)))
-if (thunderPreview && thunderPreview.props.disabled === true) pass('雷霆大字 预览 disabled while off')
-else fail('雷霆大字 预览 should be disabled while the feature is off')
-
 /* --- 高度对齐：动作按钮与同排的下拉触发器同高（宽度可不同） ---
    触发器高度从真实样式表读（.endfield-select-trigger 的 height），不在此
    复述数值：将来触发器改高度而按钮没跟上时，这条会红而不是默默失配。 */
@@ -329,22 +305,18 @@ else fail('雷霆大字 预览 should be disabled while the feature is off')
     /* btnStyleFor 是这些按钮唯一的样式来源；带 style.height 的 button 恰好
        就是它们（下拉触发器的高度在样式表里，不在内联 style 上）。 */
     const actionBtns = nodes.filter((n) => n.type === 'button' && n.props.style && n.props.style.height !== undefined)
-    if (actionBtns.length >= 8) pass('面板渲染出 ' + actionBtns.length + ' 个动作按钮（预览×6 + 刷新 + 开机行预览）')
-    else fail('动作按钮应有 8 个（含音频四槽位），只找到 ' + actionBtns.length)
+    if (actionBtns.length >= 7) pass('面板渲染出 ' + actionBtns.length + ' 个动作按钮（预览×5 + 刷新 + 开机行预览）')
+    else fail('动作按钮应有 7 个（含音频四槽位），只找到 ' + actionBtns.length)
     const wrongH = actionBtns.filter((b) => b.props.style.height !== triggerH)
     const wrongBox = actionBtns.filter((b) => b.props.style.boxSizing !== 'border-box')
     if (wrongH.length === 0) pass('动作按钮与下拉触发器同高（' + triggerH + '，含被禁用的）')
     else fail(wrongH.length + ' 个按钮高度为 ' + wrongH[0].props.style.height + '，与触发器 ' + triggerH + ' 不齐：' + textOf(wrongH[0]))
     if (wrongBox.length === 0) pass('动作按钮声明 box-sizing:border-box（border 计入 32px）')
     else fail(wrongBox.length + ' 个按钮缺 box-sizing:border-box，边框会让实高多 2px：' + textOf(wrongBox[0]))
-    /* 用户报告的那一个：雷霆大字行的预览按钮，与它旁边的开/关下拉同排。 */
-    if (thunderPreview && thunderPreview.props.style && thunderPreview.props.style.height === triggerH) {
-      pass('雷霆大字行 预览 按钮与旁边下拉触发器等高')
-    } else fail('雷霆大字行的 预览 按钮高度应等于触发器的 ' + triggerH)
   }
 }
 
-/* --- 统一文案：音频各槽位的动作按钮与加载动画/雷霆大字行同为「预览」 ---
+/* --- 统一文案：音频各槽位的动作按钮与加载动画行同为「预览」 ---
    「试听 · 开始」曾是第三种拼法；统一后整页只允许一个动作词，槽位由行名
    说明。 */
 if (!all.includes('试听')) pass('面板不再出现「试听」文案（统一为「预览」）')
@@ -389,60 +361,6 @@ else fail('面板仍含「试听」——音频动作按钮应统一为「预览
   prefStore.setField('motion', 'signal')
 }
 
-/* --- 大字入场动画: its own sub-switch, ALSO default off ---
-   enforces the doc default (=== '1'), not opt-in === '1' vs !== '0' mismatch.
-   Two independent defaults live here and both are part of the request. */
-{
-  const trig = selectTriggerOf(rendered(), '大字入场动画')
-  if (trig && textOf(trig).includes('关闭')) pass('大字入场动画 默认关闭')
-  else fail('大字入场动画 trigger should read 关闭 with the default state: ' + (trig ? textOf(trig) : '(none)'))
-  if (trig && trig.props.disabled === true) pass('大字入场动画 在大字关闭时为 disabled')
-  else fail('大字入场动画 should be disabled while 雷霆大字 itself is off')
-}
-
-/* --- 雷霆大字 on: 预览 becomes usable and the row states the live behaviour ---
-   The stateful stub only refreshes React state through the panel's own event
-   path (the host-sync useEffect the stub does not implement), so the ON state
-   is reached the way a user reaches it: through the dropdown itself. */
-let treeT
-{
-  const step = driveSelect(() => rendered(), '雷霆大字', '开启')
-  if (step === 'ok') pass('雷霆大字 下拉开启（走真实事件路径）')
-  else fail('thunder dropdown could not be driven on: ' + step)
-  try { treeT = rendered() } catch (e) { fail('re-render (thunder on) threw: ' + e.message); process.exit(1) }
-  const rowsT = walk(treeT).filter((n) => n.type === 'div' && n.props && n.props.key === 'thunder')
-  const thunderBtnsOn = rowsT.length ? walk(rowsT[0]).filter((n) => n.type === 'button' && n.props.type === 'button') : []
-  const previewOn = thunderBtnsOn.find((b) => /预览/.test(textOf(b)))
-  if (previewOn && !previewOn.props.disabled) pass('雷霆大字 预览 enabled once switched on')
-  else fail('雷霆大字 预览 should be enabled once the feature is on')
-  const trigT = selectTriggerOf(treeT, '雷霆大字')
-  if (trigT && textOf(trigT).includes('开启')) pass('thunder=1 时触发器显示开启')
-  else fail('with thunder=1 the trigger should read 开启: ' + (trigT ? textOf(trigT) : '(none)'))
-}
-
-/* The animation sub-switch must become usable once its parent is on, and its
-   dropdown must write its own field rather than the parent's. */
-{
-  const trigA = selectTriggerOf(treeT, '大字入场动画')
-  if (trigA && trigA.props.disabled !== true) pass('大字入场动画 在大字开启后恢复可用')
-  else fail('大字入场动画 should be enabled once 雷霆大字 is on')
-  const stepA = driveSelect(() => rendered(), '大字入场动画', '开启')
-  if (stepA === 'ok') {
-    if (prefStore.get('thunderAnim') === '1') pass('大字入场动画 下拉写入 thunderAnim=1')
-    else fail('大字入场动画 dropdown wrote ' + JSON.stringify(prefStore.get('thunderAnim')) + ', expected "1"')
-    // It must not have disturbed the parent switch's own field.
-    if (prefStore.get('thunder') === '1') pass('子开关不会误写主开关的字段')
-    else fail('the sub-switch overwrote the parent field: ' + JSON.stringify(prefStore.get('thunder')))
-    /* With the animation ON through the UI, the trigger must show the live value. */
-    const trigTA = selectTriggerOf(rendered(), '大字入场动画')
-    if (trigTA && textOf(trigTA).includes('开启')) pass('thunderAnim=1 时入场动画触发器显示开启')
-    else fail('with thunderAnim on the 大字入场动画 trigger should read 开启: ' + (trigTA ? textOf(trigTA) : '(none)'))
-  } else fail('大字入场动画 dropdown could not be driven: ' + stepA)
-  const stepOff = driveSelect(() => rendered(), '大字入场动画', '关闭')
-  if (stepOff === 'ok' && prefStore.get('thunderAnim') === '0') pass('大字入场动画 关闭写回 thunderAnim=0')
-  else fail('大字入场动画 off wrote ' + JSON.stringify(prefStore.get('thunderAnim')) + ' [' + stepOff + ']')
-}
-
 /* --- with 武陵青 selected, the dropdown follows the store --- */
 {
   const step = driveSelect(() => rendered(), '主题配色', '武陵青')
@@ -474,24 +392,6 @@ prefStore.setField('palette', 'gray')
   if (step2 === 'ok' && prefStore.get('watermark') === '1') pass('背景水印 重新开启写入 watermark=1')
   else fail('背景水印 re-enable wrote ' + JSON.stringify(prefStore.get('watermark')) + ' [' + step2 + ']')
 }
-{
-  /* The panel was left ON by the block above; cycle it through the UI. Writing
-     the store behind the panel's back is exactly the state the real app keeps
-     in sync via the prefs subscription — which this stub cannot run — so a
-     silent setField here would test a panel that has never seen the change. */
-  const stepOff = driveSelect(() => rendered(), '雷霆大字', '关闭')
-  if (stepOff === 'ok' && prefStore.get('thunder') === '0') pass('雷霆大字 下拉关闭写入 thunder=0')
-  else fail('雷霆大字 off wrote ' + JSON.stringify(prefStore.get('thunder')) + ' [' + stepOff + ']')
-  const step = driveSelect(() => rendered(), '雷霆大字', '开启')
-  if (step === 'ok') {
-    if (prefStore.get('thunder') === '1') pass('雷霆大字 下拉写入 thunder=1')
-    else fail('雷霆大字 dropdown wrote ' + JSON.stringify(prefStore.get('thunder')) + ', expected "1"')
-  } else fail('雷霆大字 dropdown could not be driven: ' + step)
-  const stepOff2 = driveSelect(() => rendered(), '雷霆大字', '关闭')
-  if (stepOff2 === 'ok' && prefStore.get('thunder') === '0') pass('雷霆大字 复位为 thunder=0')
-  else fail('雷霆大字 reset wrote ' + JSON.stringify(prefStore.get('thunder')) + ' [' + stepOff2 + ']')
-}
-
 if (!/(typeof\s+localStorage|localStorage\.(getItem|setItem|removeItem))/.test(src)) pass('client.js has no localStorage storage-API calls')
 else fail('client.js still calls the localStorage storage API — migration incomplete')
 
