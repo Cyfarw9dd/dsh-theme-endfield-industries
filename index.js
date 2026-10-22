@@ -40,8 +40,8 @@
  *
  * The browser half (client.js) reaches the same entry over the
  * `configForms.get('theme-endfield')` mirror and live-reacts to changes with
- * the form's subscription (and still falls back to the pre-0.1.7
- * `ctx.settingsScope` seam on older hosts).
+ * the form's subscription. The pre-0.1.7 `settingsScope` fallback was dropped:
+ * peerDependencies pins @deepseek-ai/dsh >=0.2.0.
  *
  * The namespace fields mirror exactly the setting keys, defaults and polarity
  * the theme has always shipped (see docs/features.md): default-ON switches
@@ -722,9 +722,9 @@ function hasVisibleText(message) {
  * Install the notification feature on one host context.
  *
  * @param ctx - host Cordis context.
- * @param settingsScope - the registered settings scope, when one exists.
+ * @param prefScope - a get()/watch() view over this plugin's resolved Config.
  */
-function installAudio(ctx, settingsScope) {
+function installAudio(ctx, prefScope) {
   const audio = new AudioRuntime(ctx);
   const terminals = new Map(); // `${sessionId}:${turn}` -> saw a text answer
   const playedDone = new Set(); // turn keys already reported, so a turn speaks once
@@ -734,11 +734,11 @@ function installAudio(ctx, settingsScope) {
       seams, which a different composition may drive instead. */
   const attentionSeen = { approval: 0, question: 0, ui: 0, uiLastAt: 0, uiLastKind: '' };
 
-  if (settingsScope !== undefined) {
+  if (prefScope !== undefined) {
     try {
-      audio.setValues(settingsScope.get());
-      settingsScope.watch(() => {
-        audio.setValues(settingsScope.get());
+      audio.setValues(prefScope.get());
+      prefScope.watch(() => {
+        audio.setValues(prefScope.get());
       });
     } catch (error) {
       audio.note('settings-unavailable', String(error && error.message ? error.message : error));
@@ -1032,13 +1032,13 @@ function apply(ctx, config) {
      behaves that way. The guard keeps the two in-apply paths from installing
      two engines on one context. */
   let audioInstalled = false;
-  const startAudio = (settingsScope) => {
+  const startAudio = () => {
     if (audioInstalled) return;
     audioInstalled = true;
     try {
       /* The legacy scope wins where a host hands one out; on 0.1.7 the live
          values are this plugin's own resolved Config (see configPrefScope). */
-      installAudio(ctx, settingsScope === undefined ? configPrefScope(ctx, config) : settingsScope);
+      installAudio(ctx, configPrefScope(ctx, config));
     } catch (error) {
       // The theme must keep working even if the notification feature cannot
       // install at all.
@@ -1082,28 +1082,11 @@ function apply(ctx, config) {
       }
     }
 
-    /* DSH <= 0.1.5-rc.2: the legacy namespace registration.
-       Those hosts persisted a plugin-declared namespace to
-       `<dshHome>/settings.yaml` and mirrored it to the browser through
-       `ctx.settingsScope`, which the client half still binds when no
-       `configForms` service exists. Feature-detected: on 0.1.7 `register` is
-       gone and this branch is simply skipped — the Config above is the
-       declaration instead. Its RETURN VALUE is also the only live preference
-       scope those hosts expose, so it is what the audio runtime reads. */
-    let scope;
-    if (typeof settings.register === 'function') {
-      const schema = buildSchema(false);
-      if (schema !== undefined) {
-        try {
-          // Registration is scoped to this plugin's fiber and disposed with the run.
-          scope = settings.register(LEGACY_NAMESPACE, schema, { applies: 'live' });
-        } catch (e) {
-          // A throw here must not kill the whole theme; leaving it unregistered
-          // just means browser prefs stay page-local on that host generation.
-        }
-      }
-    }
-    startAudio(scope);
+    /* The legacy `settings.register` namespace (DSH <= 0.1.5-rc.2, persisted to
+       <dshHome>/settings.yaml) was dropped with the >=0.2.0 floor: the exported
+       volatile Config above IS the declaration, and the audio runtime reads the
+       live values through configPrefScope (this plugin's own resolved Config). */
+    startAudio(undefined);
   });
 }
 

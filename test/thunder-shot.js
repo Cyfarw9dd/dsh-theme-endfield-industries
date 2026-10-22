@@ -82,7 +82,7 @@ const mk = (dark) => `<!doctype html><html><head><meta charset="utf-8"><style>
 <script src="./client.js"></script>
 <script>
   /* The theme's switches no longer persist through localStorage — it reads and
-     writes its own 'dsh-theme-endfield' namespace over the DSH ctx.settingsScope
+     writes its own 'theme-endfield' entry over the DSH ctx.configForms service
      service (client mirror of the host settings.namespace; persisted to the
      profile's settings.yaml), exactly like dsh-client-locale consumes settings. So
      seeding browser storage here would switch thunder on for NOTHING: the store
@@ -112,7 +112,7 @@ const mk = (dark) => `<!doctype html><html><head><meta charset="utf-8"><style>
     set: (field, encoded) => { value[field] = String(encoded); prefNotify() },
     unset: (field) => { value[field] = DEFAULTS[field]; prefNotify() },
   }
-  window.__EndfieldBinder = { bind: () => prefScope }
+  window.__EndfieldForms = { get: () => prefScope }
 
   // A sessions double shaped like the runtime contract, so the plate is produced by
   // the theme's real subscription path rather than by hand-built DOM.
@@ -128,7 +128,7 @@ const mk = (dark) => `<!doctype html><html><head><meta charset="utf-8"><style>
     get:(n)=> {
       if (n === 'theme') return { overrideTokens:()=>()=>{} }
       if (n === 'sessions') return sessions
-      if (n === 'settingsScope') return window.__EndfieldBinder
+      if (n === 'configForms') return window.__EndfieldForms
       return undefined
     },
     effect:()=>{},

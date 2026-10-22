@@ -108,7 +108,7 @@ const setScheme = (s) => {
 }
 
 /* --- apply the real theme with the master switch OFF ---
-   The theme reads preferences through the dsh settingsScope seam, so this page
+   The theme reads preferences through the dsh configForms seam, so this page
    seeds a fake binder with the same section the old localStorage lines set:
    master switch and the anim/heavy layers all OFF. */
 ${BROWSER_SETTINGS_SCOPE_SNIPPET}
@@ -124,7 +124,7 @@ const mod = window.__MOD__.factory(() => null)
 mod.apply({
   get: (n) => n === 'theme'
     ? { overrideTokens: () => () => {} }
-    : (n === 'slots' ? slots : (n === 'settingsScope' ? __prefs.binder : undefined)),
+    : (n === 'slots' ? slots : (n === 'configForms' ? __prefs.forms : undefined)),
   effect: () => {},
 })
 if (typeof rendered !== 'function') throw new Error('settings.section never registered')

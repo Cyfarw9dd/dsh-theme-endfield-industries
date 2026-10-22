@@ -153,9 +153,9 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 
 **`settings-rows.test.js`** 不用浏览器也不用 React：以**记录型 `React` / `slots` + 假的设置 transport**（`test/fixtures/settings-scope.js`）在进程内跑一次真实 `apply()`，抓下设置面板真正的元素树。设置页是用户唯一能碰到这些开关的入口，而那里的错误（抛异常、漏 key、开关写错了 DSH 设置的字段）check.js 与画布测试都看不见。
 
-> 说明：这个插件从 **`localStorage` 迁移到了 DSH 的持久化设置服务**（见 features.md / engineering-notes.md）。因此设置类测试不再往浏览器存储里塞值，而是驱动假的 transport：除 `settings-config-forms.test.js` 之外的用例走旧世代 `ctx.settingsScope`（fixture 的 `settingsScopeStub`，在内存里扮演 `<settings.yaml>` 的命名字段节），新世代由 `configFormsStub` 扮演 `ctx.configForms`（命名空间 = profile entry id）。断言 27 行齐全且归入 5 个分组容器、key 唯一、分组标题（01 主题 / 02 背景 / 03 动画 / 04 娱乐 / 05 音频）与配色样式规则都在、配色行默认显示谷地黄且按钮提供「切换武陵青」、点击把 `palette` 写成 `wuling`、存了 `wuling` 时反向提供「切换谷地黄」并标注 `#14d0d0`、图层关闭时子开关为 disabled、开启后恢复可用，雷霆大字与大字入场动画均默认为关、说明文字包含「任务开始」/「任务完成」与 3 秒、**子开关只写自己的字段而不误写主开关的**，以及点击确实写入文档里那个 DSH 设置字段。
+> 说明：这个插件从 **`localStorage` 迁移到了 DSH 的持久化设置服务**（见 features.md / engineering-notes.md）。因此设置类测试不再往浏览器存储里塞值，而是驱动假的 transport：所有用例走 `ctx.configForms`（fixture 的 `configFormsStub` / 便捷封装 `formStub`，命名空间 = profile entry id；旧世代 `settingsScopeStub` 已随 0.2.0 下限移除）。断言 27 行齐全且归入 5 个分组容器、key 唯一、分组标题（01 主题 / 02 背景 / 03 动画 / 04 娱乐 / 05 音频）与配色样式规则都在、配色行默认显示谷地黄且按钮提供「切换武陵青」、点击把 `palette` 写成 `wuling`、存了 `wuling` 时反向提供「切换谷地黄」并标注 `#14d0d0`、图层关闭时子开关为 disabled、开启后恢复可用，雷霆大字与大字入场动画均默认为关、说明文字包含「任务开始」/「任务完成」与 3 秒、**子开关只写自己的字段而不误写主开关的**，以及点击确实写入文档里那个 DSH 设置字段。
 
-**`settings-durable-hold.test.js`**（旧世代 `settingsScope` 路径；0.1.7 上同一份写入 gate / 补写契约由 `settings-config-forms.test.js` 覆盖）用**两阶段假 `ctx.settingsScope`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 武陵青」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
+**`settings-durable-hold.test.js`**（两代皆适用的写入 gate / 补写契约）用**两阶段假 `ctx.configForms`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 武陵青」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
 
 **`settings-mode-gate.test.js`** 钉住快照 `mode` 键的**缺失语义**：DSH 0.2.1-rc.2 从快照里删掉了这个字段，而写入 gate 若逐字要求 `mode==='host'`，门在 0.2.1 宿主上永远打不开（写入全部被挂起后放弃，刷新复位——无声，因为读不存在的字段得到 `undefined`）。它用三个**只差 `mode` 键**的 ready+writable 快照各跑一次真实 `apply()`：缺失（0.2.1+ 形状）与显式 `'host'` 都必须让写入出线，显式 `'memory'`（0.1.7 非回环页）必须拒写——防止「缺失即 durable」将来被改成「永远 durable」。对修复前的判定做过变异验证（场景 A 必失败）。浏览器夹具相应新增 `omitMode` 选项以建模 0.2.1 快照形状；教训是**桩必须建模生产契约的每一代形状**，只写 `mode:'host'` 等于把 0.1.7 冻结进套件。
 
@@ -170,7 +170,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 - **静默 ready**：命名空间开始被服务但镜像**完全不通知**任何表单时，有界 settle watch（20 × 500ms）会自己重新读取、采纳、切到被 served 的拼写并补写——这是旧世代 250 ms binder 轮询的等价安全网；
 - **退订**：run 拆除时调用 `form.subscribe()` 返回的 disposer（`ConfigForm` 是 provider 拥有、跨插件共享的实例，漏掉就是给下一次 run 泄漏监听器）。
 
-> 覆盖面说明：0.1.7 transport 由上面这个用例在**进程内**验证。三个 headless 浏览器用例（`settings-off` / `settings-buttons` / `loader-late-prefs`）注入的仍是旧世代 `settingsScope` 缝（`test/fixtures/settings-scope.browser.js`），因为它们验证的是渲染、对比度与启动动画，与 transport 是哪一代无关。
+> 覆盖面说明：transport 契约由上面这些用例在**进程内**验证。三个 headless 浏览器用例（`settings-off` / `settings-buttons` / `loader-late-prefs`）注入的也是 `configForms` 缝（`test/fixtures/settings-scope.browser.js`，与 Node 侧同一契约形状），因为它们验证的是渲染、对比度与启动动画，transport 只是取值通道。
 
 > **「设置刷新后复位」的排查顺序。** 这条症状有两个完全不同的成因，先分清再动手：
 >

@@ -89,7 +89,7 @@ const list=mkObs({current:'s1'})
 const sessions={list,binding:(id)=>id==='s1'?{sessionId:id,session}:undefined}
 
 const mod=window.__MOD__.factory(()=>null)
-mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='sessions'?sessions:(n==='settingsScope'?__prefs.binder:undefined)),effect:()=>{}})
+mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='sessions'?sessions:(n==='configForms'?__prefs.forms:undefined)),effect:()=>{}})
 
 const plate=()=>document.querySelector('[data-endfield-thunder]')
 const word=()=>{const p=plate();const w=p&&p.querySelector('[data-endfield-thunder-word]');return w?w.textContent:null}

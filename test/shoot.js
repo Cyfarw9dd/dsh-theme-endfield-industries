@@ -169,7 +169,7 @@ const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta chars
         for(const [k,v] of Object.entries(t)) document.body.style.setProperty(k, v[${dark ? "'dark'" : "'light'"}])
         return ()=>{}
       }}
-      if(n==='settingsScope')return __prefs.binder
+      if(n==='configForms')return __prefs.forms
       return undefined
     },
     effect:(f)=>f(),

@@ -158,7 +158,7 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
   ${BROWSER_SETTINGS_SCOPE_SNIPPET}
   var __prefs=__endfieldSettingsScope({ enabled:'1', loader:'0', watermark:'1', watermarkPersist:'1' })
   const mod=window.__MOD__.factory(()=>null)
-  mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='settingsScope'?__prefs.binder:undefined),effect:(f)=>f()})
+  mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='configForms'?__prefs.forms:undefined),effect:(f)=>f()})
   document.body.appendChild(document.createElement('span'))
   /* Hide the mark by ALPHA ONLY, after it has mounted. The element, its box and
      every other node stay exactly as in the visible run, so the two screenshots

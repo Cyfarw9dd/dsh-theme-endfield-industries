@@ -8,10 +8,10 @@
  *   2) insertCss —— 注入字体栈、强调色、直角化、去蓝、hover 反色等全局样式。
  *      （动态插件环境走 styles.insert；安装为独立 bundle 时直接注入 <style> 到 head。）
  *   3) 设置页「终末地主题设置」—— 设置项按四组分类（主题 / 背景 / 动画 / 娱乐），
- *      默认值 / 语义标记通过 DSH 的设置命名空间随 profile 落盘。DSH 0.1.7-rc.1 起
- *      走 client `ctx.configForms`（host index.js 导出的 volatile `Config`，命名空间
- *      = profile entry id `theme-endfield`）；旧版 DSH 回落到 `ctx.settingsScope`
- *      （host 的 `ctx.settings.register('dsh-theme-endfield', …)`）。文案跟随 DSH
+ *      默认值 / 语义标记通过 DSH 的设置命名空间随 profile 落盘：client 走
+ *      `ctx.configForms`（host index.js 导出的 volatile `Config`，命名空间
+ *      = profile entry id `theme-endfield`）。兼容下限 DSH 0.2.0（peerDependencies
+ *      钉住），更旧的 `settingsScope` 一代已移除。文案跟随 DSH
  *      的语言设置。不再使用 localStorage：见本文 apply() 顶部
  *      「Durable preference store」注释。
  *
@@ -90,9 +90,11 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        the old namespace string for the legacy fallback and as the prefix of
        every UI key in the tables below.
 
-       Older hosts (<= 0.1.5-rc.2) keep the old seam, which this file still
-       binds when no `configForms` service exists — see the transport-selection
-       note further down. Either way the values live host-side, so:
+       The >=0.2.0 floor dropped the legacy seam entirely (peerDependencies
+       enforces it): a host without `configForms` is not a supported
+       configuration, and pages that have none (an out-of-DSH page,
+       in-process tests) run on memory defaults below. Either way the values
+       live host-side, so:
 
          dsh web     (browser, fixed loopback port)  -> host persistence
          DSH Desktop (browser, random loopback port) -> host persistence
@@ -121,8 +123,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        `configForms.get()` is keyed by exactly that string. */
     const PREFS_ENTRY = 'theme-endfield'
     /* Pre-0.1.7 namespace string. Still the prefix of every UI key in the
-       tables below, and the namespace the legacy `settingsScope` bind asks
-       for — so it stays even though the modern transport never uses it. */
+       tables below, so it stays even though no transport is keyed by it any
+       more (the settingsScope seam it named was dropped with the >=0.2.0
+       floor). */
     const PREFS_NS = 'dsh-theme-endfield'
     const PREFS_FIELD_DEFAULTS = {
       enabled: '1',
@@ -375,12 +378,14 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     // only the former means there is nothing left to persist.
     const prefsEdited = new Set()
     let prefsFieldValue = null // last schema-resolved user+base+defaults section from the scope, if any
-    /* The bound settings transport: a DSH 0.1.7 `ConfigForm` or a legacy
-       `settingsScope`. Both answer getSnapshot()/subscribe()/set(), which is
-       all the store below needs; `prefsScopeKind` records which one it is (for
-       diagnostics and the write-settlement contract). */
+    /* The bound settings transport: a DSH `ConfigForm` answering
+       getSnapshot()/subscribe()/set(), which is all the store below needs;
+       `prefsScopeKind` records what it is (for diagnostics and the
+       write-settlement contract). The pre-0.1.7 `settingsScope` seam was
+       dropped with the >=0.2.0 floor: pages without `configForms` (an
+       out-of-DSH page, in-process tests) run on memory defaults. */
     let prefsScope = null
-    let prefsScopeKind = null // 'configForms' | 'settingsScope' | null
+    let prefsScopeKind = null // 'configForms' | null (memory has no scope)
     let prefsScopeNs = null // the namespace / profile entry id the scope came from
     let prefsUnsubscribe = null // disposer of the active scope subscription, if any
     let prefsBindTimer = null // retry handle for a settings transport that arrives late
@@ -410,46 +415,38 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        show nothing, and must not be mistaken for a failure. */
     let panelMounted = false
     /* --- transport selection ------------------------------------------------
-       Two DSH generations expose the same durable-preference seam under
-       different names, and the theme has to work on both without throwing on
-       whichever is absent:
+       The durable-preference seam is the settings domain's shared-form service
+       (>=0.2.0 floor; the pre-0.1.7 `settingsScope` binder was dropped — a
+       host without configForms is not a supported configuration):
 
-         0.1.7-rc.1   cfg = ctx.get('configForms')   (the settings domain's
-                      shared-form service)
-                      cfg.get(<profile entry id>) -> ConfigForm with
-                      getSnapshot() / subscribe() / set() / unset() / mutate()
-                      and a snapshot of { status, value, base, user, revision,
-                      writable, mode }. set() returns Promise<boolean>: false
-                      means the Host refused or SKIPPED the write (the classic
-                      case being memory mode on a non-loopback page).
-                      0.2.1-rc.2 keeps this seam but DELETED `mode` (and
-                      `persistence`): the snapshot is { status, value, base,
-                      user, revision, writable } and every accepted set() is a
-                      remote.settings.mutate() against the Host document —
-                      treat a missing mode as durable (see the durable write
-                      gate below); only an explicit mode:'memory' (0.1.7 on a
-                      non-loopback page) refuses.
-         <=0.1.5-rc.2 binder = ctx.get('settingsScope') / ctx.settingsScope
-                      binder.bind({ namespace, decode }) -> scope with the same
-                      snapshot fields, and a fire-and-forget set().
+          cfg = ctx.get('configForms')   (the settings domain's
+          shared-form service)
+          cfg.get(<profile entry id>) -> ConfigForm with
+          getSnapshot() / subscribe() / set() / unset() / mutate()
+          and a snapshot of { status, value, base, user, revision,
+          writable, mode }. set() returns Promise<boolean>: false
+          means the Host refused or SKIPPED the write (the classic
+          case being memory mode on a non-loopback page).
+          0.2.1-rc.2 keeps this seam but DELETED `mode` (and
+          `persistence`): the snapshot is { status, value, base,
+          user, revision, writable } and every accepted set() is a
+          remote.settings.mutate() against the Host document —
+          treat a missing mode as durable (see the durable write
+          gate below); only an explicit mode:'memory' (0.1.7-0.2.0
+          on a non-loopback page) refuses.
 
-       Same snapshot vocabulary, same write intent, so everything downstream of
-       acquisition is shared; only the lookup, the namespace string and the
-       settlement of set() differ. `configForms` is tried FIRST because on
-       0.1.7 the legacy service does not exist at all.
-
-       A ConfigForm is keyed by the PROFILE ENTRY ID, which the patch layer
-       assigns: this package's own bundle patch inserts `theme-endfield`, but a
-       hand-written insert may use the package name and the loader's tree path
-       prefixes include groups with `include:`. PREFS_ENTRY_CANDIDATES lists the
-       spellings this package can be installed under, in likelihood order.
-       Acquisition prefers whichever candidate the Host actually SERVES and
-       otherwise binds the first one immediately: a form is only a lazy view over
-       the shared mirror, so binding early is what lets a slow boot deliver its
-       section late instead of losing that page load's settings entirely. A wrong
-       guess self-heals — while the bound form reports 'unavailable' and the
-       mirror reloads, prefsOnScopeChange moves the binding to whichever
-       candidate is served. */
+        A ConfigForm is keyed by the PROFILE ENTRY ID, which the patch layer
+        assigns: this package's own bundle patch inserts `theme-endfield`, but a
+        hand-written insert may use the package name and the loader's tree path
+        prefixes include groups with `include:`. PREFS_ENTRY_CANDIDATES lists the
+        spellings this package can be installed under, in likelihood order.
+        Acquisition prefers whichever candidate the Host actually SERVES and
+        otherwise binds the first one immediately: a form is only a lazy view over
+        the shared mirror, so binding early is what lets a slow boot deliver its
+        section late instead of losing that page load's settings entirely. A wrong
+        guess self-heals — while the bound form reports 'unavailable' and the
+        mirror reloads, prefsOnScopeChange moves the binding to whichever
+        candidate is served. */
     const PREFS_ENTRY_CANDIDATES = [
       PREFS_ENTRY,                   // this package's cordis.patch.yml row id
       'include:' + PREFS_ENTRY,      // loader tree path when bundle-mounted
@@ -469,16 +466,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         if (forms !== undefined && forms !== null && typeof forms.get === 'function') return forms
       } catch (e) { /* optional service lookup */ }
       return undefined
-    }
-    // Try the idiomatic injected-property access first (how DSH client plugins like
-    // dsh-client-locale consume services — exports.inject plus `ctx.xxx`), then
-    // the lookup form this module has historically used for optional services.
-    const getSettingsScopeBinder = () => {
-      try {
-        if (ctx.settingsScope !== undefined && ctx.settingsScope !== null
-          && typeof ctx.settingsScope.bind === 'function') return ctx.settingsScope
-      } catch (e) { /* property may be a getter that throws when not available */ }
-      try { return ctx.get('settingsScope') } catch (e) { return undefined }
     }
     /* The namespaces the Host's describe view actually SERVES, for diagnostics.
        This is the one fact that tells "the host half exported no Config" apart
@@ -520,9 +507,11 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        anyway, even while the mirror is still 'loading' or reports it
        'unavailable': a ConfigForm always exists (it is a lazy view over the
        shared mirror), and binding it immediately is what lets a slow or
-       later-served Host still deliver its section through the subscription —
-       exactly how the legacy binder behaved. A wrong guess is not fatal:
-       prefsOnScopeChange re-selects as soon as another candidate is served. */
+       later-served Host still deliver its section through the subscription.
+       A wrong guess is not fatal: prefsOnScopeChange re-selects as soon as
+       another candidate is served. No transport at all (a page without the
+       configForms service) returns null: the store runs on memory defaults.
+       The pre-0.1.7 settingsScope binder is gone with the >=0.2.0 floor. */
     const acquirePrefsScope = () => {
       const ready = prefsFindReadyForm()
       if (ready !== null) return ready
@@ -533,12 +522,6 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           try { form = forms.get(ns) } catch (e) { form = null }
           if (form && typeof form.getSnapshot === 'function') return { scope: form, kind: 'configForms', ns }
         }
-      }
-      const binder = getSettingsScopeBinder()
-      if (binder !== undefined && binder !== null && typeof binder.bind === 'function') {
-        let scope = null
-        try { scope = binder.bind({ namespace: PREFS_NS, decode: prefsResolveSection }) } catch (e) { dbg('bind threw', e && e.message); scope = null }
-        if (scope !== null && scope !== undefined) return { scope, kind: 'settingsScope', ns: PREFS_NS }
       }
       return null
     }

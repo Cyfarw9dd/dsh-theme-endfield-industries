@@ -187,7 +187,7 @@ const page = (dark, generation, hero) => `<!doctype html><html><head><meta chars
   ${BROWSER_SETTINGS_SCOPE_SNIPPET}
   var __prefs=__endfieldSettingsScope({ enabled:'1', loader:'0', watermark:'0' })
   var mod=window.__MOD__.factory(()=>null)
-  mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='settingsScope'?__prefs.binder:undefined),effect:(f)=>f()})
+  mod.apply({get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='configForms'?__prefs.forms:undefined),effect:(f)=>f()})
   document.body.appendChild(document.createElement('span'))
   setTimeout(()=>{
     var el=document.querySelector('[data-endfield-hero-logo]')

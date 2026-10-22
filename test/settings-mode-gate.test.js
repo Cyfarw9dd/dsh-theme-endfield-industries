@@ -113,7 +113,9 @@ function makeScope(mode) {
       for (const l of listeners.slice()) { try { l() } catch (e) { /* keep going */ } }
     },
   }
-  return { binder: { bind: () => scope }, wireWrites, section }
+  /* The ctx.configForms service: every candidate spelling gets the same
+     single-namespace form (the theme binds the first candidate it finds). */
+  return { service: { get: () => scope }, wireWrites, section }
 }
 
 /* One full page-load per scenario: client.js's apply() is idempotent per
@@ -169,7 +171,7 @@ function runScenario(mode) {
     get: (n) => {
       if (n === 'theme') return { overrideTokens: () => () => {} }
       if (n === 'slots') return slots
-      if (n === 'settingsScope') return scope.binder
+      if (n === 'configForms') return scope.service
       return undefined
     },
     effect: () => {},

@@ -39,7 +39,7 @@ dsh plugin --profile web rm dsh-theme-endfield
 
 ### 设置持久化
 
-所有设置由 DSH 自己的设置服务持久化，与页面 origin/端口无关：在 **DSH 0.1.7-rc.1** 上，Host `index.js` 导出一份字段全部 `.volatile()` 的 schemastery `Config`（命名空间 = 本插件 profile entry id `theme-endfield`），浏览器 `client.js` 通过 `ctx.configForms` 读写并订阅，值随 `<profile>/cordis.patch.yml` 落盘；在**旧版 DSH** 上则回落到 `ctx.settings.register('dsh-theme-endfield', schema)` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）。两代都与页面 origin 无关，因此 DSH web 与 DSH Desktop 都能正确保存并在重启/换端口后恢复，不再使用会被 Desktop 随机端口清空的 `localStorage`。详见 [docs/features.md](docs/features.md) 与 [docs/engineering-notes.md](docs/engineering-notes.md)；0.1.7 升级后旧设置需要在设置页重设一次（`settings.yaml` 已被 DSH 废弃，见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)）。
+所有设置由 DSH 自己的设置服务持久化，与页面 origin/端口无关：Host `index.js` 导出一份字段全部 `.volatile()` 的 schemastery `Config`（命名空间 = 本插件 profile entry id `theme-endfield`），浏览器 `client.js` 通过 `ctx.configForms` 读写并订阅，值随 `<profile>/cordis.patch.yml` 落盘。**兼容下限 DSH 0.2.0**（peerDependencies 钉住）——更旧的 `settingsScope` 一代已被移除，不做回落。与页面 origin 无关，因此 DSH web 与 DSH Desktop 都能正确保存并在重启/换端口后恢复，不再使用会被 Desktop 随机端口清空的 `localStorage`。详见 [docs/features.md](docs/features.md) 与 [docs/engineering-notes.md](docs/engineering-notes.md)；0.1.7 升级后旧设置需要在设置页重设一次（`settings.yaml` 已被 DSH 废弃，见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](docs/engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)）。
 
 **如果开关总是「刷新后复位」**：先看 Host 侧有没有这份 `Config`（`Config.listConfigs` 对该 entry 报 `absent` 就是没有）。没有 Config 时 DSH 不投影任何表单，Host `apply()` 会打一行 warn 并在 profile 目录留下报告文件 `theme-endfield-diagnostic.json`（`Config` 构建成功时会自动删除它；报告里的 `schemaMode` / `loaded` / `loadError` 会写明走了哪条解析路径、以及某个副本是否「解析得到却加载失败」）——排查与判据见 [docs/testing.md](docs/testing.md#设置页)。另外注意：**改 Host 半（`index.js`）必须整进程重启 DSH**，刷新页面只重载 `client.js`。
 
@@ -71,7 +71,7 @@ node selftest.js     # 反向验证 check.js 真能抓到那些问题
 npm test             # 上述 + 配色/设置页/渲染/动效性能等全套
 ```
 
-`npm test` 覆盖样式不变量、配色对比度、设置页（两代 transport）、真实浏览器渲染、动画可访问性与性能预算（layout/帧间隔/主线程）。部分测试需要本机安装 Chrome 或 Edge。跑测试请用 Node 22+（浏览器 fixture 依赖全局 `WebSocket`/`fetch`，版本不足会在测试处明确报错；插件本身的运行没有这个要求）。测试原则：**从真实 `client.js` 里读值，不复述数值；每条断言都做过变异验证**——方法论见 [docs/testing.md](docs/testing.md)。
+`npm test` 覆盖样式不变量、配色对比度、设置页（configForms transport）、真实浏览器渲染、动画可访问性与性能预算（layout/帧间隔/主线程）。部分测试需要本机安装 Chrome 或 Edge。跑测试请用 Node 22+（浏览器 fixture 依赖全局 `WebSocket`/`fetch`，版本不足会在测试处明确报错；插件本身的运行没有这个要求）。测试原则：**从真实 `client.js` 里读值，不复述数值；每条断言都做过变异验证**——方法论见 [docs/testing.md](docs/testing.md)。
 
 ## 项目结构
 

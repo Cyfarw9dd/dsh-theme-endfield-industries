@@ -13,12 +13,12 @@
 │  · lib/slots.js、lib/tone.js   │   │  · 功能面：水印/加载屏/大字        │
 └──────────────┬───────────────┘   │  · React 迷你实现（设置面板）       │
                │                   └───────────────┬─────────────────┘
-   cordis.patch.yml（bundle 注入声明）                │ settingsScope/configForms
+   cordis.patch.yml（bundle 注入声明）                │ configForms（下限 DSH 0.2.0）
    「./client」导出 → Host 按请求读盘 ← 浏览器刷新即生效 │
 ```
 
 - **Host 半**只在 profile 启动时加载一次；**Client 半**按请求从磁盘读取，刷新生效
-- 两半通过 DSH 设置命名空间（`theme-endfield`）同步偏好；浏览器 localStorage 已弃用（见工程笔记）
+- 两半通过 DSH 设置命名空间（`theme-endfield`，`ctx.configForms`，兼容下限 DSH 0.2.0）同步偏好；浏览器 localStorage 已弃用（见工程笔记）
 
 ## 样式表组织
 

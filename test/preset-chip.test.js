@@ -130,7 +130,7 @@ function makePage(chip) {
   window.__dispose__ = mod.apply({
     get: function (n) {
       return n === 'theme' ? { overrideTokens: function () { return function () {} } }
-        : (n === 'settingsScope' ? __prefs.binder : undefined)
+        : (n === 'configForms' ? __prefs.forms : undefined)
     },
     effect: function (f) { return f() },
   })

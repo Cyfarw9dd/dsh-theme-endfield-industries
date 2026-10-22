@@ -43,7 +43,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
   var __prefs=__endfieldSettingsScope({ enabled:'1', loader:'1', watermark:'0' })
   const mod=window.__MOD__.factory(()=>null)
   window.__dispose__=mod.apply({
-    get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='settingsScope'?__prefs.binder:undefined),
+    get:(n)=>n==='theme'?{overrideTokens:()=>()=>{}}:(n==='configForms'?__prefs.forms:undefined),
     effect:(f)=>f(),
   })
   document.body.appendChild(document.createElement('span'))

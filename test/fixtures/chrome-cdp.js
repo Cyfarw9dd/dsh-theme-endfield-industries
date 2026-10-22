@@ -83,7 +83,7 @@ async function boot(browser,root,values={},prefix='') {
   const {BROWSER_SETTINGS_SCOPE_SNIPPET}=require(path.join(root,'test/fixtures/settings-scope.browser.js'))
   await browser.evaluate(BROWSER_SETTINGS_SCOPE_SNIPPET+`\nwindow.__prefs=__endfieldSettingsScope(${JSON.stringify({enabled:'1',loader:'0',watermark:'0',...values})});
     window.__disposers=[];window.__MOD__.factory(()=>null).apply({
-      get:n=>n==='settingsScope'?__prefs.binder:n==='theme'?{overrideTokens:()=>()=>{}}:undefined,
+      get:n=>n==='configForms'?__prefs.forms:n==='theme'?{overrideTokens:()=>()=>{}}:undefined,
       effect:f=>{const d=f();if(typeof d==='function')__disposers.push(d);return d}
     })`)
 }

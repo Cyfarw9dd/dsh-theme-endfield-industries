@@ -24,7 +24,7 @@
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const { settingsScopeStub, fieldName } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
+const { formStub, fieldName } = require(path.join(__dirname, 'fixtures', 'settings-scope.js'))
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
@@ -140,12 +140,12 @@ const sessions = {
 }
 
 /* ---------- load the real client bundle ----------
-   The theme reads/writes its preferences through the dsh settingsScope seam, so
+   The theme reads/writes its preferences through the dsh configForms seam, so
    this test drives it with a fake binder seeded like the old localStorage store:
    theme on, anim-heavy layers off (thunder itself starts OFF so the edge probes
    below begin from a pristine state). Changes the sections make write back here;
    scenarios 11/11b mount fresh sandboxes and seed their own binder. */
-const makePrefStore = (extra = {}) => settingsScopeStub(Object.assign({
+const makePrefStore = (extra = {}) => formStub(Object.assign({
   enabled: '1',
   loader: '0',
   watermark: '0',
@@ -198,7 +198,7 @@ const ctx = {
     if (n === 'theme') return { overrideTokens: () => () => {} }
     if (n === 'slots') return slots
     if (n === 'sessions') return sessions
-    if (n === 'settingsScope') return prefStore.binder
+    if (n === 'configForms') return prefStore.service
     return undefined
   },
   effect: (fn) => { const d = fn(); if (typeof d === 'function') teardown = d },
@@ -523,7 +523,7 @@ try {
   mod2.apply({
     get: (n) => {
       if (n === 'theme') return { overrideTokens: () => () => {} }
-      if (n === 'settingsScope') return pref2.binder
+      if (n === 'configForms') return pref2.service
       return undefined
     },
     effect: () => {},
@@ -560,7 +560,7 @@ try {
     get: (n) => {
       if (n === 'theme') return { overrideTokens: () => () => {} }
       if (n === 'sessions') return lateService
-      if (n === 'settingsScope') return pref3.binder
+      if (n === 'configForms') return pref3.service
       return undefined
     },
     effect: () => {},
