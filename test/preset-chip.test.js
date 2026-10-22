@@ -37,19 +37,12 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync } = require('child_process')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
+/* Browser plumbing (launch/CDP/PNG) is shared — see test/fixtures/chrome-cdp.js. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-chip-'))
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('FAIL  no Chrome/Edge found (set CHROME_PATH)'); process.exit(1) }
 
 /* The stock layout the theme overrides: _headerActions is flex:none upstream,
    which is why the chip needs the container to grow, and the slot's entry wrapper
@@ -160,25 +153,19 @@ function makePage(chip) {
 </script></body></html>`
 }
 
-function run(label, chip) {
+async function run(label, chip) {
   const page = path.join(OUT, 'chip-' + label + '.html')
   fs.writeFileSync(page, makePage(chip))
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'chip-prof-'))
-  let dom = ''
+  const browser = await launch({
+    url: 'file:///' + page.replace(/\\/g, '/'),
+    width: 1280, height: 800, dpr: 1, args: ['--hide-scrollbars'],
+  })
   try {
-    dom = execFileSync(chrome, [
-      '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-      '--virtual-time-budget=5000', '--window-size=1280,800',
-      '--user-data-dir=' + tmp, '--dump-dom',
-      'file:///' + page.replace(/\\/g, '/'),
-    ], { encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] })
-  } catch (e) {
-    console.error('FAIL  [' + label + '] browser run failed: ' + e.message)
-    process.exit(1)
+    await browser.until("document.title.indexOf('CHIP ') === 0")
+    return JSON.parse((await browser.evaluate('document.title')).slice(5))
+  } finally {
+    await browser.close()
   }
-  const m = dom.match(/<title>CHIP (.*?)<\/title>/s)
-  if (!m) { console.error('FAIL  [' + label + '] page did not report results'); process.exit(1) }
-  return JSON.parse(m[1].replace(/&quot;/g, '"'))
 }
 
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
@@ -195,51 +182,53 @@ const ACCENT_RGB = 'rgb(255, 245, 0)'
 const ACCENT_INK_RGB = 'rgb(16, 17, 16)'
 const STOCK_RGB = 'rgb(200, 200, 200)'
 
-const a = run('a', true)
-console.log('      A: ' + JSON.stringify(a))
-if (a.chipBg === ACCENT_RGB) ok('A: the preset chip is filled with the theme accent (' + a.chipBg + ')')
-else fail('A: the preset chip is NOT themed — background is ' + a.chipBg + ', expected ' + ACCENT_RGB
-  + '. The chip sits inside the slot\'s class-less wrapper; a selector without that level matches nothing.')
-if (a.chipInk === ACCENT_INK_RGB) ok('A: the chip ink is accent-ink over the accent')
-else fail('A: chip ink is ' + a.chipInk + ', expected ' + ACCENT_INK_RGB)
-if (a.chipMaxWidth === '180px') ok('A: the stock 180px cap is kept, so a long preset name cannot widen the chip into a bar')
-else fail('A: chip max-width is ' + a.chipMaxWidth + ', expected the stock 180px cap')
-if (a.chipRadius === '0px') ok('A: square radius mode squares the chip')
-else fail('A: chip radius is ' + a.chipRadius + ', expected 0px (body has no theme-endfield-round)')
+;(async () => {
+    const a = await run('a', true)
+  console.log('      A: ' + JSON.stringify(a))
+  if (a.chipBg === ACCENT_RGB) ok('A: the preset chip is filled with the theme accent (' + a.chipBg + ')')
+  else fail('A: the preset chip is NOT themed — background is ' + a.chipBg + ', expected ' + ACCENT_RGB
+    + '. The chip sits inside the slot\'s class-less wrapper; a selector without that level matches nothing.')
+  if (a.chipInk === ACCENT_INK_RGB) ok('A: the chip ink is accent-ink over the accent')
+  else fail('A: chip ink is ' + a.chipInk + ', expected ' + ACCENT_INK_RGB)
+  if (a.chipMaxWidth === '180px') ok('A: the stock 180px cap is kept, so a long preset name cannot widen the chip into a bar')
+  else fail('A: chip max-width is ' + a.chipMaxWidth + ', expected the stock 180px cap')
+  if (a.chipRadius === '0px') ok('A: square radius mode squares the chip')
+  else fail('A: chip radius is ' + a.chipRadius + ', expected 0px (body has no theme-endfield-round)')
 
-/* The chip must stay a CHIP. An earlier attempt at this fix reproduced the old
-   "fills the action row" intent (flatten the slot wrapper + grow the container),
-   which on the real header turned the accent fill into a full-width yellow bar
-   (923px of a 976px row) and was reported straight back. The theme owns the
-   COLOUR here, not the geometry, so the stock size has to survive: bounded width,
-   and the container must not have been grown to make room for it. */
-if (a.actionsFlexGrow === '0') ok('A: the actions container keeps the stock flex:none (no stretched bar)')
-else fail('A: actions flex-grow is ' + a.actionsFlexGrow + ' — the chip will stretch into a full-width bar')
-if (a.wrapperDisplay !== 'contents') ok('A: the slot wrapper is left alone (display:' + a.wrapperDisplay + ')')
-else fail('A: the slot wrapper was flattened to display:contents — that is the stretched-bar recipe')
-if (a.chipWidth !== null && a.chipWidth <= 180) {
-  ok('A: the chip stays compact (' + a.chipWidth + 'px, within the stock 180px cap)')
-} else {
-  fail('A: the chip is ' + a.chipWidth + 'px wide — it has become a bar instead of a chip')
-}
+  /* The chip must stay a CHIP. An earlier attempt at this fix reproduced the old
+     "fills the action row" intent (flatten the slot wrapper + grow the container),
+     which on the real header turned the accent fill into a full-width yellow bar
+     (923px of a 976px row) and was reported straight back. The theme owns the
+     COLOUR here, not the geometry, so the stock size has to survive: bounded width,
+     and the container must not have been grown to make room for it. */
+  if (a.actionsFlexGrow === '0') ok('A: the actions container keeps the stock flex:none (no stretched bar)')
+  else fail('A: actions flex-grow is ' + a.actionsFlexGrow + ' — the chip will stretch into a full-width bar')
+  if (a.wrapperDisplay !== 'contents') ok('A: the slot wrapper is left alone (display:' + a.wrapperDisplay + ')')
+  else fail('A: the slot wrapper was flattened to display:contents — that is the stretched-bar recipe')
+  if (a.chipWidth !== null && a.chipWidth <= 180) {
+    ok('A: the chip stays compact (' + a.chipWidth + 'px, within the stock 180px cap)')
+  } else {
+    fail('A: the chip is ' + a.chipWidth + 'px wide — it has become a bar instead of a chip')
+  }
 
-/* The scope's whole reason for existing: the jobs entry renders a _label too, but
-   deep inside its menu. It must stay stock, both inside and outside the slot. */
-if (a.jobLabelBg === STOCK_RGB) ok('A: the jobs-style _label deeper in the same slot stays stock')
-else fail('A: the scope is too wide — a jobs-style _label inside the slot got themed: ' + a.jobLabelBg)
-if (a.strayBg === STOCK_RGB) ok('A: a _label OUTSIDE the slot stays stock')
-else fail('A: the scope is too wide — a plain list _label got themed: ' + a.strayBg)
+  /* The scope's whole reason for existing: the jobs entry renders a _label too, but
+     deep inside its menu. It must stay stock, both inside and outside the slot. */
+  if (a.jobLabelBg === STOCK_RGB) ok('A: the jobs-style _label deeper in the same slot stays stock')
+  else fail('A: the scope is too wide — a jobs-style _label inside the slot got themed: ' + a.jobLabelBg)
+  if (a.strayBg === STOCK_RGB) ok('A: a _label OUTSIDE the slot stays stock')
+  else fail('A: the scope is too wide — a plain list _label got themed: ' + a.strayBg)
 
-/* B: the slot holds only the jobs-style entry. The theme must leave the container
-   alone, or every session without a preset would get a stretched header. */
-const b = run('b', false)
-console.log('      B: ' + JSON.stringify(b))
-if (b.chipFound === false) ok('B: no chip in the slot')
-else fail('B: a chip was found where none was placed')
-if (b.actionsFlexGrow === '0') ok('B: with no preset chip the actions container keeps the stock flex:none')
-else fail('B: actions flex-grow is ' + b.actionsFlexGrow + ' with no chip present — the :has() scope is too wide')
-if (b.jobLabelBg === STOCK_RGB) ok('B: the jobs-style _label stays stock')
-else fail('B: the jobs-style _label got themed: ' + b.jobLabelBg)
+  /* B: the slot holds only the jobs-style entry. The theme must leave the container
+     alone, or every session without a preset would get a stretched header. */
+    const b = await run('b', false)
+  console.log('      B: ' + JSON.stringify(b))
+  if (b.chipFound === false) ok('B: no chip in the slot')
+  else fail('B: a chip was found where none was placed')
+  if (b.actionsFlexGrow === '0') ok('B: with no preset chip the actions container keeps the stock flex:none')
+  else fail('B: actions flex-grow is ' + b.actionsFlexGrow + ' with no chip present — the :has() scope is too wide')
+  if (b.jobLabelBg === STOCK_RGB) ok('B: the jobs-style _label stays stock')
+  else fail('B: the jobs-style _label got themed: ' + b.jobLabelBg)
 
-if (failures) { console.error('\n' + failures + ' preset-chip check(s) failed'); process.exit(1) }
-console.log('\nall preset-chip checks passed')
+  if (failures) { console.error('\n' + failures + ' preset-chip check(s) failed'); process.exit(1) }
+  console.log('\nall preset-chip checks passed')
+})().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })
