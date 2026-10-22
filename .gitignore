@@ -6,3 +6,5 @@ node_modules/
 .mimosa/
 .claude/
 .scratch/
+# 本地 npm 内容缓存（install 时用 --cache .npm-cache 落盘，避免写 ~/.npm；数百 MB，不入库）
+.npm-cache/
