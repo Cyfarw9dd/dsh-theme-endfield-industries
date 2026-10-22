@@ -252,93 +252,7 @@
 					if (el.parentNode) el.parentNode.removeChild(el);
 				};
 			}
-			function apply(ctx) {
-				if (typeof window !== "undefined" && window.__dshThemeEndfieldApplied) return;
-				const services = createServices(ctx);
-				const theme = services.theme();
-				if (theme === void 0) return;
-				if (typeof window !== "undefined") window.__dshThemeEndfieldApplied = true;
-				const AUDIO_ENABLED_KEY = "audioEnabled";
-				const AUDIO_BOOT_KEY = "audioBoot";
-				const AUDIO_TURN_START_KEY = "audioTurnStart";
-				const AUDIO_TURN_DONE_KEY = "audioTurnDone";
-				const AUDIO_VOLUME_KEY = "audioVolume";
-				const AUDIO_HUMAN_ONLY_KEY = "audioHumanOnly";
-				const AUDIO_DIAG_KEY = "audioDiag";
-				const AUDIO_SOUND_DIR_KEY = "audioSoundDir";
-				const AUDIO_STATE_URL = "/theme-endfield/audio/state";
-				const AUDIO_PREVIEW_URL = "/theme-endfield/audio/preview";
-				const AUDIO_ATTENTION_URL = "/theme-endfield/audio/attention";
-				const isAudioOn = () => prefsGet(AUDIO_ENABLED_KEY) !== "0";
-				const isAudioBootOn = () => prefsGet(AUDIO_BOOT_KEY) !== "0";
-				const isAudioStartOn = () => prefsGet(AUDIO_TURN_START_KEY) !== "0";
-				const isAudioDoneOn = () => prefsGet(AUDIO_TURN_DONE_KEY) !== "0";
-				const isAudioHumanOnly = () => prefsGet(AUDIO_HUMAN_ONLY_KEY) !== "0";
-				const isAudioDiagOn = () => prefsGet(AUDIO_DIAG_KEY) === "1";
-				const readAudioVolume = () => {
-					const parsed = Number.parseInt(prefsGet(AUDIO_VOLUME_KEY), 10);
-					return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 100;
-				};
-				const readAudioSoundDir = () => prefsGet(AUDIO_SOUND_DIR_KEY) || "";
-				/** Ask the host to play one slot through the real notification path. */
-				const previewSlot = (slot) => {
-					if (typeof fetch !== "function") return Promise.resolve({
-						played: false,
-						why: "no fetch"
-					});
-					return fetch(AUDIO_PREVIEW_URL, {
-						method: "POST",
-						headers: { "content-type": "application/json" },
-						body: JSON.stringify({ slot })
-					}).then((res) => res.json().catch(() => ({
-						played: false,
-						why: "bad response"
-					})), (error) => ({
-						played: false,
-						why: String(error && error.message ? error.message : error)
-					}));
-				};
-				const ATTENTION_MARKERS = [
-					{
-						kind: "approval",
-						selector: "[data-approval-key]"
-					},
-					{
-						kind: "plan-review",
-						selector: "[data-plan-review-key]"
-					},
-					{
-						kind: "question",
-						selector: "[data-question-key]"
-					}
-				];
-				module.exports.__attentionMarkers = ATTENTION_MARKERS;
-				/** Which kind of pending interaction is on screen right now, if any. */
-				const detectPendingInteraction = () => {
-					if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
-					for (const marker of ATTENTION_MARKERS) try {
-						if (document.querySelector(marker.selector) !== null) return marker.kind;
-					} catch (e) {}
-					return null;
-				};
-				/** Tell the host a confirmation box appeared; it decides whether to sound. */
-				const reportAttention = (kind) => {
-					if (typeof fetch !== "function") return Promise.resolve({
-						played: false,
-						why: "no fetch"
-					});
-					return fetch(AUDIO_ATTENTION_URL, {
-						method: "POST",
-						headers: { "content-type": "application/json" },
-						body: JSON.stringify({ kind })
-					}).then((res) => res.json().catch(() => ({
-						played: false,
-						why: "bad response"
-					})), (error) => ({
-						played: false,
-						why: String(error && error.message ? error.message : error)
-					}));
-				};
+			function createPrefsStore(services) {
 				const prefsListeners = [];
 				const prefsLocal = Object.assign({}, PREFS_FIELD_DEFAULTS);
 				const prefsLocalEdited = /* @__PURE__ */ new Set();
@@ -355,9 +269,9 @@
 				const PREFS_RETRY_LIMIT = 20;
 				let prefsRetryCount = 0;
 				let prefsReplayBusy = false;
-				let reconcileFromPrefs = null;
+				let reconciler = null;
 				let prefsSettledOnce = false;
-				let onPrefsSettled = null;
+				let settledHook = null;
 				let panelMounted = false;
 				const PREFS_ENTRY_CANDIDATES = [
 					PREFS_ENTRY,
@@ -459,15 +373,15 @@
 					for (const l of prefsListeners.slice()) try {
 						l();
 					} catch (e) {}
-					if (reconcileFromPrefs) try {
-						reconcileFromPrefs();
+					if (reconciler) try {
+						reconciler();
 					} catch (e) {}
 				};
 				const prefsMarkSettled = () => {
 					if (prefsSettledOnce) return;
 					prefsSettledOnce = true;
-					if (onPrefsSettled) try {
-						onPrefsSettled();
+					if (settledHook) try {
+						settledHook();
 					} catch (e) {}
 				};
 				const dbg = (...a) => {
@@ -725,14 +639,14 @@
 					}
 				};
 				rebindPrefs(0);
-				services.effect(() => () => {
+				const dispose = () => {
 					prefsListeners.length = 0;
 					prefsReleaseSubscription();
 					prefsScope = null;
 					prefsScopeKind = null;
 					prefsScopeNs = null;
 					prefsFieldValue = null;
-					onPrefsSettled = null;
+					settledHook = null;
 					if (prefsBindTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBindTimer);
 					prefsBindTimer = null;
 					if (prefsRetryTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsRetryTimer);
@@ -741,12 +655,121 @@
 					prefsSettleTimer = null;
 					if (prefsBootReportTimer !== null && typeof clearTimeout === "function") clearTimeout(prefsBootReportTimer);
 					prefsBootReportTimer = null;
-				});
+				};
+				return {
+					get: prefsGet,
+					set: prefsSet,
+					commit: prefsCommit,
+					listen: prefsSubscribe,
+					wasEdited: (field) => prefsEdited.has(field),
+					ready: () => prefsSettledOnce,
+					setReconciler: (fn) => {
+						reconciler = fn;
+					},
+					onSettled: (fn) => {
+						settledHook = fn;
+					},
+					markPanelMounted: () => {
+						panelMounted = true;
+					},
+					markSettled: prefsMarkSettled,
+					dispose
+				};
+			}
+			function apply(ctx) {
+				if (typeof window !== "undefined" && window.__dshThemeEndfieldApplied) return;
+				const services = createServices(ctx);
+				const theme = services.theme();
+				if (theme === void 0) return;
+				if (typeof window !== "undefined") window.__dshThemeEndfieldApplied = true;
+				const prefs = createPrefsStore(services);
+				services.effect(() => () => prefs.dispose());
+				const AUDIO_ENABLED_KEY = "audioEnabled";
+				const AUDIO_BOOT_KEY = "audioBoot";
+				const AUDIO_TURN_START_KEY = "audioTurnStart";
+				const AUDIO_TURN_DONE_KEY = "audioTurnDone";
+				const AUDIO_VOLUME_KEY = "audioVolume";
+				const AUDIO_HUMAN_ONLY_KEY = "audioHumanOnly";
+				const AUDIO_DIAG_KEY = "audioDiag";
+				const AUDIO_SOUND_DIR_KEY = "audioSoundDir";
+				const AUDIO_STATE_URL = "/theme-endfield/audio/state";
+				const AUDIO_PREVIEW_URL = "/theme-endfield/audio/preview";
+				const AUDIO_ATTENTION_URL = "/theme-endfield/audio/attention";
+				const isAudioOn = () => prefs.get(AUDIO_ENABLED_KEY) !== "0";
+				const isAudioBootOn = () => prefs.get(AUDIO_BOOT_KEY) !== "0";
+				const isAudioStartOn = () => prefs.get(AUDIO_TURN_START_KEY) !== "0";
+				const isAudioDoneOn = () => prefs.get(AUDIO_TURN_DONE_KEY) !== "0";
+				const isAudioHumanOnly = () => prefs.get(AUDIO_HUMAN_ONLY_KEY) !== "0";
+				const isAudioDiagOn = () => prefs.get(AUDIO_DIAG_KEY) === "1";
+				const readAudioVolume = () => {
+					const parsed = Number.parseInt(prefs.get(AUDIO_VOLUME_KEY), 10);
+					return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 100;
+				};
+				const readAudioSoundDir = () => prefs.get(AUDIO_SOUND_DIR_KEY) || "";
+				/** Ask the host to play one slot through the real notification path. */
+				const previewSlot = (slot) => {
+					if (typeof fetch !== "function") return Promise.resolve({
+						played: false,
+						why: "no fetch"
+					});
+					return fetch(AUDIO_PREVIEW_URL, {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({ slot })
+					}).then((res) => res.json().catch(() => ({
+						played: false,
+						why: "bad response"
+					})), (error) => ({
+						played: false,
+						why: String(error && error.message ? error.message : error)
+					}));
+				};
+				const ATTENTION_MARKERS = [
+					{
+						kind: "approval",
+						selector: "[data-approval-key]"
+					},
+					{
+						kind: "plan-review",
+						selector: "[data-plan-review-key]"
+					},
+					{
+						kind: "question",
+						selector: "[data-question-key]"
+					}
+				];
+				module.exports.__attentionMarkers = ATTENTION_MARKERS;
+				/** Which kind of pending interaction is on screen right now, if any. */
+				const detectPendingInteraction = () => {
+					if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+					for (const marker of ATTENTION_MARKERS) try {
+						if (document.querySelector(marker.selector) !== null) return marker.kind;
+					} catch (e) {}
+					return null;
+				};
+				/** Tell the host a confirmation box appeared; it decides whether to sound. */
+				const reportAttention = (kind) => {
+					if (typeof fetch !== "function") return Promise.resolve({
+						played: false,
+						why: "no fetch"
+					});
+					return fetch(AUDIO_ATTENTION_URL, {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({ kind })
+					}).then((res) => res.json().catch(() => ({
+						played: false,
+						why: "bad response"
+					})), (error) => ({
+						played: false,
+						why: String(error && error.message ? error.message : error)
+					}));
+				};
 				const RADIUS_KEY = "dsh-theme-endfield-radius";
 				const ENABLED_KEY = "dsh-theme-endfield-enabled";
-				const isEnabled = () => prefsGet(ENABLED_KEY) !== "0";
+				const isEnabled = () => prefs.get(ENABLED_KEY) !== "0";
 				const MOTION_KEY = "dsh-theme-endfield-motion";
-				const readMotion = () => prefsGet(MOTION_KEY) === "off" ? "off" : "signal";
+				const readMotion = () => prefs.get(MOTION_KEY) === "off" ? "off" : "signal";
 				const syncMotion = () => {
 					if (typeof document === "undefined" || document.body === null) return;
 					if (isEnabled() && readMotion() !== "off") document.body.setAttribute?.("data-endfield-motion", "signal");
@@ -759,7 +782,7 @@
 					"standard"
 				];
 				const readTexture = () => {
-					const value = prefsGet(TEXTURE_KEY);
+					const value = prefs.get(TEXTURE_KEY);
 					return TEXTURE_OPTIONS.includes(value) ? value : "standard";
 				};
 				const syncTexture = () => {
@@ -776,7 +799,7 @@
 					"strong"
 				];
 				const readGlass = () => {
-					const value = prefsGet(GLASS_KEY);
+					const value = prefs.get(GLASS_KEY);
 					return GLASS_OPTIONS.includes(value) ? value : "off";
 				};
 				const syncGlass = () => {
@@ -787,7 +810,7 @@
 				};
 				const syncRadiusMode = () => {
 					if (typeof document === "undefined" || document.body === null) return;
-					if ((prefsGet(RADIUS_KEY) || "square") === "round") document.body.classList.add("theme-endfield-round");
+					if ((prefs.get(RADIUS_KEY) || "square") === "round") document.body.classList.add("theme-endfield-round");
 					else document.body.classList.remove("theme-endfield-round");
 				};
 				const PALETTE_KEY = "dsh-theme-endfield-palette";
@@ -796,7 +819,7 @@
 					wuling: "theme-endfield-wuling"
 				};
 				const readPalette = () => {
-					const stored = prefsGet(PALETTE_KEY);
+					const stored = prefs.get(PALETTE_KEY);
 					return stored === "valley" || stored === "wuling" ? stored : "gray";
 				};
 				const syncPaletteClass = () => {
@@ -807,8 +830,8 @@
 				};
 				const WATERMARK_KEY = "dsh-theme-endfield-watermark";
 				const WATERMARK_PERSIST_KEY = "dsh-theme-endfield-watermark-persist";
-				const isWatermarkOn = () => prefsGet(WATERMARK_KEY) !== "0";
-				const isWatermarkPersistOn = () => prefsGet(WATERMARK_PERSIST_KEY) === "1";
+				const isWatermarkOn = () => prefs.get(WATERMARK_KEY) !== "0";
+				const isWatermarkPersistOn = () => prefs.get(WATERMARK_PERSIST_KEY) === "1";
 				const isHeroVisible = () => {
 					if (typeof document === "undefined") return false;
 					const hero = document.querySelector("[class$=\"_root\"][data-phase=\"hero\"]");
@@ -1009,7 +1032,7 @@
 					return frame;
 				};
 				const LOADER_KEY = "dsh-theme-endfield-loader";
-				const isLoaderOn = () => prefsGet(LOADER_KEY) === "1";
+				const isLoaderOn = () => prefs.get(LOADER_KEY) === "1";
 				let loaderEl = null;
 				let loaderRaf = null;
 				let loaderTick = null;
@@ -1179,13 +1202,13 @@
 						loaderKill = window.setTimeout(destroyLoader, 4890);
 					} else if (loaderRaf === null && loaderTick === null) destroyLoader();
 				};
-				onPrefsSettled = () => {
+				prefs.onSettled(() => {
 					if (loaderDone || loaderEl !== null) return;
-					if (prefsEdited.has("loader")) return;
+					if (prefs.wasEdited("loader")) return;
 					if (!isEnabled()) return;
 					if (!isLoaderOn()) return;
 					runLoader();
-				};
+				});
 				const getSessions = () => services.sessions();
 				let turnUnsubList = null;
 				let turnUnsubSession = null;
@@ -1380,10 +1403,10 @@
 				const NOTIFY_DONE_KEY = "dsh-theme-endfield-notify-done";
 				const NOTIFY_QUESTION_KEY = "dsh-theme-endfield-notify-question";
 				const NOTIFY_APPROVE_KEY = "dsh-theme-endfield-notify-approve";
-				const isNotifyOn = () => prefsGet(NOTIFY_KEY) !== "0";
-				const isNotifyDoneOn = () => prefsGet(NOTIFY_DONE_KEY) !== "0";
-				const isNotifyQuestionOn = () => prefsGet(NOTIFY_QUESTION_KEY) !== "0";
-				const isNotifyApproveOn = () => prefsGet(NOTIFY_APPROVE_KEY) !== "0";
+				const isNotifyOn = () => prefs.get(NOTIFY_KEY) !== "0";
+				const isNotifyDoneOn = () => prefs.get(NOTIFY_DONE_KEY) !== "0";
+				const isNotifyQuestionOn = () => prefs.get(NOTIFY_QUESTION_KEY) !== "0";
+				const isNotifyApproveOn = () => prefs.get(NOTIFY_APPROVE_KEY) !== "0";
 				/** Does this attention kind have a notification switch flipped on? */
 				const notifyWantsKind = (kind) => {
 					if (kind === "question") return isNotifyQuestionOn();
@@ -1607,7 +1630,7 @@
 					syncTurnWatch();
 					syncAudioAttentionWatch();
 				}
-				reconcileFromPrefs = () => {
+				prefs.setReconciler(() => {
 					const enabledNext = isEnabled();
 					const enabledNow = mounted;
 					if (enabledNext && !enabledNow) mount();
@@ -1623,7 +1646,7 @@
 						syncTurnWatch();
 						syncAudioAttentionWatch();
 					} else stopAudioAttentionWatch();
-				};
+				});
 				const ENDFIELD_NS = "settings.theme-endfield";
 				const LOCALE_ZH = {
 					nav: "终末地主题设置",
@@ -1852,7 +1875,7 @@
 						const [palette, setPalette] = R.useState(readPalette());
 						const [glass, setGlass] = R.useState(readGlass());
 						const [texture, setTexture] = R.useState(readTexture());
-						const [mode, setMode] = R.useState(prefsGet(RADIUS_KEY) || "square");
+						const [mode, setMode] = R.useState(prefs.get(RADIUS_KEY) || "square");
 						const [motion, setMotion] = R.useState(readMotion());
 						const [audioOn, setAudioOn] = R.useState(isAudioOn());
 						const [audioBoot, setAudioBoot] = R.useState(isAudioBootOn());
@@ -1874,7 +1897,7 @@
 							}).catch(() => {});
 						};
 						if (typeof R.useEffect === "function") {
-							panelMounted = true;
+							prefs.markPanelMounted();
 							const resyncPanelFromPrefs = () => {
 								setEnabled(isEnabled());
 								setWmOn(isWatermarkOn());
@@ -1886,7 +1909,7 @@
 								setNotifyApprove(isNotifyApproveOn());
 								setPalette(readPalette());
 								setGlass(readGlass());
-								setMode(prefsGet(RADIUS_KEY) || "square");
+								setMode(prefs.get(RADIUS_KEY) || "square");
 								setMotion(readMotion());
 								setAudioOn(isAudioOn());
 								setAudioBoot(isAudioBootOn());
@@ -1897,7 +1920,7 @@
 								setAudioDiag(isAudioDiagOn());
 							};
 							R.useEffect(() => {
-								const unsubscribe = prefsSubscribe(resyncPanelFromPrefs);
+								const unsubscribe = prefs.listen(resyncPanelFromPrefs);
 								resyncPanelFromPrefs();
 								return unsubscribe;
 							}, []);
@@ -1945,19 +1968,19 @@
 						};
 						const setGlassValue = (value) => {
 							if (!GLASS_OPTIONS.includes(value)) return;
-							prefsSet(GLASS_KEY, value);
+							prefs.set(GLASS_KEY, value);
 							setGlass(value);
 							syncGlass();
 						};
 						const setTextureValue = (value) => {
 							if (!TEXTURE_OPTIONS.includes(value)) return;
-							prefsSet(TEXTURE_KEY, value);
+							prefs.set(TEXTURE_KEY, value);
 							setTexture(value);
 							syncTexture();
 						};
 						const toggleTheme = () => {
 							const next = !isEnabled();
-							prefsSet(ENABLED_KEY, next ? "1" : "0");
+							prefs.set(ENABLED_KEY, next ? "1" : "0");
 							setEnabled(next);
 							if (next) {
 								mount();
@@ -1970,13 +1993,13 @@
 						const setPaletteValue = (value) => {
 							if (value !== "gray" && value !== "valley" && value !== "wuling") return;
 							if (value === readPalette()) return;
-							prefsSet(PALETTE_KEY, value);
+							prefs.set(PALETTE_KEY, value);
 							setPalette(value);
 							syncPaletteClass();
 						};
 						const toggleWm = () => {
 							const next = !isWatermarkOn();
-							prefsSet(WATERMARK_KEY, next ? "1" : "0");
+							prefs.set(WATERMARK_KEY, next ? "1" : "0");
 							setWmOn(next);
 							syncWatermarkVisibility();
 						};
@@ -1984,44 +2007,44 @@
 						const setMotionValue = (value) => {
 							if (value !== "signal" && value !== "off") return;
 							if (value === readMotion()) return;
-							prefsSet(MOTION_KEY, value);
+							prefs.set(MOTION_KEY, value);
 							setMotion(value);
 							syncMotion();
 						};
 						const setWmPersistValue = (value) => {
 							const next = value === "1";
 							if (next === isWatermarkPersistOn()) return;
-							prefsSet(WATERMARK_PERSIST_KEY, next ? "1" : "0");
+							prefs.set(WATERMARK_PERSIST_KEY, next ? "1" : "0");
 							setWmPersist(next);
 							syncWatermarkVisibility();
 						};
 						const toggleNotify = () => {
 							const next = !isNotifyOn();
-							prefsSet(NOTIFY_KEY, next ? "1" : "0");
+							prefs.set(NOTIFY_KEY, next ? "1" : "0");
 							setNotifyOn(next);
 							syncAudioAttentionWatch();
 							if (!next) destroyNotify();
 						};
 						const toggleNotifyDone = () => {
 							const next = !isNotifyDoneOn();
-							prefsSet(NOTIFY_DONE_KEY, next ? "1" : "0");
+							prefs.set(NOTIFY_DONE_KEY, next ? "1" : "0");
 							setNotifyDone(next);
 						};
 						const toggleNotifyQuestion = () => {
 							const next = !isNotifyQuestionOn();
-							prefsSet(NOTIFY_QUESTION_KEY, next ? "1" : "0");
+							prefs.set(NOTIFY_QUESTION_KEY, next ? "1" : "0");
 							setNotifyQuestion(next);
 							syncAudioAttentionWatch();
 						};
 						const toggleNotifyApprove = () => {
 							const next = !isNotifyApproveOn();
-							prefsSet(NOTIFY_APPROVE_KEY, next ? "1" : "0");
+							prefs.set(NOTIFY_APPROVE_KEY, next ? "1" : "0");
 							setNotifyApprove(next);
 							syncAudioAttentionWatch();
 						};
 						const toggleLoader = () => {
 							const next = !isLoaderOn();
-							prefsSet(LOADER_KEY, next ? "1" : "0");
+							prefs.set(LOADER_KEY, next ? "1" : "0");
 							setLoaderOn(next);
 							if (next) {
 								loaderDone = false;
@@ -2036,8 +2059,8 @@
 						};
 						const setRadiusValue = (value) => {
 							if (value !== "square" && value !== "round") return;
-							if (value === (prefsGet(RADIUS_KEY) || "square")) return;
-							prefsSet(RADIUS_KEY, value);
+							if (value === (prefs.get(RADIUS_KEY) || "square")) return;
+							prefs.set(RADIUS_KEY, value);
 							setMode(value);
 							if (value === "round") document.body.classList.add("theme-endfield-round");
 							else document.body.classList.remove("theme-endfield-round");
@@ -2059,47 +2082,47 @@
 						}, t("preview"));
 						const toggleAudio = () => {
 							const next = !audioOn;
-							prefsSet(AUDIO_ENABLED_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_ENABLED_KEY, next ? "1" : "0");
 							setAudioOn(next);
 							syncAudioAttentionWatch();
 							if (next) playPreview("turn-done");
 						};
 						const toggleAudioStart = () => {
 							const next = !audioStart;
-							prefsSet(AUDIO_TURN_START_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_TURN_START_KEY, next ? "1" : "0");
 							setAudioStart(next);
 							if (next) playPreview("turn-start");
 						};
 						const toggleAudioBoot = () => {
 							const next = !audioBoot;
-							prefsSet(AUDIO_BOOT_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_BOOT_KEY, next ? "1" : "0");
 							setAudioBoot(next);
 							if (next) playPreview("boot");
 						};
 						const toggleAudioDone = () => {
 							const next = !audioDone;
-							prefsSet(AUDIO_TURN_DONE_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_TURN_DONE_KEY, next ? "1" : "0");
 							setAudioDone(next);
 							if (next) playPreview("turn-done");
 						};
 						const setAudioVolumeValue = (next) => {
 							const clamped = Math.min(100, Math.max(0, Math.round(next)));
-							prefsSet(AUDIO_VOLUME_KEY, String(clamped));
+							prefs.set(AUDIO_VOLUME_KEY, String(clamped));
 							setAudioVolume(clamped);
 						};
 						const toggleAudioHumanOnly = () => {
 							const next = !audioHumanOnly;
-							prefsSet(AUDIO_HUMAN_ONLY_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_HUMAN_ONLY_KEY, next ? "1" : "0");
 							setAudioHumanOnly(next);
 						};
 						const toggleAudioDiag = () => {
 							const next = !audioDiag;
-							prefsSet(AUDIO_DIAG_KEY, next ? "1" : "0");
+							prefs.set(AUDIO_DIAG_KEY, next ? "1" : "0");
 							setAudioDiag(next);
 						};
 						const applySoundDir = (value) => {
 							const text = typeof value === "string" ? value.trim() : "";
-							prefsSet(AUDIO_SOUND_DIR_KEY, text);
+							prefs.set(AUDIO_SOUND_DIR_KEY, text);
 							refreshHostState();
 						};
 						const boolSelect = (toggleFn, isOn) => (value) => {

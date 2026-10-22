@@ -58,6 +58,783 @@ function insertCss(css) {
   }
 }
 
+/* ---------- Durable preference store (replaces localStorage) ----------
+   The theme's switches used to persist through `localStorage`, which DSH
+   Desktop broke on every restart: Desktop binds a fresh random localhost
+   port per launch, so the origin (and thus the browser storage scope)
+   changed and the saved settings silently reset to defaults.
+
+   The durable authority is DSH's own settings service, and DSH 0.1.7-rc.1
+   moved it once more. The whole pre-0.1.7 seam — a host
+   `ctx.settings.register(namespace, schema)` persisted by
+   `@deepseek-ai/dsh-settings-file` to `<dshHome>/settings.yaml`, mirrored
+   to the browser as the `ctx.settingsScope` service — is GONE: the package
+   is not in the distribution any more, `settings.yaml` is not the settings
+   carrier, and the client has no `settingsScope` service at all.
+
+   What replaced it (see index.js for the host side):
+
+     host    the plugin entry exports a schemastery `Config` whose fields
+             are `.volatile()`. `ctx.settings` projects it into a form and
+             persists user edits into the PROFILE PATCH
+             (<profile>/cordis.patch.yml) through `ctx.configEditor`,
+             i.e. a path owned by DSH and independent of the web origin.
+     client  `services.configForms()` (src/client/services.js) — the
+             settings domain's shared-form service — `.get(<profile entry id>)` returns that entry's
+             ConfigForm: getSnapshot() / subscribe() / set() / unset() /
+             mutate().
+
+   The namespace is now the PROFILE ENTRY ID, not a plugin-chosen string:
+   this package's cordis.patch.yml inserts `id: theme-endfield`, and
+   index.js exports that same id as SETTINGS_ENTRY. Both halves still speak
+   the old namespace string for the legacy fallback and as the prefix of
+   every UI key in the tables below.
+
+   The >=0.2.0 floor dropped the legacy seam entirely (peerDependencies
+   enforces it): a host without `configForms` is not a supported
+   configuration, and pages that have none (an out-of-DSH page,
+   in-process tests) run on memory defaults below. Either way the values
+   live host-side, so:
+
+     dsh web     (browser, fixed loopback port)  -> host persistence
+     DSH Desktop (browser, random loopback port) -> host persistence
+
+   Both are loopback pages, so DSH resolves the connection to 'host' mode
+   and the values land on disk; a change of port does not move them because
+   nothing lives in browser storage any more.
+
+   Value model. Namespace fields are the tails of the old localStorage keys
+   and are stored as the same strings, so the semantics (and any older
+   <settings.yaml> section from a prior build) keep scanning identically:
+     default-ON switches store  '1'  and read as  !== '0'
+     default-OFF switches store '0'  and read as  === '1'
+     palette/radius/fps/speed  store one of their documented literals.
+   FIELD_DEFAULTS is the shipped fallback and mirrors index.js.
+
+   Resilience. Before the transport hands us a section (boot), or in an
+   environment with neither settings service at all (an out-of-DSH page,
+   in-process tests), the store falls back to FIELD_DEFAULTS overlaid with
+   any in-page overrides made this session. Writes are committed to the
+   settings transport only when it is ready + writable; otherwise they are
+   kept session-local so toggles still work in place but do not persist
+   (there is no durable backend to persist to — and no localStorage). */
+function createPrefsStore(services) {
+  const prefsListeners = []
+  const prefsLocal = Object.assign({}, PREFS_FIELD_DEFAULTS) // schema defaults, for boot / no transport
+  // The subset of prefsLocal a USER has actually edited this session. It is what
+  // prefsGetValue overlays on the fetched section: prefsLocal as a whole carries
+  // the shipped defaults, so overlaying all of it would shadow the very values
+  // the host just served (watermark off would read back as its default on).
+  const prefsLocalEdited = new Set()
+  // Fields a panel toggle changed so far but that have not yet been durably
+  // committed to the host scope. If the scope was not ready at apply() time and
+  // only appears later, these are replayed so a pre-bind edit still persists
+  // instead of silently living in page-only memory.
+  const prefsDirty = new Set()
+  // Fields whose value THIS SESSION changed (see prefsSet), regardless of where
+  // that edit currently stands. Used to tell "the host already holds this value"
+  // apart from "the user put it back to a value the host happens to hold":
+  // only the former means there is nothing left to persist.
+  const prefsEdited = new Set()
+  let prefsFieldValue = null // last schema-resolved user+base+defaults section from the scope, if any
+  /* The bound settings transport: a DSH `ConfigForm` answering
+     getSnapshot()/subscribe()/set(), which is all the store below needs;
+     `prefsScopeKind` records what it is (for diagnostics and the
+     write-settlement contract). The pre-0.1.7 `settingsScope` seam was
+     dropped with the >=0.2.0 floor: pages without `configForms` (an
+     out-of-DSH page, in-process tests) run on memory defaults. */
+  let prefsScope = null
+  let prefsScopeKind = null // 'configForms' | null (memory has no scope)
+  let prefsScopeNs = null // the namespace / profile entry id the scope came from
+  let prefsUnsubscribe = null // disposer of the active scope subscription, if any
+  let prefsBindTimer = null // retry handle for a settings transport that arrives late
+  let prefsRetryTimer = null // bounded retry for held edits whose ready cue has not arrived
+  let prefsSettleTimer = null // bounded settle watch for a transport bound before it was ready
+  // Max held-edit retry passes. The ready transition is normally the cue; this
+  // bounded timer is the safety net for a mirror whose first describe predates
+  // a late host registration and sees no document commit to rerun on.
+  const PREFS_RETRY_LIMIT = 20 // ~20 * 500ms = up to ~10s after the last held edit
+  let prefsRetryCount = 0
+  // True while prefsReplayDirty is mid-pass. A normal DSH scope.set is async,
+  // but the mirror can fold a ready snapshot in synchronously (and document
+  // mocks/transitions too), which would re-enter the replay from the theme's
+  // own subscription and write the same held edits twice. The bus flag makes a
+  // single replay pass authoritative; re-entrant calls become no-ops.
+  let prefsReplayBusy = false
+  /* Theme layers install *their* reconcile here once they exist (updated from
+     the bottom of apply) so a transport event can live-apply a real change. */
+  let reconciler = null
+  /* True once an authoritative (status:'ready') section has been read for THIS
+     page load, plus the one-shot hook the startup surfaces that depend on such a
+     section install below. See prefsMarkSettled. */
+  let prefsSettledOnce = false
+  let settledHook = null
+  /* Whether the settings page has rendered its body, for the boot report: a
+     report from a page whose settings page was never opened is expected to
+     show nothing, and must not be mistaken for a failure. */
+  let panelMounted = false
+  /* --- transport selection ------------------------------------------------
+     The durable-preference seam is the settings domain's shared-form service
+     (>=0.2.0 floor; the pre-0.1.7 `settingsScope` binder was dropped — a
+     host without configForms is not a supported configuration):
+
+        cfg = services.configForms()   (the settings domain's
+        shared-form service; see src/client/services.js)
+        cfg.get(<profile entry id>) -> ConfigForm with
+        getSnapshot() / subscribe() / set() / unset() / mutate()
+        and a snapshot of { status, value, base, user, revision,
+        writable, mode }. set() returns Promise<boolean>: false
+        means the Host refused or SKIPPED the write (the classic
+        case being memory mode on a non-loopback page).
+        0.2.1-rc.2 keeps this seam but DELETED `mode` (and
+        `persistence`): the snapshot is { status, value, base,
+        user, revision, writable } and every accepted set() is a
+        remote.settings.mutate() against the Host document —
+        treat a missing mode as durable (see the durable write
+        gate below); only an explicit mode:'memory' (0.1.7-0.2.0
+        on a non-loopback page) refuses.
+
+      A ConfigForm is keyed by the PROFILE ENTRY ID, which the patch layer
+      assigns: this package's own bundle patch inserts `theme-endfield`, but a
+      hand-written insert may use the package name and the loader's tree path
+      prefixes include groups with `include:`. PREFS_ENTRY_CANDIDATES lists the
+      spellings this package can be installed under, in likelihood order.
+      Acquisition prefers whichever candidate the Host actually SERVES and
+      otherwise binds the first one immediately: a form is only a lazy view over
+      the shared mirror, so binding early is what lets a slow boot deliver its
+      section late instead of losing that page load's settings entirely. A wrong
+      guess self-heals — while the bound form reports 'unavailable' and the
+      mirror reloads, prefsOnScopeChange moves the binding to whichever
+      candidate is served. */
+  const PREFS_ENTRY_CANDIDATES = [
+    PREFS_ENTRY,                   // this package's cordis.patch.yml row id
+    'include:' + PREFS_ENTRY,      // loader tree path when bundle-mounted
+    PREFS_NS,                      // a row inserted under the old namespace name
+    'include:' + PREFS_NS,
+  ]
+  /* The 0.1.7 shared-form service, or undefined on a host that has none. Both
+     access forms are tried: the injected-property spelling DSH's own client
+     plugins use, then the optional-lookup form this module has always used. */
+  const getConfigForms = () => {
+    return services.configForms()
+  }
+  /* The namespaces the Host's describe view actually SERVES, for diagnostics.
+     This is the one fact that tells "the host half exported no Config" apart
+     from "the client bound an entry spelling this install does not use": both
+     leave the bound form unserved, and only the served list says which one
+     happened. Returns null while the mirror has not answered yet. */
+  const prefsServedNamespaces = () => {
+    try {
+      const forms = getConfigForms()
+      if (forms === undefined || typeof forms.describe !== 'function') return null
+      const mirrored = forms.describe().getSnapshot()
+      const view = mirrored && mirrored.view
+      if (!view || !Array.isArray(view.namespaces)) return null
+      return view.namespaces.map((row) => row && row.ns)
+    } catch (e) { return null }
+  }
+  /* Snapshot of any transport object, or null when it cannot be read. */
+  const prefsSnapshotOf = (scope) => {
+    if (!scope || typeof scope.getSnapshot !== 'function') return null
+    try { return scope.getSnapshot() } catch (e) { return null }
+  }
+  /* The first CANDIDATE spelling the Host actually serves (status 'ready'),
+     or null. Kept separate from acquisition because it is also the re-check a
+     bound-but-unserved form runs when the mirror reloads. */
+  const prefsFindReadyForm = () => {
+    const forms = getConfigForms()
+    if (forms === undefined) return null
+    for (const ns of PREFS_ENTRY_CANDIDATES) {
+      let form = null
+      try { form = forms.get(ns) } catch (e) { form = null }
+      if (!form || typeof form.getSnapshot !== 'function') continue
+      const snap = prefsSnapshotOf(form)
+      if (snap !== null && snap.status === 'ready') return { scope: form, kind: 'configForms', ns }
+    }
+    return null
+  }
+  /* Acquire the transport for this page.
+     A SERVED candidate wins outright. Otherwise the FIRST candidate is bound
+     anyway, even while the mirror is still 'loading' or reports it
+     'unavailable': a ConfigForm always exists (it is a lazy view over the
+     shared mirror), and binding it immediately is what lets a slow or
+     later-served Host still deliver its section through the subscription.
+     A wrong guess is not fatal: prefsOnScopeChange re-selects as soon as
+     another candidate is served. No transport at all (a page without the
+     configForms service) returns null: the store runs on memory defaults.
+     The pre-0.1.7 settingsScope binder is gone with the >=0.2.0 floor. */
+  const acquirePrefsScope = () => {
+    const ready = prefsFindReadyForm()
+    if (ready !== null) return ready
+    const forms = getConfigForms()
+    if (forms !== undefined) {
+      for (const ns of PREFS_ENTRY_CANDIDATES) {
+        let form = null
+        try { form = forms.get(ns) } catch (e) { form = null }
+        if (form && typeof form.getSnapshot === 'function') return { scope: form, kind: 'configForms', ns }
+      }
+    }
+    return null
+  }
+  /* A schema-accepted section from the transport, else in-memory defaults
+     (PREFS_FIELD_DEFAULTS is the fallback BEFORE a first section arrives).
+     Fields the user has edited this session are overlaid ON TOP on purpose: a
+     toggle writes prefsLocal synchronously and only then does the host echo the
+     section back, so reading the fetched section first would show the panel the
+     new state while the theme still acted on the old one until the round-trip
+     closed. Only EDITED fields are overlaid (see prefsLocalEdited), so a served
+     value for any other field is still what the theme reads. */
+  let prefsOverlayCache = null
+  const prefsGetValue = () => {
+    const base = prefsFieldValue || PREFS_FIELD_DEFAULTS
+    if (prefsLocalEdited.size === 0) return base
+    /* Hot path: the watermark observer reads prefs many
+       times per frame. Rebuilding this overlay per read allocated a fresh
+       ~24-key object every time; caching it against the base-section
+       REFERENCE keeps those reads allocation-free. prefsSet invalidates on
+       every edit (the only place prefsLocalEdited grows), and a new section
+       from the host arrives as a different `base` reference, so a stale pair
+       can never be served. Callers treat the result as read-only — prefsGet
+       is the sole runtime consumer and only reads single fields. */
+    if (prefsOverlayCache !== null && prefsOverlayCache.base === base) return prefsOverlayCache.out
+    const out = Object.assign({}, base)
+    for (const field of prefsLocalEdited) out[field] = prefsLocal[field]
+    prefsOverlayCache = { base, out }
+    return out
+  }
+  /** read one field as its raw stored string: <stored-or-default>, never null. */
+  const prefsGet = (rawKey) => {
+    const field = prefsFieldOf(rawKey)
+    const sec = prefsGetValue()
+    if (sec && Object.prototype.hasOwnProperty.call(sec, field)) return String(sec[field])
+    return PREFS_FIELD_DEFAULTS[field]
+  }
+  /** subscribe to any change of the whole namespace (transport or local). */
+  const prefsSubscribe = (listener) => {
+    prefsListeners.push(listener)
+    return () => {
+      const i = prefsListeners.indexOf(listener)
+      if (i >= 0) prefsListeners.splice(i, 1)
+    }
+  }
+  const prefsEmit = () => {
+    for (const l of prefsListeners.slice()) { try { l() } catch (e) { /* keep going */ } }
+    if (reconciler) try { reconciler() } catch (e) { /* keep going */ }
+  }
+  /* The FIRST authoritative section of a page load is a moment of its own: it is
+     the instant the stored preferences become knowable at all. On a real page
+     load the Host serves that section over the wire, so every read made while
+     apply() runs — including the boot plate's — falls back to the schema
+     defaults. A surface whose whole job happens at startup therefore cannot act
+     on its apply()-time read; it hangs off this transition instead.
+
+     Fires at most once per page load, and only AFTER the section has been
+     resolved (prefsFieldValue assigned) and any legacy migration has run, so a
+     hook reading prefsGet() sees final values rather than a half-applied
+     snapshot. Deliberately not re-fired by later sections: a section that
+     changes later is an ordinary runtime edit, not a page load. */
+  const prefsMarkSettled = () => {
+    if (prefsSettledOnce) return
+    prefsSettledOnce = true
+    if (settledHook) try { settledHook() } catch (e) { /* keep going */ }
+  }
+  const dbg = (...a) => { try { if (typeof console !== 'undefined' && console.warn) console.warn('[dsh-theme-endfield:prefs]', ...a) } catch (e) { /* noop */ } }
+
+  /* --- Durable write gate -----------------------------------------------
+     A scope snapshot from @deepseek-ai/dsh-client-ui-settings carries three
+     flags that must ALL hold before a scope.set can durably land:
+       mode    === 'host'   OPTIONAL since DSH 0.2.1-rc.2, which DELETED the
+                            field (and `persistence`) from the snapshot: the
+                            shape is { status, value, base, user, revision,
+                            writable } and every accepted set() is a
+                            remote.settings.mutate() against the Host
+                            document. A missing mode therefore means durable;
+                            only an explicit 'memory' — 0.1.7-rc.* on a
+                            non-loopback page, which never persists — refuses.
+                            (Requiring mode==='host' verbatim on 0.2.1 held
+                            every write, retried it inside the bounded settle
+                            window and then dropped it: toggles worked for
+                            the page session and reset on reload.)
+       status  === 'ready'  the Host's describe view actually SERVES this
+                            namespace and a decoded value stands. It stays
+                            'loading' before the first accepted section and
+                            becomes 'unavailable' when the namespace is NOT in
+                            the host's served list (the host half has not run
+                            its ctx.settings.register(...) yet, or the mirror
+                            last fetched before it appeared). A scope.set into
+                            a 'loading'/'unavailable' host scope reaches no
+                            durable store.
+       writable=== true     the Host document accepts writes.
+     Gating on snap.writable ALONE is the old bug: a host-mode describe view
+     answers writable=true even while this namespace is still unserved, so the
+     old code fired scope.set into a namespace the host had not registered,
+     cleared the dirty mark and logged the misleading
+     `commit ... status= unavailable` warn — the preference kept working for
+     the page session but vanished on the next reload. We issue a real wire
+     write only once the namespace is genuinely served, and keep the edit
+     dirty so a later ready transition (re)plays it. */
+  const prefsSnap = () => {
+    const scope = prefsScope
+    if (!scope) return null
+    try { return scope.getSnapshot() } catch (e) { return null }
+  }
+  const prefsDurablyServed = (snap) => !!snap && (snap.mode === undefined || snap.mode === 'host') && snap.status === 'ready' && !!snap.writable
+  /* One field write through the bound transport, with one settlement contract
+     for both generations. The legacy scope.set() is fire-and-forget; a
+     ConfigForm's set() returns Promise<boolean>, where false means the Host
+     REFUSED or SKIPPED the write (most commonly memory mode on a non-loopback
+     page) and a rejection means the wire call failed. Either way the edit is
+     put back into prefsDirty so a later ready/replay pass retries it instead
+     of the setting looking saved while nothing reached the document.
+     Deliberately NOT marked dirty up front for a thenable write: DSH's own
+     client folds an ACCEPTED write into the shared mirror before the returned
+     promise resolves, so a synchronous dirty mark would make every toggle
+     emit a redundant second write. A late repair beats a duplicate write.
+     @returns true when the write was issued (not when it was accepted). */
+  const prefsWriteField = (field, value) => {
+    const scope = prefsScope
+    if (!scope || typeof scope.set !== 'function') return false
+    let result = null
+    try { result = scope.set(field, String(value)) } catch (e) {
+      dbg('set threw', field, e && e.message)
+      prefsDirty.add(field)
+      return false
+    }
+    if (result && typeof result.then === 'function') {
+      result.then((ok) => {
+        if (ok === false) {
+          dbg('set REFUSED by the host', field, value)
+          prefsDirty.add(field)
+          prefsScheduleRetry()
+        } else {
+          prefsDirty.delete(field)
+        }
+      }, (e) => {
+        dbg('set REJECTED', field, value, String(e && e.message || e))
+        prefsDirty.add(field)
+      })
+    } else {
+      prefsDirty.delete(field)
+    }
+    return true
+  }
+  /* Push edits recorded while the scope was not durably served as soon as it
+     is (bind catch-up + an unavailable/loading -> ready subscription both call
+     this). A dirty field is cleared only once it is WRITTEN to a served host
+     scope, or once the host's own FETCHED section already holds that exact
+     value. Guarded against races the same way as prefsCommit: a rejected async
+     write keeps the field for a later try. */
+  const prefsReplayDirty = () => {
+    if (prefsReplayBusy) return
+    if (prefsDirty.size === 0) return
+    prefsReplayBusy = true
+    try {
+      const snap = prefsSnap()
+      const durable = prefsDurablyServed(snap)
+      for (const field of Array.from(prefsDirty)) {
+        const local = prefsLocal[field]
+        const hostValue = snap && snap.value
+          ? (Object.prototype.hasOwnProperty.call(snap.value, field) ? String(snap.value[field]) : undefined)
+          : undefined
+        /* An edit the host ALREADY holds needs no write — provided the host
+           really holds it, rather than the user having just typed that value
+           back in. Those differ in exactly one case, and it is the one that
+           matters: the user reverts a field to a value the host's stale view
+           still reports (the pre-migration default is the common one), and
+           skipping the write would silently drop the revert. So only a field
+           this session never edited is cleared on equality; an edited field is
+           cleared by its write.
+           Equality with the shipped DEFAULT is likewise not a reason to clear:
+           the host may still hold a non-default value, and "put it back to the
+           default" is then a real edit that has to reach the document. */
+        if (local === hostValue && !prefsEdited.has(field)) {
+          prefsDirty.delete(field)
+          continue
+        }
+        if (!durable) continue
+        // Optimistically clear; a refused/rejected write puts the field back
+        // into prefsDirty from prefsWriteField's settlement handler.
+        if (prefsWriteField(field, local)) {
+          dbg('replayed held', field, '=', local)
+          prefsDirty.delete(field)
+        }
+      }
+    } finally {
+      prefsReplayBusy = false
+    }
+  }
+  /* Bounded safety net for a held edit whose "ready" cue never arrives on its
+     own. A normal scope subscription fires on the ready transition and replays
+     immediately; this is only for a mirror whose first describe predated a late
+     host registration and that sees no intermediate document commit / reconnect
+     to rerun on. Each tick simply calls prefsReplayDirty() again; once nothing
+     is held (all written) the loop stops itself. Stops after PREFS_RETRY_LIMIT
+     ticks so an environment where the namespace is genuinely never served does
+     not spin forever. */
+  const prefsStopRetry = () => {
+    if (prefsRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsRetryTimer)
+    prefsRetryTimer = null
+    prefsRetryCount = 0
+  }
+  const prefsScheduleRetry = () => {
+    // Nothing held any more: no reason to keep ticking.
+    if (prefsDirty.size === 0) { prefsStopRetry(); return }
+    // A durably-served scope needs no timer — its subscription replays fast.
+    if (prefsDurablyServed(prefsSnap())) { prefsStopRetry(); return }
+    if (prefsRetryTimer !== null) return // already ticking
+    if (typeof setTimeout !== 'function') return // no timer environment
+    prefsRetryCount = 0
+    const tick = () => {
+      prefsRetryTimer = null
+      prefsRetryCount += 1
+      if (prefsRetryCount > PREFS_RETRY_LIMIT) { prefsStopRetry(); return }
+      if (prefsDirty.size === 0) { prefsStopRetry(); return }
+      if (prefsDurablyServed(prefsSnap())) { prefsStopRetry(); return }
+      prefsReplayDirty()
+      if (prefsDirty.size > 0) prefsRetryTimer = setTimeout(tick, 500)
+      else prefsStopRetry()
+    }
+    prefsRetryTimer = setTimeout(tick, 500)
+  }
+  const prefsCommit = (field, encoded) => {
+    // Best-effort durable write. A real wire write happens only while the
+    // scope is durably served (see the gate note above); before that we stay
+    // session-local, record the edit in prefsDirty and let prefsReplayDirty
+    // push it once the namespace is served. We deliberately do NOT
+    // prefsEmit() here: the caller's toggle already reconciles the layer it
+    // changes, and the authoritative echo arrives through the scope
+    // subscription below, so an immediate synchronous emit would do the same
+    // work twice.
+    const scope = prefsScope
+    if (scope) {
+      const snap = prefsSnapshotOf(scope)
+      if (prefsDurablyServed(snap)) {
+        dbg('commit', field, '=', encoded, 'via', prefsScopeKind, prefsScopeNs, 'status=', snap.status, 'mode=', snap.mode)
+        prefsWriteField(field, encoded)
+        return true
+      }
+      dbg('held (namespace not durably served yet)', field, '=', encoded, 'snap=', snap === null ? null : { status: snap.status, writable: snap.writable, mode: snap.mode }, 'hostServes=', prefsServedNamespaces())
+    } else {
+      dbg('commit with NO settings transport bound (page-local only)', field, encoded, 'hostServes=', prefsServedNamespaces())
+    }
+    prefsDirty.add(field)
+    prefsScheduleRetry()
+    return false
+  }
+  /** write one field with the exact stored-string value the UI derives. */
+  const prefsSet = (rawKey, encoded) => {
+    const field = prefsFieldOf(rawKey)
+    prefsLocal[field] = String(encoded)
+    prefsLocalEdited.add(field)
+    prefsEdited.add(field)
+    prefsOverlayCache = null
+    prefsCommit(field, prefsLocal[field])
+  }
+  /* Normalize a section the transport handed us to a full set of SCHEMA
+     fields: the declared fields the mirror resolved, plus schema defaults for
+     any it has not. Field names come from the one table (prefsFieldOf), so a
+     section is keyed exactly the way the theme reads it. */
+  const prefsResolveSection = (section) => {
+    const out = Object.assign({}, PREFS_FIELD_DEFAULTS)
+    if (section === null || typeof section !== 'object') return out
+    for (const field of Object.keys(PREFS_FIELD_DEFAULTS)) {
+      if (Object.prototype.hasOwnProperty.call(section, field)) out[field] = String(section[field])
+    }
+    return out
+  }
+  /* Legacy-spelled fields written by the buggy build are repaired once per run;
+     the pure decision rule lives in prefs/legacy.js. */
+  const prefsMigrateLegacy = createLegacyMigrator({
+    // Thunks, not references: prefsSet/dbg are declared in this closure and the
+    // migrator only ever calls them long after apply() finished.
+    commit: (field, value) => prefsSet(field, value),
+    debug: (...a) => dbg(...a),
+  }).migrate
+  /* Everything a bound transport needs after acquisition: adopt the initial
+     snapshot, subscribe, then run the catch-up / legacy-repair / settled
+     passes the single-transport version already ran. */
+  /* Drop the active transport subscription, if any. Called by the re-selection
+     below (switching to a different entry spelling) and by run teardown. */
+  const prefsReleaseSubscription = () => {
+    if (typeof prefsUnsubscribe === 'function') {
+      try { prefsUnsubscribe() } catch (e) { /* the transport may already be gone */ }
+    }
+    prefsUnsubscribe = null
+  }
+  const prefsOnScopeChange = (scope) => {
+    const snap = prefsSnapshotOf(scope)
+    if (snap === null) return
+    /* Re-selection. A form bound before the mirror answered reports 'loading'
+       (bound while the Host was still sending its describe view) or
+       'unavailable' (this install does not use that entry spelling); the
+       moment the Host serves one of the OTHER candidates, move the binding
+       there instead of staying deaf to the real entry. Re-selection uses a
+       ready-only scan, so it can never bounce between two unserved
+       candidates.
+
+       'loading' is included in the trigger — not only 'unavailable' — because
+       a real boot binds during exactly that window: client.js reaches
+       acquirePrefsScope() while the mirror is still fetching, so the FIRST
+       candidate is bound with status:'loading'. If that guess is the wrong
+       spelling, the fix-up has to happen on the unserved side of the
+       transition; waiting for 'unavailable' alone misses a wrong form that
+       goes straight from 'loading' to a served other candidate. */
+    if ((snap.status === 'unavailable' || snap.status === 'loading') && prefsScopeKind === 'configForms') {
+      const ready = prefsFindReadyForm()
+      if (ready !== null && ready.ns !== prefsScopeNs) {
+        dbg('re-selecting settings entry', prefsScopeNs, '->', ready.ns)
+        prefsReleaseSubscription()
+        prefsScope = null
+        prefsScopeKind = null
+        prefsScopeNs = null
+        prefsBindScope(ready)
+        // A re-selection happens long after apply() (the mirror answered
+        // late), so the theme is already mounted and must reconcile onto the
+        // section that just arrived. Harmless at apply time, where no layer
+        // has installed its reconciler yet.
+        prefsEmit()
+        return
+      }
+    }
+    /* ONLY a status that cannot carry a section is ignored here. 'loading' is
+       deliberately NOT ignored: it is the state a real page load STARTS in
+       (the Host serves the section over the wire, so the bound form reports
+       status:'loading', writable:false, valueKeys:0 while apply() runs), and
+       the transition that matters — loading -> ready — is a single
+       subscription event. Returning early on 'loading' swallowed exactly that
+       event, so a section that settled after the bind never reached
+       prefsFieldValue, the held edits were never replayed onto it, and
+       prefsMarkSettled() never fired. Everything then fell back to the schema
+       defaults until the next reload, even though the Host had served the
+       user's values. The bounded settle watch usually rescued it, which is why
+       the failure was intermittent rather than total. */
+    if (snap.status !== 'ready' && snap.status !== 'unavailable' && snap.status !== 'loading') return
+    if (snap.status === 'ready' && snap.value !== undefined) prefsFieldValue = prefsResolveSection(snap.value)
+    // An unavailable/loading -> ready transition is precisely when an edit we
+    // HELD (see prefsCommit) can finally be written: replay any dirty fields
+    // the moment the namespace is durably served. prefsReplayDirty is a no-op
+    // when nothing is held or the scope is not yet served.
+    prefsReplayDirty()
+    // The FIRST served section is also the first chance to see a document the
+    // buggy build wrote (before that there is nothing to read), so the legacy
+    // repair runs here too — and again on any later section that has not been
+    // examined yet. Whatever it queues is replayed below.
+    prefsMigrateLegacy(snap.value)
+    prefsReplayDirty()
+    prefsEmit()
+    /* Deliberately last: the startup hook must read the section only after it
+       is resolved and migrated (and after prefsEmit has let the layer
+       reconciler mount a theme the settled section switched on), and it must
+       fire once rather than on every snapshot. */
+    if (snap.status === 'ready' && snap.value !== undefined) prefsMarkSettled()
+  }
+  const prefsBindScope = (acquired) => {
+    const scope = acquired.scope
+    prefsScope = scope
+    prefsScopeKind = acquired.kind
+    prefsScopeNs = acquired.ns
+    const initial = prefsSnapshotOf(scope)
+    if (initial) dbg('bound', acquired.kind, 'ns=', acquired.ns, '; initial status=', initial.status, 'writable=', initial.writable, 'mode=', initial.mode, 'valueKeys=', initial.value ? Object.keys(initial.value).length : 0)
+    if (initial && initial.status === 'ready' && initial.value !== undefined) {
+      prefsFieldValue = prefsResolveSection(initial.value)
+    }
+    /* The subscription disposer is RETAINED here (the single-transport version
+       dropped it): a ConfigForm is a shared, provider-owned controller, so the
+       run's teardown must remove this listener instead of leaking it into the
+       next run — see the prefs ctx.effect below. */
+    if (typeof scope.subscribe === 'function') {
+      try {
+        const unsubscribe = scope.subscribe(() => prefsOnScopeChange(scope))
+        if (typeof unsubscribe === 'function') prefsUnsubscribe = unsubscribe
+      } catch (e) { dbg('subscribe threw', e && e.message) }
+    }
+    // Catch up: an edit made before the scope settled must still persist. Replay
+    // only genuinely user-changed fields (those prefsSet recorded as dirty) that
+    // now differ from a freshly-fetched, durably-served host section.
+    prefsReplayDirty()
+    // Then repair a section the buggy build wrote with the pre-migration field
+    // spelling, and re-run the catch-up for whatever that migration queued.
+    prefsMigrateLegacy(initial && initial.value)
+    prefsReplayDirty()
+    /* A section that was ALREADY ready when the scope bound is authoritative on
+       the first read too. In practice no hook is installed yet at this point in
+       apply() (the boot-loader block below runs later), so this normally just
+       records the transition — the plate's own apply()-time read is already
+       correct when the section beat apply(), and that path is unchanged. */
+    if (initial && initial.status === 'ready' && initial.value !== undefined) prefsMarkSettled()
+    // Safety net for a transport bound before the Host served it (no-op when
+    // the section was ready already).
+    prefsStartSettleWatch(0)
+  }
+  /* Bounded settle watch for a transport that was bound before the Host served
+     it. The subscription is normally the cue — the shared describe mirror
+     re-derives every form on a reload and the store notifies on a snapshot
+     change — but a mirror that answers WITHOUT replacing the bound form's
+     snapshot (or that only ever serves a different entry spelling) would leave
+     this page load on schema defaults forever. This is the bounded safety net
+     the legacy generation had as its 250 ms binder poll: it re-checks a limited
+     number of times, moves to a newly served candidate spelling when one
+     appears, and stops the moment the bound snapshot is ready. */
+  const PREFS_SETTLE_LIMIT = 20 // ~20 * 500ms = up to ~10s after the bind
+  const prefsStartSettleWatch = (attempt) => {
+    if (prefsScope === null) return
+    /* A re-bind or a re-selection can start a new chain while an earlier one
+       is still pending; drop the old timer first so exactly one chain runs.
+       The passes are idempotent, but duplicate chains duplicate logs and
+       duplicate snapshot work. Clearing an already-fired handle is harmless. */
+    if (prefsSettleTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsSettleTimer)
+    prefsSettleTimer = null
+    const snap = prefsSnapshotOf(prefsScope)
+    if (snap !== null && snap.status === 'ready') {
+      /* The form is served but its store never emitted (or the value arrived
+         between acquisition and subscription). Run the same passes the
+         subscription would have run — adopt, replay, migrate, settle — unless
+         the bind already did them, then stop watching. */
+      if (prefsFieldValue === null || prefsDirty.size > 0) prefsOnScopeChange(prefsScope)
+      return
+    }
+    if (attempt >= PREFS_SETTLE_LIMIT) {
+      /* Give up loudly, once. This is the page load that will lose the user's
+         switches on the next reload, and the line below says which side is at
+         fault: boundNs/status describe the client's binding, hostServes lists
+         what the host actually serves (our entry id missing from it means the
+         host half exported no Config — see index.js). */
+      const finalSnap = prefsSnapshotOf(prefsScope)
+      dbg('settle watch gave up after', attempt, 'attempts; preferences stay page-local. boundNs=', prefsScopeNs, 'status=', finalSnap === null ? null : finalSnap.status, 'mode=', finalSnap === null ? null : finalSnap.mode, 'hostServes=', prefsServedNamespaces())
+      return
+    }
+    const ready = prefsFindReadyForm()
+    if (ready !== null && ready.ns !== prefsScopeNs) {
+      dbg('settle watch re-selecting settings entry', prefsScopeNs, '->', ready.ns)
+      prefsReleaseSubscription()
+      prefsScope = null
+      prefsScopeKind = null
+      prefsScopeNs = null
+      prefsBindScope(ready)
+      prefsEmit()
+      return
+    }
+    if (typeof setTimeout !== 'function') return
+    prefsSettleTimer = setTimeout(() => prefsStartSettleWatch(attempt + 1), 500)
+  }
+  /* One-shot boot report, logged ONLY when the store did not end up in the
+     healthy state (a served, settled, writable host section with nothing held).
+     "The switches reset on reload" has several causes that look identical from
+     the outside — the entry spelling is wrong, the mirror never answered, the
+     page is memory-backed, or an edit never reached the document — and each one
+     is a property of THIS machine's install. When everything is fine this says
+     nothing at all; when it is not, one line names the cause instead of leaving
+     it to guesswork. */
+  const prefsReportBoot = () => {
+    const snap = prefsSnapshotOf(prefsScope)
+    /* Same absence semantics as prefsDurablyServed: a 0.2.1 snapshot has no
+       `mode` at all and is durable, so it must count as healthy here too —
+       otherwise every healthy 0.2.1 page logs a misleading boot report. */
+    const healthy = snap !== null && snap.status === 'ready' && (snap.mode === undefined || snap.mode === 'host')
+      && snap.writable === true && prefsDirty.size === 0
+    if (healthy) return
+    dbg('boot report (preferences did NOT reach a durable section):',
+      'boundNs=', prefsScopeNs, 'kind=', prefsScopeKind,
+      'status=', snap === null ? null : snap.status,
+      'mode=', snap === null ? null : snap.mode,
+      'writable=', snap === null ? null : snap.writable,
+      'valueKeys=', snap && snap.value ? Object.keys(snap.value).length : 0,
+      'settled=', prefsSettledOnce,
+      'dirty=', Array.from(prefsDirty),
+      'panelMounted=', panelMounted,
+      'hostServes=', prefsServedNamespaces(),
+      'candidates=', PREFS_ENTRY_CANDIDATES)
+  }
+  /* DIAG-ROUND5 (a host-vs-store value comparison printed on every load) was
+     removed here: its cause was confirmed and fixed by the durable
+     configForms transport, and dbg() is an unconditional console.warn, so the
+     probe had become pure console noise on healthy pages. */
+  let prefsBootReportTimer = null
+  if (typeof setTimeout === 'function') {
+    // After the mirror has had a fair chance to answer (the settle watch's own
+    // budget), state the outcome once whether or not it worked. Tracked so the
+    // dispose effect below can revoke it: after a teardown prefsScope is null,
+    // which reads as "unhealthy" and would print a misleading boot report for
+    // a page that is simply gone.
+    prefsBootReportTimer = setTimeout(prefsReportBoot, PREFS_SETTLE_LIMIT * 500 + 500)
+  }
+  /* Repeatedly try to obtain a settings transport until one is servable. DSH
+     web mounts plugin rows concurrently, so the settings service (and its
+     describe mirror) can legitimately settle AFTER this theme's apply() runs;
+     without this retry a single synchronous attempt that raced would leave
+     prefsScope null forever and every subsequent toggle would silently stay
+     page-local — the exact "works now, gone on refresh" symptom. */
+  const rebindPrefs = (attempt) => {
+    if (prefsScope !== null) return
+    if (attempt > 40) { dbg('gave up binding a settings transport after retries; staying in-memory', 'hostServes=', prefsServedNamespaces()); return }
+    let acquired = null
+    try { acquired = acquirePrefsScope() } catch (e) { dbg('acquisition threw', e && e.message); acquired = null }
+    if (acquired === null) {
+      if (typeof setTimeout === 'function') {
+        if (attempt % 8 === 0) dbg('waiting for a settings transport (attempt', attempt, ')')
+        prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250)
+      }
+      return
+    }
+    try {
+      prefsBindScope(acquired)
+    } catch (e) {
+      // A throw in the middle of a bind leaves nothing usable behind: release
+      // the slot and keep retrying instead of pretending a broken transport is
+      // bound.
+      prefsScope = null
+      prefsScopeKind = null
+      prefsScopeNs = null
+      dbg('bind failed', e && e.message)
+      if (typeof setTimeout === 'function') prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250)
+    }
+  }
+  // Kick off the (re)trying transport acquisition.
+  rebindPrefs(0)
+  // Dispose on run teardown (mirrors ctx.effect owned resources). One effect
+  // owns the whole store — the earlier pair was a strict duplicate — and it
+  // also releases the transport subscription: a ConfigForm is shared and
+  // provider-owned, so leaving our listener behind would leak it into the
+  // next run of this plugin in the same page.
+  const dispose = () => {
+    prefsListeners.length = 0
+    prefsReleaseSubscription()
+    prefsScope = null
+    prefsScopeKind = null
+    prefsScopeNs = null
+    prefsFieldValue = null
+    settledHook = null
+    if (prefsBindTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsBindTimer)
+    prefsBindTimer = null
+    if (prefsRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsRetryTimer)
+    prefsRetryTimer = null
+    if (prefsSettleTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsSettleTimer)
+    prefsSettleTimer = null
+    if (prefsBootReportTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsBootReportTimer)
+    prefsBootReportTimer = null
+  }
+
+  return {
+    /* Reads and writes used by the theme surfaces. `get` is the sole runtime
+       reader the hot paths call, so it stays allocation-free for the overlay. */
+    get: prefsGet,
+    set: prefsSet,
+    commit: prefsCommit,
+    listen: prefsSubscribe,
+    wasEdited: (field) => prefsEdited.has(field),
+    ready: () => prefsSettledOnce,
+    /* Late-bound hooks: theme layers exist only once apply() has run, and the
+       settled hook is claimed by the startup surface (the boot plate). */
+    setReconciler: (fn) => { reconciler = fn },
+    onSettled: (fn) => { settledHook = fn },
+    /* Told by the settings panel that its body rendered, for the boot report. */
+    markPanelMounted: () => { panelMounted = true },
+    /* The store decides when a section becomes authoritative for this page. */
+    markSettled: prefsMarkSettled,
+    dispose,
+  }
+}
+
 function apply(ctx) {    // Idempotency: the installed bundle can be applied more than once (boot loader +
     // cordis composition both mount it). Only the first application owns tokens/styles;
     // duplicate overrideTokens would replace the layer and break the toggle's dispose.
@@ -73,65 +850,17 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     if (typeof window !== 'undefined') window.__dshThemeEndfieldApplied = true
 
     /* ---------- Durable preference store (replaces localStorage) ----------
-       The theme's switches used to persist through `localStorage`, which DSH
-       Desktop broke on every restart: Desktop binds a fresh random localhost
-       port per launch, so the origin (and thus the browser storage scope)
-       changed and the saved settings silently reset to defaults.
-
-       The durable authority is DSH's own settings service, and DSH 0.1.7-rc.1
-       moved it once more. The whole pre-0.1.7 seam — a host
-       `ctx.settings.register(namespace, schema)` persisted by
-       `@deepseek-ai/dsh-settings-file` to `<dshHome>/settings.yaml`, mirrored
-       to the browser as the `ctx.settingsScope` service — is GONE: the package
-       is not in the distribution any more, `settings.yaml` is not the settings
-       carrier, and the client has no `settingsScope` service at all.
-
-       What replaced it (see index.js for the host side):
-
-         host    the plugin entry exports a schemastery `Config` whose fields
-                 are `.volatile()`. `ctx.settings` projects it into a form and
-                 persists user edits into the PROFILE PATCH
-                 (<profile>/cordis.patch.yml) through `ctx.configEditor`,
-                 i.e. a path owned by DSH and independent of the web origin.
-         client  `services.configForms()` (src/client/services.js) — the
-                 settings domain's shared-form service — `.get(<profile entry id>)` returns that entry's
-                 ConfigForm: getSnapshot() / subscribe() / set() / unset() /
-                 mutate().
-
-       The namespace is now the PROFILE ENTRY ID, not a plugin-chosen string:
-       this package's cordis.patch.yml inserts `id: theme-endfield`, and
-       index.js exports that same id as SETTINGS_ENTRY. Both halves still speak
-       the old namespace string for the legacy fallback and as the prefix of
-       every UI key in the tables below.
-
-       The >=0.2.0 floor dropped the legacy seam entirely (peerDependencies
-       enforces it): a host without `configForms` is not a supported
-       configuration, and pages that have none (an out-of-DSH page,
-       in-process tests) run on memory defaults below. Either way the values
-       live host-side, so:
-
-         dsh web     (browser, fixed loopback port)  -> host persistence
-         DSH Desktop (browser, random loopback port) -> host persistence
-
-       Both are loopback pages, so DSH resolves the connection to 'host' mode
-       and the values land on disk; a change of port does not move them because
-       nothing lives in browser storage any more.
-
-       Value model. Namespace fields are the tails of the old localStorage keys
-       and are stored as the same strings, so the semantics (and any older
-       <settings.yaml> section from a prior build) keep scanning identically:
-         default-ON switches store  '1'  and read as  !== '0'
-         default-OFF switches store '0'  and read as  === '1'
-         palette/radius/fps/speed  store one of their documented literals.
-       FIELD_DEFAULTS is the shipped fallback and mirrors index.js.
-
-       Resilience. Before the transport hands us a section (boot), or in an
-       environment with neither settings service at all (an out-of-DSH page,
-       in-process tests), the store falls back to FIELD_DEFAULTS overlaid with
-       any in-page overrides made this session. Writes are committed to the
-       settings transport only when it is ready + writable; otherwise they are
-       kept session-local so toggles still work in place but do not persist
-       (there is no durable backend to persist to — and no localStorage). */
+       The whole store — durable values, the write gate, the held-edit queue and
+       the settings transport selection — is now ONE explicit object. Its
+       rationale and internals live in createPrefsStore() above apply(); the
+       entry owns only its lifecycle and the late-bound hooks (the live
+       reconciler and the once-per-page-load settled hook). */
+    const prefs = createPrefsStore(services)
+    /* One run-scoped effect owns every timer, listener and transport
+       subscription the store holds, and releases the provider-owned
+       ConfigForm subscription on teardown (a leaked listener would outlive the
+       run in the next mount of this plugin). */
+    services.effect(() => () => prefs.dispose())
     /* ---------- 音频通知 preferences (host half owns playback) ----------
        The browser's whole job here is switches, a volume number and the preview
        buttons; every sound is played by the host process, including the previews
@@ -152,17 +881,17 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const AUDIO_ATTENTION_URL = '/theme-endfield/audio/attention'
     // Default ON for the master switch and both live slots; default OFF for the
     // diagnostics switch, so the host console stays quiet unless asked.
-    const isAudioOn = () => prefsGet(AUDIO_ENABLED_KEY) !== '0'
-    const isAudioBootOn = () => prefsGet(AUDIO_BOOT_KEY) !== '0'
-    const isAudioStartOn = () => prefsGet(AUDIO_TURN_START_KEY) !== '0'
-    const isAudioDoneOn = () => prefsGet(AUDIO_TURN_DONE_KEY) !== '0'
-    const isAudioHumanOnly = () => prefsGet(AUDIO_HUMAN_ONLY_KEY) !== '0'
-    const isAudioDiagOn = () => prefsGet(AUDIO_DIAG_KEY) === '1'
+    const isAudioOn = () => prefs.get(AUDIO_ENABLED_KEY) !== '0'
+    const isAudioBootOn = () => prefs.get(AUDIO_BOOT_KEY) !== '0'
+    const isAudioStartOn = () => prefs.get(AUDIO_TURN_START_KEY) !== '0'
+    const isAudioDoneOn = () => prefs.get(AUDIO_TURN_DONE_KEY) !== '0'
+    const isAudioHumanOnly = () => prefs.get(AUDIO_HUMAN_ONLY_KEY) !== '0'
+    const isAudioDiagOn = () => prefs.get(AUDIO_DIAG_KEY) === '1'
     const readAudioVolume = () => {
-      const parsed = Number.parseInt(prefsGet(AUDIO_VOLUME_KEY), 10)
+      const parsed = Number.parseInt(prefs.get(AUDIO_VOLUME_KEY), 10)
       return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 100
     }
-    const readAudioSoundDir = () => prefsGet(AUDIO_SOUND_DIR_KEY) || ''
+    const readAudioSoundDir = () => prefs.get(AUDIO_SOUND_DIR_KEY) || ''
     /** Ask the host to play one slot through the real notification path. */
     const previewSlot = (slot) => {
       if (typeof fetch !== 'function') return Promise.resolve({ played: false, why: 'no fetch' })
@@ -236,704 +965,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         (error) => ({ played: false, why: String(error && error.message ? error.message : error) }),
       )
     }
-    const prefsListeners = []
-    const prefsLocal = Object.assign({}, PREFS_FIELD_DEFAULTS) // schema defaults, for boot / no transport
-    // The subset of prefsLocal a USER has actually edited this session. It is what
-    // prefsGetValue overlays on the fetched section: prefsLocal as a whole carries
-    // the shipped defaults, so overlaying all of it would shadow the very values
-    // the host just served (watermark off would read back as its default on).
-    const prefsLocalEdited = new Set()
-    // Fields a panel toggle changed so far but that have not yet been durably
-    // committed to the host scope. If the scope was not ready at apply() time and
-    // only appears later, these are replayed so a pre-bind edit still persists
-    // instead of silently living in page-only memory.
-    const prefsDirty = new Set()
-    // Fields whose value THIS SESSION changed (see prefsSet), regardless of where
-    // that edit currently stands. Used to tell "the host already holds this value"
-    // apart from "the user put it back to a value the host happens to hold":
-    // only the former means there is nothing left to persist.
-    const prefsEdited = new Set()
-    let prefsFieldValue = null // last schema-resolved user+base+defaults section from the scope, if any
-    /* The bound settings transport: a DSH `ConfigForm` answering
-       getSnapshot()/subscribe()/set(), which is all the store below needs;
-       `prefsScopeKind` records what it is (for diagnostics and the
-       write-settlement contract). The pre-0.1.7 `settingsScope` seam was
-       dropped with the >=0.2.0 floor: pages without `configForms` (an
-       out-of-DSH page, in-process tests) run on memory defaults. */
-    let prefsScope = null
-    let prefsScopeKind = null // 'configForms' | null (memory has no scope)
-    let prefsScopeNs = null // the namespace / profile entry id the scope came from
-    let prefsUnsubscribe = null // disposer of the active scope subscription, if any
-    let prefsBindTimer = null // retry handle for a settings transport that arrives late
-    let prefsRetryTimer = null // bounded retry for held edits whose ready cue has not arrived
-    let prefsSettleTimer = null // bounded settle watch for a transport bound before it was ready
-    // Max held-edit retry passes. The ready transition is normally the cue; this
-    // bounded timer is the safety net for a mirror whose first describe predates
-    // a late host registration and sees no document commit to rerun on.
-    const PREFS_RETRY_LIMIT = 20 // ~20 * 500ms = up to ~10s after the last held edit
-    let prefsRetryCount = 0
-    // True while prefsReplayDirty is mid-pass. A normal DSH scope.set is async,
-    // but the mirror can fold a ready snapshot in synchronously (and document
-    // mocks/transitions too), which would re-enter the replay from the theme's
-    // own subscription and write the same held edits twice. The bus flag makes a
-    // single replay pass authoritative; re-entrant calls become no-ops.
-    let prefsReplayBusy = false
-    /* Theme layers install *their* reconcile here once they exist (updated from
-       the bottom of apply) so a transport event can live-apply a real change. */
-    let reconcileFromPrefs = null
-    /* True once an authoritative (status:'ready') section has been read for THIS
-       page load, plus the one-shot hook the startup surfaces that depend on such a
-       section install below. See prefsMarkSettled. */
-    let prefsSettledOnce = false
-    let onPrefsSettled = null
-    /* Whether the settings page has rendered its body, for the boot report: a
-       report from a page whose settings page was never opened is expected to
-       show nothing, and must not be mistaken for a failure. */
-    let panelMounted = false
-    /* --- transport selection ------------------------------------------------
-       The durable-preference seam is the settings domain's shared-form service
-       (>=0.2.0 floor; the pre-0.1.7 `settingsScope` binder was dropped — a
-       host without configForms is not a supported configuration):
-
-          cfg = services.configForms()   (the settings domain's
-          shared-form service; see src/client/services.js)
-          cfg.get(<profile entry id>) -> ConfigForm with
-          getSnapshot() / subscribe() / set() / unset() / mutate()
-          and a snapshot of { status, value, base, user, revision,
-          writable, mode }. set() returns Promise<boolean>: false
-          means the Host refused or SKIPPED the write (the classic
-          case being memory mode on a non-loopback page).
-          0.2.1-rc.2 keeps this seam but DELETED `mode` (and
-          `persistence`): the snapshot is { status, value, base,
-          user, revision, writable } and every accepted set() is a
-          remote.settings.mutate() against the Host document —
-          treat a missing mode as durable (see the durable write
-          gate below); only an explicit mode:'memory' (0.1.7-0.2.0
-          on a non-loopback page) refuses.
-
-        A ConfigForm is keyed by the PROFILE ENTRY ID, which the patch layer
-        assigns: this package's own bundle patch inserts `theme-endfield`, but a
-        hand-written insert may use the package name and the loader's tree path
-        prefixes include groups with `include:`. PREFS_ENTRY_CANDIDATES lists the
-        spellings this package can be installed under, in likelihood order.
-        Acquisition prefers whichever candidate the Host actually SERVES and
-        otherwise binds the first one immediately: a form is only a lazy view over
-        the shared mirror, so binding early is what lets a slow boot deliver its
-        section late instead of losing that page load's settings entirely. A wrong
-        guess self-heals — while the bound form reports 'unavailable' and the
-        mirror reloads, prefsOnScopeChange moves the binding to whichever
-        candidate is served. */
-    const PREFS_ENTRY_CANDIDATES = [
-      PREFS_ENTRY,                   // this package's cordis.patch.yml row id
-      'include:' + PREFS_ENTRY,      // loader tree path when bundle-mounted
-      PREFS_NS,                      // a row inserted under the old namespace name
-      'include:' + PREFS_NS,
-    ]
-    /* The 0.1.7 shared-form service, or undefined on a host that has none. Both
-       access forms are tried: the injected-property spelling DSH's own client
-       plugins use, then the optional-lookup form this module has always used. */
-    const getConfigForms = () => {
-      return services.configForms()
-    }
-    /* The namespaces the Host's describe view actually SERVES, for diagnostics.
-       This is the one fact that tells "the host half exported no Config" apart
-       from "the client bound an entry spelling this install does not use": both
-       leave the bound form unserved, and only the served list says which one
-       happened. Returns null while the mirror has not answered yet. */
-    const prefsServedNamespaces = () => {
-      try {
-        const forms = getConfigForms()
-        if (forms === undefined || typeof forms.describe !== 'function') return null
-        const mirrored = forms.describe().getSnapshot()
-        const view = mirrored && mirrored.view
-        if (!view || !Array.isArray(view.namespaces)) return null
-        return view.namespaces.map((row) => row && row.ns)
-      } catch (e) { return null }
-    }
-    /* Snapshot of any transport object, or null when it cannot be read. */
-    const prefsSnapshotOf = (scope) => {
-      if (!scope || typeof scope.getSnapshot !== 'function') return null
-      try { return scope.getSnapshot() } catch (e) { return null }
-    }
-    /* The first CANDIDATE spelling the Host actually serves (status 'ready'),
-       or null. Kept separate from acquisition because it is also the re-check a
-       bound-but-unserved form runs when the mirror reloads. */
-    const prefsFindReadyForm = () => {
-      const forms = getConfigForms()
-      if (forms === undefined) return null
-      for (const ns of PREFS_ENTRY_CANDIDATES) {
-        let form = null
-        try { form = forms.get(ns) } catch (e) { form = null }
-        if (!form || typeof form.getSnapshot !== 'function') continue
-        const snap = prefsSnapshotOf(form)
-        if (snap !== null && snap.status === 'ready') return { scope: form, kind: 'configForms', ns }
-      }
-      return null
-    }
-    /* Acquire the transport for this page.
-       A SERVED candidate wins outright. Otherwise the FIRST candidate is bound
-       anyway, even while the mirror is still 'loading' or reports it
-       'unavailable': a ConfigForm always exists (it is a lazy view over the
-       shared mirror), and binding it immediately is what lets a slow or
-       later-served Host still deliver its section through the subscription.
-       A wrong guess is not fatal: prefsOnScopeChange re-selects as soon as
-       another candidate is served. No transport at all (a page without the
-       configForms service) returns null: the store runs on memory defaults.
-       The pre-0.1.7 settingsScope binder is gone with the >=0.2.0 floor. */
-    const acquirePrefsScope = () => {
-      const ready = prefsFindReadyForm()
-      if (ready !== null) return ready
-      const forms = getConfigForms()
-      if (forms !== undefined) {
-        for (const ns of PREFS_ENTRY_CANDIDATES) {
-          let form = null
-          try { form = forms.get(ns) } catch (e) { form = null }
-          if (form && typeof form.getSnapshot === 'function') return { scope: form, kind: 'configForms', ns }
-        }
-      }
-      return null
-    }
-    /* A schema-accepted section from the transport, else in-memory defaults
-       (PREFS_FIELD_DEFAULTS is the fallback BEFORE a first section arrives).
-       Fields the user has edited this session are overlaid ON TOP on purpose: a
-       toggle writes prefsLocal synchronously and only then does the host echo the
-       section back, so reading the fetched section first would show the panel the
-       new state while the theme still acted on the old one until the round-trip
-       closed. Only EDITED fields are overlaid (see prefsLocalEdited), so a served
-       value for any other field is still what the theme reads. */
-    let prefsOverlayCache = null
-    const prefsGetValue = () => {
-      const base = prefsFieldValue || PREFS_FIELD_DEFAULTS
-      if (prefsLocalEdited.size === 0) return base
-      /* Hot path: the watermark observer reads prefs many
-         times per frame. Rebuilding this overlay per read allocated a fresh
-         ~24-key object every time; caching it against the base-section
-         REFERENCE keeps those reads allocation-free. prefsSet invalidates on
-         every edit (the only place prefsLocalEdited grows), and a new section
-         from the host arrives as a different `base` reference, so a stale pair
-         can never be served. Callers treat the result as read-only — prefsGet
-         is the sole runtime consumer and only reads single fields. */
-      if (prefsOverlayCache !== null && prefsOverlayCache.base === base) return prefsOverlayCache.out
-      const out = Object.assign({}, base)
-      for (const field of prefsLocalEdited) out[field] = prefsLocal[field]
-      prefsOverlayCache = { base, out }
-      return out
-    }
-    /** read one field as its raw stored string: <stored-or-default>, never null. */
-    const prefsGet = (rawKey) => {
-      const field = prefsFieldOf(rawKey)
-      const sec = prefsGetValue()
-      if (sec && Object.prototype.hasOwnProperty.call(sec, field)) return String(sec[field])
-      return PREFS_FIELD_DEFAULTS[field]
-    }
-    /** subscribe to any change of the whole namespace (transport or local). */
-    const prefsSubscribe = (listener) => {
-      prefsListeners.push(listener)
-      return () => {
-        const i = prefsListeners.indexOf(listener)
-        if (i >= 0) prefsListeners.splice(i, 1)
-      }
-    }
-    const prefsEmit = () => {
-      for (const l of prefsListeners.slice()) { try { l() } catch (e) { /* keep going */ } }
-      if (reconcileFromPrefs) try { reconcileFromPrefs() } catch (e) { /* keep going */ }
-    }
-    /* The FIRST authoritative section of a page load is a moment of its own: it is
-       the instant the stored preferences become knowable at all. On a real page
-       load the Host serves that section over the wire, so every read made while
-       apply() runs — including the boot plate's — falls back to the schema
-       defaults. A surface whose whole job happens at startup therefore cannot act
-       on its apply()-time read; it hangs off this transition instead.
-
-       Fires at most once per page load, and only AFTER the section has been
-       resolved (prefsFieldValue assigned) and any legacy migration has run, so a
-       hook reading prefsGet() sees final values rather than a half-applied
-       snapshot. Deliberately not re-fired by later sections: a section that
-       changes later is an ordinary runtime edit, not a page load. */
-    const prefsMarkSettled = () => {
-      if (prefsSettledOnce) return
-      prefsSettledOnce = true
-      if (onPrefsSettled) try { onPrefsSettled() } catch (e) { /* keep going */ }
-    }
-    const dbg = (...a) => { try { if (typeof console !== 'undefined' && console.warn) console.warn('[dsh-theme-endfield:prefs]', ...a) } catch (e) { /* noop */ } }
-
-    /* --- Durable write gate -----------------------------------------------
-       A scope snapshot from @deepseek-ai/dsh-client-ui-settings carries three
-       flags that must ALL hold before a scope.set can durably land:
-         mode    === 'host'   OPTIONAL since DSH 0.2.1-rc.2, which DELETED the
-                              field (and `persistence`) from the snapshot: the
-                              shape is { status, value, base, user, revision,
-                              writable } and every accepted set() is a
-                              remote.settings.mutate() against the Host
-                              document. A missing mode therefore means durable;
-                              only an explicit 'memory' — 0.1.7-rc.* on a
-                              non-loopback page, which never persists — refuses.
-                              (Requiring mode==='host' verbatim on 0.2.1 held
-                              every write, retried it inside the bounded settle
-                              window and then dropped it: toggles worked for
-                              the page session and reset on reload.)
-         status  === 'ready'  the Host's describe view actually SERVES this
-                              namespace and a decoded value stands. It stays
-                              'loading' before the first accepted section and
-                              becomes 'unavailable' when the namespace is NOT in
-                              the host's served list (the host half has not run
-                              its ctx.settings.register(...) yet, or the mirror
-                              last fetched before it appeared). A scope.set into
-                              a 'loading'/'unavailable' host scope reaches no
-                              durable store.
-         writable=== true     the Host document accepts writes.
-       Gating on snap.writable ALONE is the old bug: a host-mode describe view
-       answers writable=true even while this namespace is still unserved, so the
-       old code fired scope.set into a namespace the host had not registered,
-       cleared the dirty mark and logged the misleading
-       `commit ... status= unavailable` warn — the preference kept working for
-       the page session but vanished on the next reload. We issue a real wire
-       write only once the namespace is genuinely served, and keep the edit
-       dirty so a later ready transition (re)plays it. */
-    const prefsSnap = () => {
-      const scope = prefsScope
-      if (!scope) return null
-      try { return scope.getSnapshot() } catch (e) { return null }
-    }
-    const prefsDurablyServed = (snap) => !!snap && (snap.mode === undefined || snap.mode === 'host') && snap.status === 'ready' && !!snap.writable
-    /* One field write through the bound transport, with one settlement contract
-       for both generations. The legacy scope.set() is fire-and-forget; a
-       ConfigForm's set() returns Promise<boolean>, where false means the Host
-       REFUSED or SKIPPED the write (most commonly memory mode on a non-loopback
-       page) and a rejection means the wire call failed. Either way the edit is
-       put back into prefsDirty so a later ready/replay pass retries it instead
-       of the setting looking saved while nothing reached the document.
-       Deliberately NOT marked dirty up front for a thenable write: DSH's own
-       client folds an ACCEPTED write into the shared mirror before the returned
-       promise resolves, so a synchronous dirty mark would make every toggle
-       emit a redundant second write. A late repair beats a duplicate write.
-       @returns true when the write was issued (not when it was accepted). */
-    const prefsWriteField = (field, value) => {
-      const scope = prefsScope
-      if (!scope || typeof scope.set !== 'function') return false
-      let result = null
-      try { result = scope.set(field, String(value)) } catch (e) {
-        dbg('set threw', field, e && e.message)
-        prefsDirty.add(field)
-        return false
-      }
-      if (result && typeof result.then === 'function') {
-        result.then((ok) => {
-          if (ok === false) {
-            dbg('set REFUSED by the host', field, value)
-            prefsDirty.add(field)
-            prefsScheduleRetry()
-          } else {
-            prefsDirty.delete(field)
-          }
-        }, (e) => {
-          dbg('set REJECTED', field, value, String(e && e.message || e))
-          prefsDirty.add(field)
-        })
-      } else {
-        prefsDirty.delete(field)
-      }
-      return true
-    }
-    /* Push edits recorded while the scope was not durably served as soon as it
-       is (bind catch-up + an unavailable/loading -> ready subscription both call
-       this). A dirty field is cleared only once it is WRITTEN to a served host
-       scope, or once the host's own FETCHED section already holds that exact
-       value. Guarded against races the same way as prefsCommit: a rejected async
-       write keeps the field for a later try. */
-    const prefsReplayDirty = () => {
-      if (prefsReplayBusy) return
-      if (prefsDirty.size === 0) return
-      prefsReplayBusy = true
-      try {
-        const snap = prefsSnap()
-        const durable = prefsDurablyServed(snap)
-        for (const field of Array.from(prefsDirty)) {
-          const local = prefsLocal[field]
-          const hostValue = snap && snap.value
-            ? (Object.prototype.hasOwnProperty.call(snap.value, field) ? String(snap.value[field]) : undefined)
-            : undefined
-          /* An edit the host ALREADY holds needs no write — provided the host
-             really holds it, rather than the user having just typed that value
-             back in. Those differ in exactly one case, and it is the one that
-             matters: the user reverts a field to a value the host's stale view
-             still reports (the pre-migration default is the common one), and
-             skipping the write would silently drop the revert. So only a field
-             this session never edited is cleared on equality; an edited field is
-             cleared by its write.
-             Equality with the shipped DEFAULT is likewise not a reason to clear:
-             the host may still hold a non-default value, and "put it back to the
-             default" is then a real edit that has to reach the document. */
-          if (local === hostValue && !prefsEdited.has(field)) {
-            prefsDirty.delete(field)
-            continue
-          }
-          if (!durable) continue
-          // Optimistically clear; a refused/rejected write puts the field back
-          // into prefsDirty from prefsWriteField's settlement handler.
-          if (prefsWriteField(field, local)) {
-            dbg('replayed held', field, '=', local)
-            prefsDirty.delete(field)
-          }
-        }
-      } finally {
-        prefsReplayBusy = false
-      }
-    }
-    /* Bounded safety net for a held edit whose "ready" cue never arrives on its
-       own. A normal scope subscription fires on the ready transition and replays
-       immediately; this is only for a mirror whose first describe predated a late
-       host registration and that sees no intermediate document commit / reconnect
-       to rerun on. Each tick simply calls prefsReplayDirty() again; once nothing
-       is held (all written) the loop stops itself. Stops after PREFS_RETRY_LIMIT
-       ticks so an environment where the namespace is genuinely never served does
-       not spin forever. */
-    const prefsStopRetry = () => {
-      if (prefsRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsRetryTimer)
-      prefsRetryTimer = null
-      prefsRetryCount = 0
-    }
-    const prefsScheduleRetry = () => {
-      // Nothing held any more: no reason to keep ticking.
-      if (prefsDirty.size === 0) { prefsStopRetry(); return }
-      // A durably-served scope needs no timer — its subscription replays fast.
-      if (prefsDurablyServed(prefsSnap())) { prefsStopRetry(); return }
-      if (prefsRetryTimer !== null) return // already ticking
-      if (typeof setTimeout !== 'function') return // no timer environment
-      prefsRetryCount = 0
-      const tick = () => {
-        prefsRetryTimer = null
-        prefsRetryCount += 1
-        if (prefsRetryCount > PREFS_RETRY_LIMIT) { prefsStopRetry(); return }
-        if (prefsDirty.size === 0) { prefsStopRetry(); return }
-        if (prefsDurablyServed(prefsSnap())) { prefsStopRetry(); return }
-        prefsReplayDirty()
-        if (prefsDirty.size > 0) prefsRetryTimer = setTimeout(tick, 500)
-        else prefsStopRetry()
-      }
-      prefsRetryTimer = setTimeout(tick, 500)
-    }
-    const prefsCommit = (field, encoded) => {
-      // Best-effort durable write. A real wire write happens only while the
-      // scope is durably served (see the gate note above); before that we stay
-      // session-local, record the edit in prefsDirty and let prefsReplayDirty
-      // push it once the namespace is served. We deliberately do NOT
-      // prefsEmit() here: the caller's toggle already reconciles the layer it
-      // changes, and the authoritative echo arrives through the scope
-      // subscription below, so an immediate synchronous emit would do the same
-      // work twice.
-      const scope = prefsScope
-      if (scope) {
-        const snap = prefsSnapshotOf(scope)
-        if (prefsDurablyServed(snap)) {
-          dbg('commit', field, '=', encoded, 'via', prefsScopeKind, prefsScopeNs, 'status=', snap.status, 'mode=', snap.mode)
-          prefsWriteField(field, encoded)
-          return true
-        }
-        dbg('held (namespace not durably served yet)', field, '=', encoded, 'snap=', snap === null ? null : { status: snap.status, writable: snap.writable, mode: snap.mode }, 'hostServes=', prefsServedNamespaces())
-      } else {
-        dbg('commit with NO settings transport bound (page-local only)', field, encoded, 'hostServes=', prefsServedNamespaces())
-      }
-      prefsDirty.add(field)
-      prefsScheduleRetry()
-      return false
-    }
-    /** write one field with the exact stored-string value the UI derives. */
-    const prefsSet = (rawKey, encoded) => {
-      const field = prefsFieldOf(rawKey)
-      prefsLocal[field] = String(encoded)
-      prefsLocalEdited.add(field)
-      prefsEdited.add(field)
-      prefsOverlayCache = null
-      prefsCommit(field, prefsLocal[field])
-    }
-    /* Normalize a section the transport handed us to a full set of SCHEMA
-       fields: the declared fields the mirror resolved, plus schema defaults for
-       any it has not. Field names come from the one table (prefsFieldOf), so a
-       section is keyed exactly the way the theme reads it. */
-    const prefsResolveSection = (section) => {
-      const out = Object.assign({}, PREFS_FIELD_DEFAULTS)
-      if (section === null || typeof section !== 'object') return out
-      for (const field of Object.keys(PREFS_FIELD_DEFAULTS)) {
-        if (Object.prototype.hasOwnProperty.call(section, field)) out[field] = String(section[field])
-      }
-      return out
-    }
-    /* Legacy-spelled fields written by the buggy build are repaired once per run;
-       the pure decision rule lives in prefs/legacy.js. */
-    const prefsMigrateLegacy = createLegacyMigrator({
-      // Thunks, not references: prefsSet/dbg are declared in this closure and the
-      // migrator only ever calls them long after apply() finished.
-      commit: (field, value) => prefsSet(field, value),
-      debug: (...a) => dbg(...a),
-    }).migrate
-    /* Everything a bound transport needs after acquisition: adopt the initial
-       snapshot, subscribe, then run the catch-up / legacy-repair / settled
-       passes the single-transport version already ran. */
-    /* Drop the active transport subscription, if any. Called by the re-selection
-       below (switching to a different entry spelling) and by run teardown. */
-    const prefsReleaseSubscription = () => {
-      if (typeof prefsUnsubscribe === 'function') {
-        try { prefsUnsubscribe() } catch (e) { /* the transport may already be gone */ }
-      }
-      prefsUnsubscribe = null
-    }
-    const prefsOnScopeChange = (scope) => {
-      const snap = prefsSnapshotOf(scope)
-      if (snap === null) return
-      /* Re-selection. A form bound before the mirror answered reports 'loading'
-         (bound while the Host was still sending its describe view) or
-         'unavailable' (this install does not use that entry spelling); the
-         moment the Host serves one of the OTHER candidates, move the binding
-         there instead of staying deaf to the real entry. Re-selection uses a
-         ready-only scan, so it can never bounce between two unserved
-         candidates.
-
-         'loading' is included in the trigger — not only 'unavailable' — because
-         a real boot binds during exactly that window: client.js reaches
-         acquirePrefsScope() while the mirror is still fetching, so the FIRST
-         candidate is bound with status:'loading'. If that guess is the wrong
-         spelling, the fix-up has to happen on the unserved side of the
-         transition; waiting for 'unavailable' alone misses a wrong form that
-         goes straight from 'loading' to a served other candidate. */
-      if ((snap.status === 'unavailable' || snap.status === 'loading') && prefsScopeKind === 'configForms') {
-        const ready = prefsFindReadyForm()
-        if (ready !== null && ready.ns !== prefsScopeNs) {
-          dbg('re-selecting settings entry', prefsScopeNs, '->', ready.ns)
-          prefsReleaseSubscription()
-          prefsScope = null
-          prefsScopeKind = null
-          prefsScopeNs = null
-          prefsBindScope(ready)
-          // A re-selection happens long after apply() (the mirror answered
-          // late), so the theme is already mounted and must reconcile onto the
-          // section that just arrived. Harmless at apply time, where no layer
-          // has installed its reconciler yet.
-          prefsEmit()
-          return
-        }
-      }
-      /* ONLY a status that cannot carry a section is ignored here. 'loading' is
-         deliberately NOT ignored: it is the state a real page load STARTS in
-         (the Host serves the section over the wire, so the bound form reports
-         status:'loading', writable:false, valueKeys:0 while apply() runs), and
-         the transition that matters — loading -> ready — is a single
-         subscription event. Returning early on 'loading' swallowed exactly that
-         event, so a section that settled after the bind never reached
-         prefsFieldValue, the held edits were never replayed onto it, and
-         prefsMarkSettled() never fired. Everything then fell back to the schema
-         defaults until the next reload, even though the Host had served the
-         user's values. The bounded settle watch usually rescued it, which is why
-         the failure was intermittent rather than total. */
-      if (snap.status !== 'ready' && snap.status !== 'unavailable' && snap.status !== 'loading') return
-      if (snap.status === 'ready' && snap.value !== undefined) prefsFieldValue = prefsResolveSection(snap.value)
-      // An unavailable/loading -> ready transition is precisely when an edit we
-      // HELD (see prefsCommit) can finally be written: replay any dirty fields
-      // the moment the namespace is durably served. prefsReplayDirty is a no-op
-      // when nothing is held or the scope is not yet served.
-      prefsReplayDirty()
-      // The FIRST served section is also the first chance to see a document the
-      // buggy build wrote (before that there is nothing to read), so the legacy
-      // repair runs here too — and again on any later section that has not been
-      // examined yet. Whatever it queues is replayed below.
-      prefsMigrateLegacy(snap.value)
-      prefsReplayDirty()
-      prefsEmit()
-      /* Deliberately last: the startup hook must read the section only after it
-         is resolved and migrated (and after prefsEmit has let the layer
-         reconciler mount a theme the settled section switched on), and it must
-         fire once rather than on every snapshot. */
-      if (snap.status === 'ready' && snap.value !== undefined) prefsMarkSettled()
-    }
-    const prefsBindScope = (acquired) => {
-      const scope = acquired.scope
-      prefsScope = scope
-      prefsScopeKind = acquired.kind
-      prefsScopeNs = acquired.ns
-      const initial = prefsSnapshotOf(scope)
-      if (initial) dbg('bound', acquired.kind, 'ns=', acquired.ns, '; initial status=', initial.status, 'writable=', initial.writable, 'mode=', initial.mode, 'valueKeys=', initial.value ? Object.keys(initial.value).length : 0)
-      if (initial && initial.status === 'ready' && initial.value !== undefined) {
-        prefsFieldValue = prefsResolveSection(initial.value)
-      }
-      /* The subscription disposer is RETAINED here (the single-transport version
-         dropped it): a ConfigForm is a shared, provider-owned controller, so the
-         run's teardown must remove this listener instead of leaking it into the
-         next run — see the prefs ctx.effect below. */
-      if (typeof scope.subscribe === 'function') {
-        try {
-          const unsubscribe = scope.subscribe(() => prefsOnScopeChange(scope))
-          if (typeof unsubscribe === 'function') prefsUnsubscribe = unsubscribe
-        } catch (e) { dbg('subscribe threw', e && e.message) }
-      }
-      // Catch up: an edit made before the scope settled must still persist. Replay
-      // only genuinely user-changed fields (those prefsSet recorded as dirty) that
-      // now differ from a freshly-fetched, durably-served host section.
-      prefsReplayDirty()
-      // Then repair a section the buggy build wrote with the pre-migration field
-      // spelling, and re-run the catch-up for whatever that migration queued.
-      prefsMigrateLegacy(initial && initial.value)
-      prefsReplayDirty()
-      /* A section that was ALREADY ready when the scope bound is authoritative on
-         the first read too. In practice no hook is installed yet at this point in
-         apply() (the boot-loader block below runs later), so this normally just
-         records the transition — the plate's own apply()-time read is already
-         correct when the section beat apply(), and that path is unchanged. */
-      if (initial && initial.status === 'ready' && initial.value !== undefined) prefsMarkSettled()
-      // Safety net for a transport bound before the Host served it (no-op when
-      // the section was ready already).
-      prefsStartSettleWatch(0)
-    }
-    /* Bounded settle watch for a transport that was bound before the Host served
-       it. The subscription is normally the cue — the shared describe mirror
-       re-derives every form on a reload and the store notifies on a snapshot
-       change — but a mirror that answers WITHOUT replacing the bound form's
-       snapshot (or that only ever serves a different entry spelling) would leave
-       this page load on schema defaults forever. This is the bounded safety net
-       the legacy generation had as its 250 ms binder poll: it re-checks a limited
-       number of times, moves to a newly served candidate spelling when one
-       appears, and stops the moment the bound snapshot is ready. */
-    const PREFS_SETTLE_LIMIT = 20 // ~20 * 500ms = up to ~10s after the bind
-    const prefsStartSettleWatch = (attempt) => {
-      if (prefsScope === null) return
-      /* A re-bind or a re-selection can start a new chain while an earlier one
-         is still pending; drop the old timer first so exactly one chain runs.
-         The passes are idempotent, but duplicate chains duplicate logs and
-         duplicate snapshot work. Clearing an already-fired handle is harmless. */
-      if (prefsSettleTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsSettleTimer)
-      prefsSettleTimer = null
-      const snap = prefsSnapshotOf(prefsScope)
-      if (snap !== null && snap.status === 'ready') {
-        /* The form is served but its store never emitted (or the value arrived
-           between acquisition and subscription). Run the same passes the
-           subscription would have run — adopt, replay, migrate, settle — unless
-           the bind already did them, then stop watching. */
-        if (prefsFieldValue === null || prefsDirty.size > 0) prefsOnScopeChange(prefsScope)
-        return
-      }
-      if (attempt >= PREFS_SETTLE_LIMIT) {
-        /* Give up loudly, once. This is the page load that will lose the user's
-           switches on the next reload, and the line below says which side is at
-           fault: boundNs/status describe the client's binding, hostServes lists
-           what the host actually serves (our entry id missing from it means the
-           host half exported no Config — see index.js). */
-        const finalSnap = prefsSnapshotOf(prefsScope)
-        dbg('settle watch gave up after', attempt, 'attempts; preferences stay page-local. boundNs=', prefsScopeNs, 'status=', finalSnap === null ? null : finalSnap.status, 'mode=', finalSnap === null ? null : finalSnap.mode, 'hostServes=', prefsServedNamespaces())
-        return
-      }
-      const ready = prefsFindReadyForm()
-      if (ready !== null && ready.ns !== prefsScopeNs) {
-        dbg('settle watch re-selecting settings entry', prefsScopeNs, '->', ready.ns)
-        prefsReleaseSubscription()
-        prefsScope = null
-        prefsScopeKind = null
-        prefsScopeNs = null
-        prefsBindScope(ready)
-        prefsEmit()
-        return
-      }
-      if (typeof setTimeout !== 'function') return
-      prefsSettleTimer = setTimeout(() => prefsStartSettleWatch(attempt + 1), 500)
-    }
-    /* One-shot boot report, logged ONLY when the store did not end up in the
-       healthy state (a served, settled, writable host section with nothing held).
-       "The switches reset on reload" has several causes that look identical from
-       the outside — the entry spelling is wrong, the mirror never answered, the
-       page is memory-backed, or an edit never reached the document — and each one
-       is a property of THIS machine's install. When everything is fine this says
-       nothing at all; when it is not, one line names the cause instead of leaving
-       it to guesswork. */
-    const prefsReportBoot = () => {
-      const snap = prefsSnapshotOf(prefsScope)
-      /* Same absence semantics as prefsDurablyServed: a 0.2.1 snapshot has no
-         `mode` at all and is durable, so it must count as healthy here too —
-         otherwise every healthy 0.2.1 page logs a misleading boot report. */
-      const healthy = snap !== null && snap.status === 'ready' && (snap.mode === undefined || snap.mode === 'host')
-        && snap.writable === true && prefsDirty.size === 0
-      if (healthy) return
-      dbg('boot report (preferences did NOT reach a durable section):',
-        'boundNs=', prefsScopeNs, 'kind=', prefsScopeKind,
-        'status=', snap === null ? null : snap.status,
-        'mode=', snap === null ? null : snap.mode,
-        'writable=', snap === null ? null : snap.writable,
-        'valueKeys=', snap && snap.value ? Object.keys(snap.value).length : 0,
-        'settled=', prefsSettledOnce,
-        'dirty=', Array.from(prefsDirty),
-        'panelMounted=', panelMounted,
-        'hostServes=', prefsServedNamespaces(),
-        'candidates=', PREFS_ENTRY_CANDIDATES)
-    }
-    /* DIAG-ROUND5 (a host-vs-store value comparison printed on every load) was
-       removed here: its cause was confirmed and fixed by the durable
-       configForms transport, and dbg() is an unconditional console.warn, so the
-       probe had become pure console noise on healthy pages. */
-    let prefsBootReportTimer = null
-    if (typeof setTimeout === 'function') {
-      // After the mirror has had a fair chance to answer (the settle watch's own
-      // budget), state the outcome once whether or not it worked. Tracked so the
-      // dispose effect below can revoke it: after a teardown prefsScope is null,
-      // which reads as "unhealthy" and would print a misleading boot report for
-      // a page that is simply gone.
-      prefsBootReportTimer = setTimeout(prefsReportBoot, PREFS_SETTLE_LIMIT * 500 + 500)
-    }
-    /* Repeatedly try to obtain a settings transport until one is servable. DSH
-       web mounts plugin rows concurrently, so the settings service (and its
-       describe mirror) can legitimately settle AFTER this theme's apply() runs;
-       without this retry a single synchronous attempt that raced would leave
-       prefsScope null forever and every subsequent toggle would silently stay
-       page-local — the exact "works now, gone on refresh" symptom. */
-    const rebindPrefs = (attempt) => {
-      if (prefsScope !== null) return
-      if (attempt > 40) { dbg('gave up binding a settings transport after retries; staying in-memory', 'hostServes=', prefsServedNamespaces()); return }
-      let acquired = null
-      try { acquired = acquirePrefsScope() } catch (e) { dbg('acquisition threw', e && e.message); acquired = null }
-      if (acquired === null) {
-        if (typeof setTimeout === 'function') {
-          if (attempt % 8 === 0) dbg('waiting for a settings transport (attempt', attempt, ')')
-          prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250)
-        }
-        return
-      }
-      try {
-        prefsBindScope(acquired)
-      } catch (e) {
-        // A throw in the middle of a bind leaves nothing usable behind: release
-        // the slot and keep retrying instead of pretending a broken transport is
-        // bound.
-        prefsScope = null
-        prefsScopeKind = null
-        prefsScopeNs = null
-        dbg('bind failed', e && e.message)
-        if (typeof setTimeout === 'function') prefsBindTimer = setTimeout(() => rebindPrefs(attempt + 1), 250)
-      }
-    }
-    // Kick off the (re)trying transport acquisition.
-    rebindPrefs(0)
-    // Dispose on run teardown (mirrors ctx.effect owned resources). One effect
-    // owns the whole store — the earlier pair was a strict duplicate — and it
-    // also releases the transport subscription: a ConfigForm is shared and
-    // provider-owned, so leaving our listener behind would leak it into the
-    // next run of this plugin in the same page.
-    services.effect(() => () => {
-      prefsListeners.length = 0
-      prefsReleaseSubscription()
-      prefsScope = null
-      prefsScopeKind = null
-      prefsScopeNs = null
-      prefsFieldValue = null
-      onPrefsSettled = null
-      if (prefsBindTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsBindTimer)
-      prefsBindTimer = null
-      if (prefsRetryTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsRetryTimer)
-      prefsRetryTimer = null
-      if (prefsSettleTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsSettleTimer)
-      prefsSettleTimer = null
-      if (prefsBootReportTimer !== null && typeof clearTimeout === 'function') clearTimeout(prefsBootReportTimer)
-      prefsBootReportTimer = null
-    })
-
     const RADIUS_KEY = 'dsh-theme-endfield-radius'
     const ENABLED_KEY = 'dsh-theme-endfield-enabled'
-    const isEnabled = () => prefsGet(ENABLED_KEY) !== '0'
+    const isEnabled = () => prefs.get(ENABLED_KEY) !== '0'
     const MOTION_KEY = 'dsh-theme-endfield-motion'
     /* 按钮动效自 2026-10 起是**一套合并设计**（信号母题 × 新会话/审批/表格行 +
        角标母题 × 侧边栏会话行，详见样式表动效区），不再是六选一的方案下拉。
@@ -942,7 +976,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          'off'    = 关。
        读取时把一切旧方案名（silent/impact/clamp/meter/stamp）都并轨为「开」——
        曾经明确选过关闭的用户保持关闭，其余用户直接进入合并设计。 */
-    const readMotion = () => (prefsGet(MOTION_KEY) === 'off' ? 'off' : 'signal')
+    const readMotion = () => (prefs.get(MOTION_KEY) === 'off' ? 'off' : 'signal')
     const syncMotion = () => {
       if (typeof document === 'undefined' || document.body === null) return
       if (isEnabled() && readMotion() !== 'off') document.body.setAttribute?.('data-endfield-motion', 'signal')
@@ -955,7 +989,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const TEXTURE_KEY = 'dsh-theme-endfield-texture'
     const TEXTURE_OPTIONS = ['off', 'subtle', 'standard']
     const readTexture = () => {
-      const value = prefsGet(TEXTURE_KEY)
+      const value = prefs.get(TEXTURE_KEY)
       return TEXTURE_OPTIONS.includes(value) ? value : 'standard'
     }
     const syncTexture = () => {
@@ -967,7 +1001,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const GLASS_KEY = 'dsh-theme-endfield-glass'
     const GLASS_OPTIONS = ['off', 'subtle', 'standard', 'strong']
     const readGlass = () => {
-      const value = prefsGet(GLASS_KEY)
+      const value = prefs.get(GLASS_KEY)
       return GLASS_OPTIONS.includes(value) ? value : 'off'
     }
     const syncGlass = () => {
@@ -981,7 +1015,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       // deferral for the same window); a classList touch on null would throw and
       // kill the whole install. syncPaletteClass guards the same way.
       if (typeof document === 'undefined' || document.body === null) return
-      const mode = prefsGet(RADIUS_KEY) || 'square'
+      const mode = prefs.get(RADIUS_KEY) || 'square'
       if (mode === 'round') document.body.classList.add('theme-endfield-round')
       else document.body.classList.remove('theme-endfield-round')
     }
@@ -1009,7 +1043,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        state is observable from the DOM. */
     const PALETTE_CLASSES = { gray: 'theme-endfield-gray', wuling: 'theme-endfield-wuling' }
     const readPalette = () => {
-      const stored = prefsGet(PALETTE_KEY)
+      const stored = prefs.get(PALETTE_KEY)
       return stored === 'valley' || stored === 'wuling' ? stored : 'gray'
     }
     /* Read from the DOM, not from storage: the canvas must match what is actually
@@ -1046,9 +1080,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        pointer-events:none layer cannot be hit-tested. */
     const WATERMARK_KEY = 'dsh-theme-endfield-watermark'
     const WATERMARK_PERSIST_KEY = 'dsh-theme-endfield-watermark-persist'
-    const isWatermarkOn = () => prefsGet(WATERMARK_KEY) !== '0'
+    const isWatermarkOn = () => prefs.get(WATERMARK_KEY) !== '0'
     // Default OFF: the hero-only behaviour stays the shipped default.
-    const isWatermarkPersistOn = () => prefsGet(WATERMARK_PERSIST_KEY) === '1'
+    const isWatermarkPersistOn = () => prefs.get(WATERMARK_PERSIST_KEY) === '1'
     /* Hash-free selectors only. DSH 0.1.2-rc.1 rebuilt its CSS modules and every
        hex hash changed (0/33 of the old pinned hashes survive), so anything of the
        form [class*='pXSMma_root'] dies silently on upgrade. The stable hooks are
@@ -1400,7 +1434,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        viewport size. */
     const LOADER_KEY = 'dsh-theme-endfield-loader'
     // Default OFF (=== '1' rather than !== '0'): opt-in, per the request.
-    const isLoaderOn = () => prefsGet(LOADER_KEY) === '1'
+    const isLoaderOn = () => prefs.get(LOADER_KEY) === '1'
     let loaderEl = null
     let loaderRaf = null
     let loaderTick = null
@@ -1709,17 +1743,17 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          - a user who has answered this question in-session (the settings toggle)
            outranks a section that was still in flight when they answered it. What
            enforces that is prefsGetValue overlaying prefsLocalEdited, so
-           isLoaderOn() already reads the session value; the prefsEdited check
+           isLoaderOn() already reads the session value; the wasEdited check
            below merely pins the same intent at this call site instead of leaning
            on the overlay's internals. The plain 预览 button needs neither guard:
            runLoader() sets loaderDone the instant it starts. */
-    onPrefsSettled = () => {
+    prefs.onSettled(() => {
       if (loaderDone || loaderEl !== null) return
-      if (prefsEdited.has('loader')) return
+      if (prefs.wasEdited('loader')) return
       if (!isEnabled()) return
       if (!isLoaderOn()) return
       runLoader()
-    }
+    })
 
     /* ---------- 回合边沿 → 任务完成回执 ----------
        The 任务完成 receipt's trigger is the authoritative ConversationSnapshot.running
@@ -2006,10 +2040,10 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const NOTIFY_APPROVE_KEY = 'dsh-theme-endfield-notify-approve'
     // Master default ON: the module was requested as a feature, not as an
     // opt-in experiment. Sub-switches default ON and read independently.
-    const isNotifyOn = () => prefsGet(NOTIFY_KEY) !== '0'
-    const isNotifyDoneOn = () => prefsGet(NOTIFY_DONE_KEY) !== '0'
-    const isNotifyQuestionOn = () => prefsGet(NOTIFY_QUESTION_KEY) !== '0'
-    const isNotifyApproveOn = () => prefsGet(NOTIFY_APPROVE_KEY) !== '0'
+    const isNotifyOn = () => prefs.get(NOTIFY_KEY) !== '0'
+    const isNotifyDoneOn = () => prefs.get(NOTIFY_DONE_KEY) !== '0'
+    const isNotifyQuestionOn = () => prefs.get(NOTIFY_QUESTION_KEY) !== '0'
+    const isNotifyApproveOn = () => prefs.get(NOTIFY_APPROVE_KEY) !== '0'
     /** Does this attention kind have a notification switch flipped on? */
     const notifyWantsKind = (kind) => {
       if (kind === 'question') return isNotifyQuestionOn()
@@ -2248,7 +2282,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          `opacity: var(--edge-wm-alpha)` computes invalid and falls back to 1,
          so an orphaned mark sits on the page as a fully opaque logo stamp.
          This path also runs when the switch is turned off from ANOTHER window
-         (reconcileFromPrefs -> unmount), where nothing else removes the node —
+         (the store's live reconciler -> unmount), where nothing else removes the node —
          the local toggle path only looked covered because toggleTheme happened
          to call syncWatermarkVisibility() itself. */
       if (watermarkRaf !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(watermarkRaf)
@@ -2291,11 +2325,11 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        replayed here: it is a once-per-page-load plate, so a mid-session section
        change must not slam a startup animation over a running app. The one thing
        that DOES start it outside apply() is the first authoritative settle
-       (onPrefsSettled) — that is the same page-load moment, not a later edit — plus
+       (the store's settled hook) — that is the same page-load moment, not a later edit — plus
        the plate's own toggle and 预览 button. Every layer entry point is idempotent
        (mount() and unmount() guard on `mounted`), so repeated echoes are cheap
        and safe. */
-    reconcileFromPrefs = () => {
+    prefs.setReconciler(() => {
       const enabledNext = isEnabled()
       const enabledNow = mounted
       if (enabledNext && !enabledNow) mount()
@@ -2317,7 +2351,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
         // theme no longer owns.
         stopAudioAttentionWatch()
       }
-    }
+    })
 
     /* ---------- Settings page copy: zh / en dictionaries ----------
        The panel followed DSH's language setting for nothing before this: every
@@ -2596,7 +2630,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const [palette, setPalette] = R.useState(readPalette())
           const [glass, setGlass] = R.useState(readGlass())
           const [texture, setTexture] = R.useState(readTexture())
-          const [mode, setMode] = R.useState(prefsGet(RADIUS_KEY) || 'square')
+          const [mode, setMode] = R.useState(prefs.get(RADIUS_KEY) || 'square')
           const [motion, setMotion] = R.useState(readMotion())
           /* 音频通知 is a HOST feature: the browser only owns its switches and
              the preview buttons. `hostState` mirrors what the host half reports
@@ -2624,20 +2658,20 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
               .catch(() => { /* host bridge absent: the rows simply show no source */ })
           }
           /* Re-sync the panel onto the settings section when it finally arrives.
-             Every useState above seeded itself from prefsGet() during the FIRST
+             Every useState above seeded itself from prefs.get() during the FIRST
              render — which, on a real page load, happens while the Host is still
              sending the section, so each read fell back to the schema default.
              Without this effect the switches stayed frozen at those defaults for
              the whole session (the theme's own surfaces recovered, because
-             reconcileFromPrefs re-derives them, but the panel's React state had
+             the store's live reconciler re-derives them, but the panel's React state had
              no such path): the user sees their settings "reset after refresh"
              even though the values were on disk and the theme was applying them.
 
              Subscribing to the store rather than using the one-shot
-             onPrefsSettled hook is deliberate — that slot is already claimed by
+             settled hook is deliberate — that slot is already claimed by
              the boot loader, and a subscription additionally keeps the panel
              honest when the Host or another surface changes a value mid-session.
-             prefsEmit runs on every transport snapshot and on every local edit, so
+             the store emits on every transport snapshot and on every local edit, so
              this simply re-derives the same reads the initializers used; React
              bails out of the re-render when a value is unchanged.
 
@@ -2647,7 +2681,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
              during render. Losing the effect only costs the live re-sync, which
              is no worse than the behaviour before this fix. */
           if (typeof R.useEffect === 'function') {
-            panelMounted = true
+            prefs.markPanelMounted()
             /* Re-derive every switch from the store. Kept as one named function so
                the mount pass and every later subscription event run identical
                reads — a switch can never be re-synced from a different source
@@ -2663,7 +2697,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
               setNotifyApprove(isNotifyApproveOn())
               setPalette(readPalette())
               setGlass(readGlass())
-              setMode(prefsGet(RADIUS_KEY) || 'square')
+              setMode(prefs.get(RADIUS_KEY) || 'square')
               setMotion(readMotion())
               /* The 音频 rows seed themselves from the same store, so they are
                  re-derived here as well — the section can arrive after the
@@ -2686,7 +2720,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
                  a reconnect). Running the pass here makes the panel's state
                  converge whenever it mounts, with no dependence on
                  having been present for the transition. */
-              const unsubscribe = prefsSubscribe(resyncPanelFromPrefs)
+              const unsubscribe = prefs.listen(resyncPanelFromPrefs)
               resyncPanelFromPrefs()
               return unsubscribe
             }, [])
@@ -2740,13 +2774,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           }
           const setGlassValue = (value) => {
             if (!GLASS_OPTIONS.includes(value)) return
-            prefsSet(GLASS_KEY, value)
+            prefs.set(GLASS_KEY, value)
             setGlass(value)
             syncGlass()
           }
           const setTextureValue = (value) => {
             if (!TEXTURE_OPTIONS.includes(value)) return
-            prefsSet(TEXTURE_KEY, value)
+            prefs.set(TEXTURE_KEY, value)
             setTexture(value)
             syncTexture()
           }
@@ -2771,7 +2805,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
              real choice. The state setter still runs, so the UI follows. */
           const toggleTheme = () => {
             const next = !isEnabled()
-            prefsSet(ENABLED_KEY, next ? '1' : '0')
+            prefs.set(ENABLED_KEY, next ? '1' : '0')
             setEnabled(next)
             if (next) { mount(); syncWatermarkVisibility() }
             else { unmount(); syncWatermarkVisibility() }
@@ -2786,13 +2820,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const setPaletteValue = (value) => {
             if (value !== 'gray' && value !== 'valley' && value !== 'wuling') return
             if (value === readPalette()) return
-            prefsSet(PALETTE_KEY, value)
+            prefs.set(PALETTE_KEY, value)
             setPalette(value)
             syncPaletteClass()
           }
           const toggleWm = () => {
             const next = !isWatermarkOn()
-            prefsSet(WATERMARK_KEY, next ? '1' : '0')
+            prefs.set(WATERMARK_KEY, next ? '1' : '0')
             setWmOn(next)
             syncWatermarkVisibility()
           }
@@ -2801,7 +2835,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const setMotionValue = (value) => {
             if (value !== 'signal' && value !== 'off') return
             if (value === readMotion()) return
-            prefsSet(MOTION_KEY, value)
+            prefs.set(MOTION_KEY, value)
             setMotion(value)
             syncMotion()
           }
@@ -2809,13 +2843,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           const setWmPersistValue = (value) => {
             const next = value === '1'
             if (next === isWatermarkPersistOn()) return
-            prefsSet(WATERMARK_PERSIST_KEY, next ? '1' : '0')
+            prefs.set(WATERMARK_PERSIST_KEY, next ? '1' : '0')
             setWmPersist(next)
             syncWatermarkVisibility()
           }
           const toggleWmPersist = () => {
             const next = !isWatermarkPersistOn()
-            prefsSet(WATERMARK_PERSIST_KEY, next ? '1' : '0')
+            prefs.set(WATERMARK_PERSIST_KEY, next ? '1' : '0')
             setWmPersist(next)
             syncWatermarkVisibility()
           }
@@ -2825,31 +2859,31 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
              showNotify checks per fire. */
           const toggleNotify = () => {
             const next = !isNotifyOn()
-            prefsSet(NOTIFY_KEY, next ? '1' : '0')
+            prefs.set(NOTIFY_KEY, next ? '1' : '0')
             setNotifyOn(next)
             syncAudioAttentionWatch()
             if (!next) destroyNotify()
           }
           const toggleNotifyDone = () => {
             const next = !isNotifyDoneOn()
-            prefsSet(NOTIFY_DONE_KEY, next ? '1' : '0')
+            prefs.set(NOTIFY_DONE_KEY, next ? '1' : '0')
             setNotifyDone(next)
           }
           const toggleNotifyQuestion = () => {
             const next = !isNotifyQuestionOn()
-            prefsSet(NOTIFY_QUESTION_KEY, next ? '1' : '0')
+            prefs.set(NOTIFY_QUESTION_KEY, next ? '1' : '0')
             setNotifyQuestion(next)
             syncAudioAttentionWatch()
           }
           const toggleNotifyApprove = () => {
             const next = !isNotifyApproveOn()
-            prefsSet(NOTIFY_APPROVE_KEY, next ? '1' : '0')
+            prefs.set(NOTIFY_APPROVE_KEY, next ? '1' : '0')
             setNotifyApprove(next)
             syncAudioAttentionWatch()
           }
           const toggleLoader = () => {
             const next = !isLoaderOn()
-            prefsSet(LOADER_KEY, next ? '1' : '0')
+            prefs.set(LOADER_KEY, next ? '1' : '0')
             setLoaderOn(next)
             // Turning it on plays it once right away, so the switch shows what it
             // bought instead of making the user reload to find out.
@@ -2865,15 +2899,15 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
              palette row — the current value preselects, onChange writes through. */
           const setRadiusValue = (value) => {
             if (value !== 'square' && value !== 'round') return
-            if (value === (prefsGet(RADIUS_KEY) || 'square')) return
-            prefsSet(RADIUS_KEY, value)
+            if (value === (prefs.get(RADIUS_KEY) || 'square')) return
+            prefs.set(RADIUS_KEY, value)
             setMode(value)
             if (value === 'round') document.body.classList.add('theme-endfield-round')
             else document.body.classList.remove('theme-endfield-round')
           }
           const toggleMode = () => {
-            const next = (prefsGet(RADIUS_KEY) || 'square') === 'round' ? 'square' : 'round'
-            prefsSet(RADIUS_KEY, next)
+            const next = (prefs.get(RADIUS_KEY) || 'square') === 'round' ? 'square' : 'round'
+            prefs.set(RADIUS_KEY, next)
             setMode(next)
             if (next === 'round') document.body.classList.add('theme-endfield-round')
             else document.body.classList.remove('theme-endfield-round')
@@ -2905,7 +2939,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           }, t('preview'))
           const toggleAudio = () => {
             const next = !audioOn
-            prefsSet(AUDIO_ENABLED_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_ENABLED_KEY, next ? '1' : '0')
             setAudioOn(next)
             // The attention watcher is gated on this switch, so it has to be
             // reconciled here as well as on the pref echo.
@@ -2914,13 +2948,13 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           }
           const toggleAudioStart = () => {
             const next = !audioStart
-            prefsSet(AUDIO_TURN_START_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_TURN_START_KEY, next ? '1' : '0')
             setAudioStart(next)
             if (next) playPreview('turn-start')
           }
           const toggleAudioBoot = () => {
             const next = !audioBoot
-            prefsSet(AUDIO_BOOT_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_BOOT_KEY, next ? '1' : '0')
             setAudioBoot(next)
             // Preview the boot slot itself: the real one fires from the loader,
             // which is awkward to re-trigger from here.
@@ -2928,28 +2962,28 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
           }
           const toggleAudioDone = () => {
             const next = !audioDone
-            prefsSet(AUDIO_TURN_DONE_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_TURN_DONE_KEY, next ? '1' : '0')
             setAudioDone(next)
             if (next) playPreview('turn-done')
           }
           const setAudioVolumeValue = (next) => {
             const clamped = Math.min(100, Math.max(0, Math.round(next)))
-            prefsSet(AUDIO_VOLUME_KEY, String(clamped))
+            prefs.set(AUDIO_VOLUME_KEY, String(clamped))
             setAudioVolume(clamped)
           }
           const toggleAudioHumanOnly = () => {
             const next = !audioHumanOnly
-            prefsSet(AUDIO_HUMAN_ONLY_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_HUMAN_ONLY_KEY, next ? '1' : '0')
             setAudioHumanOnly(next)
           }
           const toggleAudioDiag = () => {
             const next = !audioDiag
-            prefsSet(AUDIO_DIAG_KEY, next ? '1' : '0')
+            prefs.set(AUDIO_DIAG_KEY, next ? '1' : '0')
             setAudioDiag(next)
           }
           const applySoundDir = (value) => {
             const text = typeof value === 'string' ? value.trim() : ''
-            prefsSet(AUDIO_SOUND_DIR_KEY, text)
+            prefs.set(AUDIO_SOUND_DIR_KEY, text)
             refreshHostState()
           }
           /* 布尔行的下拉写法：与既有 toggle 共用一条路径，仅当值真的变化时才写。
