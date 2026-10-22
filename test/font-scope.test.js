@@ -49,12 +49,14 @@ let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 const pass = (m) => console.log('ok    ' + m)
 
-/* --- static half: the panel's own root carries the class the sheet targets --- */
+/* --- static half: the panel's own root carries the class the sheet targets ---
+   The two halves live in different files since the src/ split: the class name is
+   a JS string in src/client/index.js, the rules are in src/styles/theme.css. */
 if (/className:\s*'endfield-settings'/.test(src)) pass('settings panel root carries the endfield-settings class')
 else fail('the settings panel root has no endfield-settings class — the theme face would never reach it')
-if (/\.endfield-settings\s*\{[^}]*font-family:\s*var\(--edge-font\)/.test(src)) pass('.endfield-settings rule applies the theme face')
+if (/\.endfield-settings\s*\{[^}]*font-family:\s*var\(--edge-font\)/.test(cssSrc)) pass('.endfield-settings rule applies the theme face')
 else fail('no .endfield-settings { font-family: var(--edge-font) } rule — the panel keeps the app font')
-if (/--edge-font:\s*Arial[^;]*var\(--dsw-font-family\)/.test(src)) pass('--edge-font leads with the theme stack and still honours --dsw-font-family')
+if (/--edge-font:\s*Arial[^;]*var\(--dsw-font-family\)/.test(cssSrc)) pass('--edge-font leads with the theme stack and still honours --dsw-font-family')
 else fail('--edge-font no longer reads --dsw-font-family as its fallback')
 
 const chrome = [

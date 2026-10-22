@@ -66,11 +66,14 @@ const pass = (m) => console.log('ok    ' + m)
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const clientSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+/* CSS-rule assertions read the SOURCE stylesheet pair in the order the client
+   entry concatenates them (src/client/index.js: THEME_CSS + '\n' +
+   GENERATED_CSS): the build embeds the css as an escaped string literal, so the
+   old single-template-literal scrape no longer exists. Freshness of the shipped
+   bytes is scripts/build-client.js --check's gate, not this test's. */
 const cssFromSource = (() => {
-  const m = /insertCss\(`([\s\S]*?)`\)/.exec(clientSrc)
-  if (!m) throw new Error('could not locate the insertCss() stylesheet literal')
-  return m[1]
+  const read = (f) => fs.readFileSync(path.join(ROOT, 'src', 'styles', f), 'utf8')
+  return read('theme.css') + '\n' + read('generated.css')
 })()
 
 /* ---------------- 1. static guard ---------------- */
