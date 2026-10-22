@@ -27,6 +27,8 @@
  * page load actually sees (the scope is still 'loading' while apply() runs):
  *
  *   var __prefs = __endfieldSettingsScope({ loader: '1' }, { readyDelayMs: 250 });
+ *   // DSH 0.2.1-rc.2+ snapshot shape (no `mode` key):
+ *   var __prefs = __endfieldSettingsScope({}, { omitMode: true });
  *   mod.apply({ get: function (n) {
  *     if (n === 'theme')      return { overrideTokens: function () { return function () {} } };
  *     if (n === 'settingsScope') return __prefs.binder;
@@ -86,12 +88,22 @@ function __endfieldSettingsScope(initial, opts) {
      the wire, so for the first moments of a page load the mirror reports
      status:'loading' with NO value, and only later flips to 'ready'. Pages that
      need that startup window pass a delay; every existing page omits opts and so
-     stays ready from the first synchronous read, exactly as before. */
+     stays ready from the first synchronous read, exactly as before.
+     opt.omitMode models the DSH 0.2.1-rc.2+ snapshot, which carries NO mode
+     key at all ({ status, value, base, user, revision, writable }): a fixture
+     that only ever spells mode:'host' freezes the 0.1.7 shape into the suite
+     and lets a gate regression (requiring mode==='host' verbatim) pass while
+     real 0.2.1 pages hold every write. (NB: this comment lives inside the
+     snippet's template literal — no backticks here, same rule as client.js.) */
   var readyDelay = (opts && Number(opts.readyDelayMs)) || 0;
   var ready = readyDelay <= 0;
+  var withMode = !(opts && opts.omitMode);
   var snap = function () {
-    if (!ready) return { status:'loading', value: undefined, writable:false, mode:'host' };
-    return { status:'ready', value: __copy(section), writable:true, mode:'host' };
+    var s;
+    if (!ready) s = { status:'loading', value: undefined, writable:false };
+    else s = { status:'ready', value: __copy(section), writable:true };
+    if (withMode) s.mode = 'host';
+    return s;
   };
   if (!ready) setTimeout(function () { ready = true; notify(); }, readyDelay);
   var scope = {

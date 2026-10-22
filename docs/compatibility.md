@@ -20,7 +20,7 @@
 | `theme` | overrideTokens（令牌覆盖） | Cordis 核心 API，跨版本稳定 |
 | `slots` | 面板挂载（设置页） | 同上 |
 | `settingsScope` | 0.1.5-rc.2 时代的设置 seam | **已降级为回退路径**，主路径走 `configForms` |
-| `configForms` | 0.1.7-rc.1+ 的设置域 | 当前主路径；**若再改名**，回退链自动落到 settingsScope 或内存默认 |
+| `configForms` | 0.1.7-rc.1+ 的设置域 | 当前主路径；**若再改名**，回退链自动落到 settingsScope 或内存默认。**字段级变更先例**：0.2.1-rc.2 从快照里删掉了 `mode`（连带 `persistence`），逐字匹配 `mode==='host'` 的判定会无声失效——现已按缺失语义读取（缺 `mode` = durable，见 [engineering-notes.md](engineering-notes.md#dsh-021-rc2-删掉了快照里的-mode-字段字段级契约要用缺失语义读)），`test/settings-mode-gate.test.js` 钉住三态 |
 | `sessions` | ConversationSnapshot.running（回合边缘） | 运行时核心；**防御式 try-catch + 重试预算**，缺服务 = 功能静默关闭 |
 
 **策略**：每个 `ctx.get()` 都有 `try-catch` + `undefined` 回退 + 功能降级。没有 inject 声明（不依赖加载顺序），apply 时缺什么就跳过什么。

@@ -143,6 +143,7 @@ node test/perf-motion.test.js        # 量「流畅」：静态守卫 + layout/�
 ```bash
 node test/settings-rows.test.js     # 设置面板真实渲染 + 开关联动
 node test/settings-durable-hold.test.js  # 命名空间未就绪时的写入 gate + 补写（旧世代 settingsScope）
+node test/settings-mode-gate.test.js   # 快照 mode 键三态：缺失=可写（0.2.1+）/ host=可写 / memory=拒写
 node test/settings-config-forms.test.js  # 0.1.7 的 configForms transport（entry id / volatile / 拒写补写 / 退订）
 node test/settings-config-fallback.test.js # Host Config 字段契约与选择顺序（不依赖本机 schemastery）
 node test/settings-namespace.test.js # 存储字段名对齐 schema + 旧拼写迁移 + 三条读/写边界
@@ -155,6 +156,8 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 > 说明：这个插件从 **`localStorage` 迁移到了 DSH 的持久化设置服务**（见 features.md / engineering-notes.md）。因此设置类测试不再往浏览器存储里塞值，而是驱动假的 transport：除 `settings-config-forms.test.js` 之外的用例走旧世代 `ctx.settingsScope`（fixture 的 `settingsScopeStub`，在内存里扮演 `<settings.yaml>` 的命名字段节），新世代由 `configFormsStub` 扮演 `ctx.configForms`（命名空间 = profile entry id）。断言 27 行齐全且归入 5 个分组容器、key 唯一、分组标题（01 主题 / 02 背景 / 03 动画 / 04 娱乐 / 05 音频）与配色样式规则都在、配色行默认显示谷地黄且按钮提供「切换武陵青」、点击把 `palette` 写成 `wuling`、存了 `wuling` 时反向提供「切换谷地黄」并标注 `#14d0d0`、图层关闭时子开关为 disabled、开启后恢复可用，雷霆大字与大字入场动画均默认为关、说明文字包含「任务开始」/「任务完成」与 3 秒、**子开关只写自己的字段而不误写主开关的**，以及点击确实写入文档里那个 DSH 设置字段。
 
 **`settings-durable-hold.test.js`**（旧世代 `settingsScope` 路径；0.1.7 上同一份写入 gate / 补写契约由 `settings-config-forms.test.js` 覆盖）用**两阶段假 `ctx.settingsScope`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 武陵青」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
+
+**`settings-mode-gate.test.js`** 钉住快照 `mode` 键的**缺失语义**：DSH 0.2.1-rc.2 从快照里删掉了这个字段，而写入 gate 若逐字要求 `mode==='host'`，门在 0.2.1 宿主上永远打不开（写入全部被挂起后放弃，刷新复位——无声，因为读不存在的字段得到 `undefined`）。它用三个**只差 `mode` 键**的 ready+writable 快照各跑一次真实 `apply()`：缺失（0.2.1+ 形状）与显式 `'host'` 都必须让写入出线，显式 `'memory'`（0.1.7 非回环页）必须拒写——防止「缺失即 durable」将来被改成「永远 durable」。对修复前的判定做过变异验证（场景 A 必失败）。浏览器夹具相应新增 `omitMode` 选项以建模 0.2.1 快照形状；教训是**桩必须建模生产契约的每一代形状**，只写 `mode:'host'` 等于把 0.1.7 冻结进套件。
 
 **`settings-config-forms.test.js`** 守的是 0.1.7-rc.1 换掉整套 settings API 之后最容易「看起来正常、其实没保存」的几处：它用假 `configForms` 服务（fixture 的 `configFormsStub`，只有被 `serve()` 过的命名空间才报 `status:'ready'`）驱动真实 client，断言
 
