@@ -523,6 +523,76 @@ if (cssText.includes("turnStatus")) {
   }
 }
 
+/* --- 8. the settings panel must NOT look React up from its own closures ---
+   Guard for the blank-panel regression: on a real page the settings nav row
+   existed but the section body stayed empty. Root cause: after the tsdown
+   restructure every non-entry module (all of src/client/ except index.js) is
+   hoisted to the IIFE TOP LEVEL of the artifact, OUT of the factory(require)
+   body — inside the panel's component closures `typeof require` was
+   'undefined', the app ships no global React either, so the old
+   `typeof React !== 'undefined' ? React : require('react')` resolved to null
+   and the component silently returned null. The in-process tests never saw
+   it because their recording React double hangs off the GLOBAL, which that
+   lookup's first branch accepts. Contract this pins, both halves: the entry
+   resolves React inside apply() (the one function the artifact keeps inside
+   the factory body, where the module seed require('react') is reachable) and
+   injects it as `react`; the panel component reads that injection first and
+   never mentions `require`. */
+{
+  const sectionPath = path.join(__dirname, 'src', 'client', 'ui', 'settings', 'section.js')
+  /* Comments are stripped before the lookups are searched: the rationale
+     blocks here and in the artifact quote the very phrases they ban, and the
+     guard is about CODE doing the lookup, not about prose naming it. The
+     character-class prefix keeps URL-ish `//` (preceded by : or letters or a
+     quote) out of the line-comment match. */
+  const stripComments = (s) => s
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:'"A-Za-z0-9])\/\/[^\n]*/g, '$1')
+  const sectionSrc = stripComments(fs.readFileSync(sectionPath, 'utf8'))
+  if (!/typeof require/.test(sectionSrc)) {
+    pass('section.js never touches a lexical require (React arrives by injection)')
+  } else {
+    fail('section.js looks up `require` from its closures — on the real artifact those scopes sit outside factory(require), the lookup returns null and the settings panel goes blank')
+  }
+  if (/const R = react \|\| \(\(typeof React !== 'undefined'\) \? React : null\)/.test(sectionSrc)) {
+    pass('panel resolves React as `react ||` global-fallback (injection first)')
+  } else {
+    fail('panel must read the injected `react` first (`const R = react || ...`) — a global-only lookup goes null on real pages')
+  }
+  /* The entry side: resolve inside apply() (factory scope in the artifact),
+     and actually hand the result to createSettingsSection. */
+  if (/\? require\('react'\) : null\)/.test(clientSrc) && /react,\s*\n\s*}\)/.test(clientSrc)) {
+    pass("index.js resolves require('react') inside the factory scope and injects `react`")
+  } else {
+    fail("index.js must resolve React via require('react') where the factory scope can see it, and pass `react` into createSettingsSection")
+  }
+  /* The artifact side: everything BEFORE the `factory: (require) =>` line is
+     the hoisted module graph — the component closures live there, so neither
+     `typeof require` nor an ambient-React lookup may appear in that region;
+     the seed require("react") call itself may only sit after it. */
+  const factoryAt = lines.findIndex((l) => /factory:\s*\(require\)\s*=>/.test(l))
+  if (factoryAt === -1) {
+    fail('artifact has no `factory: (require) =>` body — the module loader contract changed, re-check the React injection')
+  } else {
+    const hoisted = stripComments(lines.slice(0, factoryAt).join('\n'))
+    /* Only the lexical `require` lookup is banned out here: the artifact's
+       hoisted region genuinely has no `require` in scope, while a `typeof
+       React` GLOBAL fallback is fine (test doubles and hosts that expose one
+       ride exactly that branch). */
+    if (!/typeof require/.test(hoisted)) {
+      pass('artifact: hoisted module region (pre-factory) carries no lexical require lookup')
+    } else {
+      fail('artifact: a `typeof require` lookup sits in the hoisted region before factory(require) — that scope has no require, the panel will render blank')
+    }
+    const factoryBody = lines.slice(factoryAt).join('\n')
+    if (/require\((['"])react\1\)/.test(factoryBody)) {
+      pass('artifact: require("react") resolves inside the factory body (module seed reachable)')
+    } else {
+      fail("artifact: the factory body no longer calls require('react') — the panel has no React source on real pages")
+    }
+  }
+}
+
 console.log('')
 if (failures) {
   console.error(`${failures} check(s) failed`)

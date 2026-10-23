@@ -249,7 +249,22 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        panel (including the unified endfield-select). Injected by hand:
        services, prefs, the master-switch trio (isEnabled / mount / unmount)
        and every feature surface the panel writes through. Returns the
-       section disposer, called from the run teardown below. */
+       section disposer, called from the run teardown below.
+
+       React is resolved HERE, inside apply(), and handed down as `react`.
+       This is not style: the artifact keeps apply() inside the
+       factory(require) body that dsh-client-modules calls, so the module
+       seed `require('react')` is reachable from this line — while the panel's
+       component closures (every module tsdown hoists out of the entry, which
+       is all of src/client/ except this file) sit at the IIFE top level,
+       where `require` is out of scope and the page ships no global React.
+       Resolving it from there produced R === null and a silently blank
+       settings section on real pages. The global spelling stays first so
+       hosts and the in-process tests (which drive the panel through a global
+       recording React double) keep working unchanged. */
+    const react = (typeof React !== 'undefined')
+      ? React
+      : ((typeof require === 'function') ? require('react') : null)
     const disposeSettings = createSettingsSection({
       services,
       prefs,
@@ -260,6 +275,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       toasts,
       attention,
       audio,
+      react,
     })
 
     services.effect(() => () => {
