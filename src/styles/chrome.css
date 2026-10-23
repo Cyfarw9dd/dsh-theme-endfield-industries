@@ -354,9 +354,9 @@
       a:hover {
         text-decoration-color: var(--edge-accent);
       }
-      /* Reads the STATUS token, not the accent: 终末地灰's dark fill gray is
-         AA under white text but too dim as text itself (3.04:1); the bright
-         palettes define status-dark == accent, so only gray changes. */
+      /* Reads the STATUS token, not the accent. For 谷地黄 the two are equal
+         (#fff500); the role split survives from the palette era so a future
+         fill that reads as text can dim separately from the solid accent. */
       body[data-ds-dark-theme] a:hover {
         color: var(--edge-status-dark, var(--edge-accent));
       }

@@ -259,7 +259,7 @@ else fail('the page rendered identically in both languages')
 /* Spot-check that real row copy switched, not just the group headers. */
 const CHECKS = [
   ['themeRow', 'Endfield theme'],
-  ['paletteRow', 'Accent palette'],
+  ['radiusRow', 'Corners'],
   ['preview', 'Preview'],
 ]
 for (const [key, expect] of CHECKS) {
@@ -276,7 +276,7 @@ else fail('the Chinese group header lost either its name or its latin line')
 
 /* ============ 4. an unknown locale must fall back, not print raw keys ============ */
 const fbText = renderIn('de')
-if (!/\bpaletteRow\b|\bgroupFun\b/.test(fbText)) pass('未知语言回退到 en，不会漏出原始键名')
+if (!/\bradiusRow\b|\bgroupFun\b/.test(fbText)) pass('未知语言回退到 en，不会漏出原始键名')
 else fail('an unknown locale leaked raw dictionary keys into the UI')
 locale.setActive('zh')
 

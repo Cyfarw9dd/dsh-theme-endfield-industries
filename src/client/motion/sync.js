@@ -3,7 +3,7 @@
  *
  * Extracted from the entry (see TODO.md「入口瘦身」第 3 项): every prefs-driven
  * <body> surface lives here — radius class, motion attribute, glass/texture
- * attributes, palette classes — plus the DOM predicates the entry's surfaces
+ * attributes — plus the DOM predicates the entry's surfaces
  * read (scheme / reduced-motion / app-frame). The entry injects `prefs` and the
  * master-switch reader `isEnabled`; nothing here touches a closure of apply().
  *
@@ -58,54 +58,11 @@ export function createMotionSync({ prefs, isEnabled }) {
   const syncRadiusMode = () => {
     // The bundle can run before <body> exists (see the loader's DOMContentLoaded
     // deferral for the same window); a classList touch on null would throw and
-    // kill the whole install. syncPaletteClass guards the same way.
+    // kill the whole install.
     if (typeof document === 'undefined' || document.body === null) return
     const mode = prefs.get(RADIUS_KEY) || 'square'
     if (mode === 'round') document.body.classList.add('theme-endfield-round')
     else document.body.classList.remove('theme-endfield-round')
-  }
-
-  /* ---------- accent palette: 终末地灰 (default) / 谷地黄 / 武陵青 ----------
-     The palette is ONE class on <body>; the stylesheet defines both variable
-     sets, so switching is a class flip with no restyling work here. Because the
-     app applies its theme tokens as inline body styles and this theme's token
-     overrides are var(--edge-accent) references, those tokens re-resolve on the
-     same flip — no JS repaint, no theme.overrideTokens() re-registration.
-
-     'valley' (谷地黄, signal yellow) is the DEFAULT, so an unset field and any
-     unrecognised value both mean yellow. Only the exact string 'wuling' selects
-     武陵青, which keeps a corrupt stored value (schema rejects / outside the
-     fallback) from silently changing the shipped look.
-
-     A palette flip made in another tab or restored by the browser is caught by
-     the body-class observer on the decor side, which re-syncs the class onto
-     the page. */
-  const PALETTE_KEY = 'dsh-theme-endfield-palette'
-  /* 终末地灰 (gray) is the DEFAULT, so an unset field and any unrecognised value
-     both mean gray. Only the exact strings 'valley' / 'wuling' select a bright
-     palette, which keeps a corrupt stored value from silently changing the
-     shipped look. valley and wuling carry their own body class; gray's class
-     exists too (its block overrides the base body block) so every non-default
-     state is observable from the DOM. */
-  const PALETTE_CLASSES = { gray: 'theme-endfield-gray', wuling: 'theme-endfield-wuling' }
-  const readPalette = () => {
-    const stored = prefs.get(PALETTE_KEY)
-    return stored === 'valley' || stored === 'wuling' ? stored : 'gray'
-  }
-  /* Read from the DOM, not from storage: the canvas must match what is actually
-     on screen. While the theme is switched off the class is absent, so the sheet
-     keeps its default palette instead of following an ignored preference. */
-  const isPalette = (name) => typeof document !== 'undefined'
-    && document.body !== null
-    && document.body.classList.contains(PALETTE_CLASSES[name])
-  const syncPaletteClass = () => {
-    if (typeof document === 'undefined' || document.body === null) return
-    // A class only applies while the theme owns the page; detach() drops it.
-    const active = isEnabled() ? readPalette() : null
-    for (const [name, cls] of Object.entries(PALETTE_CLASSES)) {
-      if (name === active) document.body.classList.add(cls)
-      else document.body.classList.remove(cls)
-    }
   }
 
   /* ---------- scheme + motion + frame predicates ------------------------------
@@ -142,7 +99,6 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion()
     syncGlass()
     syncTexture()
-    syncPaletteClass()
   }
   /* The unmount-side counterpart of syncAll: the classes/attributes that only
      mean something under this theme's stylesheet must leave WITH that sheet.
@@ -153,11 +109,6 @@ export function createMotionSync({ prefs, isEnabled }) {
     // Guarded like every other body touch: an unload race must not throw here.
     if (typeof document === 'undefined' || document.body === null) return
     document.body.classList.remove('theme-endfield-round')
-    /* The palette classes must go with the stylesheet that gives them
-       meaning: left behind each would be a class nothing defines, and it
-       would make isPalette() report a palette the page is no longer using.
-       The stored preference is untouched, so re-enabling restores it. */
-    for (const cls of Object.values(PALETTE_CLASSES)) document.body.classList.remove(cls)
     document.body.removeAttribute?.('data-endfield-glass')
   }
   return {
@@ -165,15 +116,11 @@ export function createMotionSync({ prefs, isEnabled }) {
     MOTION_KEY,
     TEXTURE_KEY,
     GLASS_KEY,
-    PALETTE_KEY,
     TEXTURE_OPTIONS,
     GLASS_OPTIONS,
-    PALETTE_CLASSES,
     readMotion,
     readTexture,
     readGlass,
-    readPalette,
-    isPalette,
     isDarkScheme,
     prefersReducedMotion,
     findAppFrame,
@@ -181,7 +128,6 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion,
     syncGlass,
     syncTexture,
-    syncPaletteClass,
     syncAll,
     detach,
   }

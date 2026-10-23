@@ -79,7 +79,7 @@
   （zh/en 文案，zh 为键集真源）、`section.js`（locale 注册 + settings.section
   slots 注入 + 整个 React 面板与统一下拉；`createSettingsSection({ services,
   prefs, themeApi, … })` 返回 section 的 dispose）。面板的 useState 顺序被
-  settings-config-forms 按下标钉死（`hooks[4]` = palette），搬移保序；
+  settings-config-forms 按下标钉死（`hooks[6]` = radius 的 mode），搬移保序；
   `label` 保持 thunk、`locale:` 仍只在 locale 服务存在时声明。入口至此只剩
   组合根：services → prefs → 各 feature 模块 → settings 注册 → run effect。
   令牌覆盖层是同目录的 `ui/tokens.js`（纯数据，亮/暗成对），入口的 mount()

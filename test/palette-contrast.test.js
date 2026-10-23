@@ -4,11 +4,12 @@
  * This theme has one rule about colour (see README): every accent role is checked
  * against the surfaces it actually lands on, because two of the three historical
  * colour bugs in this repo were "the text is the same colour as the thing behind
- * it" — invisible chips and a 1.02:1 turn-status label. Adding a second palette
- * (武陵青 / #14d0d0) doubles every one of those surfaces, so the check is
- * mechanical rather than a promise.
+ * it" — invisible chips and a 1.02:1 turn-status label. One palette ships
+ * (谷地黄 / #fff500, on the plain body base block — the switchable 终末地灰 /
+ * 武陵青 classes were removed in 2026-10), so the check is mechanical rather
+ * than a promise, and it guards that removal too.
  *
- * It reads the REAL values out of client.js (the palette blocks) instead of
+ * It reads the REAL values out of client.js (the palette block) instead of
  * restating them, so a future edit to the stylesheet is what this test sees.
  * Restating them would only test the copy.
  *
@@ -57,25 +58,13 @@ const DARK_BGS = { 'bg-base': hex('#101110'), 'bg-layer-1': hex('#181a18') }
 const INK = hex('#101110')
 
 /* ---------- pull the palette definitions out of the real stylesheet ---------- */
-/** Read one custom property from a specific CSS block in client.js. */
-const blockOf = (selector) => {
-  const i = css.indexOf(selector + ' {')
-  if (i < 0) return null
-  const j = css.indexOf('}', i)
-  return j < 0 ? null : css.slice(i, j)
-}
 const varIn = (block, name) => {
   if (block === null) return null
   const m = block.match(new RegExp('\\n\\s*' + name + '\\s*:\\s*([^;]+);'))
   return m ? m[1].trim() : null
 }
 
-const YELLOW_VALLEY_SEL = 'body'   // 谷地黄 lives on plain body (the CSS base block)
-const CYAN_SEL = 'body.theme-endfield-wuling'
-const GRAY_SEL = 'body.theme-endfield-gray'
-const GRAY_DARK_SEL = 'body.theme-endfield-gray[data-ds-dark-theme]'
-
-/* The default-palette block is the one that DEFINES --edge-accent (plain `body {`
+/* The one palette block is the one that DEFINES --edge-accent (plain `body {`
    appears many times in this stylesheet, so find the right occurrence). */
 const defaultBlock = (() => {
   let from = 0
@@ -88,22 +77,22 @@ const defaultBlock = (() => {
     from = i + 1
   }
 })()
-const cyanBlock = blockOf('      ' + CYAN_SEL)
-const grayBlock = blockOf('      ' + GRAY_SEL)
-const grayDarkBlock = blockOf('      ' + GRAY_DARK_SEL)
-
 if (defaultBlock === null) { fail('no body block defines --edge-accent (谷地黄 palette missing)'); }
-if (cyanBlock === null) { fail('no ' + CYAN_SEL + ' block found (武陵青 palette missing)'); }
-if (grayBlock === null) { fail('no ' + GRAY_SEL + ' block found (终末地灰 palette missing)'); }
-if (grayDarkBlock === null) { fail('no ' + GRAY_DARK_SEL + ' block found (终末地灰 dark flip missing)'); }
+
+/* The switchable palettes are GONE: 谷地黄 must be the ONLY accent block, on the
+   plain body. A leftover body.theme-endfield-* override block would still win the
+   cascade the moment its class came back, so its absence is asserted here too
+   (check.js guards the same from the build side). */
+if (!/body\.theme-endfield-(wuling|gray|valley)\s*\{/.test(css)) {
+  pass('样式表不再含切换配色的覆盖块（仅 body 基础块的谷地黄）')
+} else {
+  fail('样式表仍有 body.theme-endfield-* 覆盖块 —— 对应配色已随设置行移除')
+}
 if (failures) { console.error('\n' + failures + ' palette check(s) failed'); process.exit(1) }
 
 const palettes = {
   '谷地黄': defaultBlock,
-  '武陵青': cyanBlock,
 }
-/* 终末地灰 pairs its fills with --edge-accent-ink rather than fixed ink, and the
-   pairing flips per scheme, so it gets its own sections further down. */
 
 /* ---------- 1. accent used as a SOLID FILL under ink text ----------
    Rows, badges, the new-session button, approval chips and ::selection all paint
@@ -206,98 +195,14 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
-/* ---------- 6. the two palettes must actually differ ---------- */
-const ay = varIn(palettes['谷地黄'], '--edge-accent')
-const ac = varIn(palettes['武陵青'], '--edge-accent')
-if (ay !== null && ac !== null) {
-  if (ay.toLowerCase() !== ac.toLowerCase()) pass('两套配色的强调色不同：' + ay + ' / ' + ac)
-  else fail('both palettes define the same --edge-accent — the switch would do nothing')
-}
-/* Every accent value in this package is written as HEX, so assert the notation as
+/* ---------- 6. accent notation ----------
+   Every accent value in this package is written as HEX, so assert the notation as
    well as the colour. The first version carried the accent in two notations (hex in
    CSS, rgb() in the settings row and the canvas strokes), which is exactly how two
    spellings of one colour drift apart. */
-if (ac !== null && /^#[0-9a-f]{6}$/i.test(ac)) pass('武陵青 强调色为 6 位十六进制：' + ac)
-else fail('武陵青 --edge-accent should be a 6-digit hex value, got ' + ac)
-
-/* ---------- 7. 武陵青 must be BRIGHT enough to partner the signal yellow ----------
-   The reported defect was that the first cyan read as too dark beside the yellow it
-   alternates with. That is measurable rather than a matter of taste: relative
-   luminance was 31.7% against the yellow's 86.6%, so the chip carried about a third
-   of the presence on a near-black page.
-   The floor is set at 45% — comfortably above the 31.7% that was rejected, and
-   below the ~56% where the light-mode chip stops separating from cream. */
-const relLum = (h) => lum(hex(h)) * 100
-if (ac !== null) {
-  const yl = relLum(ay), cl = relLum(ac)
-  if (cl >= 45) pass('武陵青 相对亮度 ' + cl.toFixed(1) + '%（下限 45%，谷地黄 ' + yl.toFixed(1) + '%）')
-  else fail('武陵青 relative luminance is only ' + cl.toFixed(1) + '% — reads dark next to 谷地黄 ' + yl.toFixed(1) + '%')
-  /* Upper guard: past ~56% the chip stops separating from cream in light mode, and
-     the hue desaturates toward white — it stops looking like 武陵青 at all. */
-  if (cl <= 56) pass('武陵青 未过亮（上限 56%，亮色模式仍与纸底可分辨）')
-  else fail('武陵青 relative luminance ' + cl.toFixed(1) + '% is too pale — the light-mode chip vanishes into cream')
-  // Hue integrity: this must remain a teal, not drift to grey-cyan or white.
-  const [r, g, b] = hex(ac)
-  if (g === b && r < g * 0.5) pass('武陵青 仍在青碧色轴上（R 低、G=B）：' + [r, g, b].join(', '))
-  else fail('武陵青 ' + ac + ' has drifted off the teal axis (expect low R, G == B)')
-}
-
-/* ---------- 8. 终末地灰: fills pair with --edge-accent-ink per scheme ----------
-   The bright palettes carry ink text on their accents, so section 1 tests them
-   with fixed INK. The gray palette's dark fill needs WHITE, which is why the
-   pairing travels as --edge-accent-ink; both schemes' pairings must clear AA. */
-{
-  for (const [label, block] of [['终末地灰·亮', grayBlock], ['终末地灰·暗', grayDarkBlock]]) {
-    const ink = varIn(block, '--edge-accent-ink')
-    const accent = varIn(block, '--edge-accent')
-    const deep = varIn(block, '--edge-accent-deep')
-    if (ink === null || accent === null || deep === null) {
-      fail(label + ': accent/accent-ink/deep must all be defined'); continue
-    }
-    const r = ratio(hex(ink), hex(accent))
-    if (r >= 4.5) pass(label + ' 实心强调底 + accent-ink 字：' + r.toFixed(2) + ':1 (AA)')
-    else fail(label + ' accent-ink on accent is only ' + r.toFixed(2) + ':1')
-    const rd = ratio(hex(ink), hex(deep))
-    if (rd >= 4.5) pass(label + ' 悬停加深底 + accent-ink 字：' + rd.toFixed(2) + ':1 (AA)')
-    else fail(label + ' accent-ink on accent-deep is only ' + rd.toFixed(2) + ':1')
-  }
-  /* The gradient stops are declared once on the gray base block; still AA. */
-  for (const [v, bgs, label] of gradientRoles) {
-    const val = varIn(grayBlock, v)
-    if (val === null) { fail('终末地灰: ' + v + ' is not defined'); continue }
-    let worst = Infinity, worstBg = ''
-    for (const [bgName, bg] of Object.entries(bgs)) {
-      const r = ratio(hex(val), bg)
-      if (r < worst) { worst = r; worstBg = bgName }
-    }
-    if (worst >= 4.5) pass('终末地灰 回合状态 ' + label + ' ' + val + '：最差 ' + worst.toFixed(2) + ':1 vs ' + worstBg + ' (AA)')
-    else fail('终末地灰 turn-status ' + label + ' is ' + worst.toFixed(2) + ':1 vs ' + worstBg)
-  }
-  /* Icon floor: the dark accent is the caret / focus-ring / scrollbar ink. */
-  const gAccent = varIn(grayDarkBlock, '--edge-accent')
-  if (gAccent !== null) {
-    let worst = Infinity
-    for (const bg of Object.values(DARK_BGS)) worst = Math.min(worst, ratio(hex(gAccent), bg))
-    if (worst >= 3) pass('终末地灰 暗色图标/焦点环强调色：' + worst.toFixed(2) + ':1 (>=3 非文本下限)')
-    else fail('终末地灰 accent-as-ink in dark mode is only ' + worst.toFixed(2) + ':1')
-  }
-}
-
-/* ---------- 10. 终末地灰 hero glow: the one-sided budget, per-scheme accent ---------- */
-{
-  /* The glow alphas live on the gray BASE block: the dark override only flips
-     the fill roles, and the cascade still resolves glow from the base. */
-  for (const [mode, accent] of [['light', varIn(grayBlock, '--edge-accent')], ['dark', varIn(grayDarkBlock, '--edge-accent')]]) {
-    if (accent === null) { fail('终末地灰: no accent for the ' + mode + ' glow check'); continue }
-    const a = glowAlpha(grayBlock, '--edge-glow-' + mode)
-    if (a === null) { fail('终末地灰: --edge-glow-' + mode + ' is not defined'); continue }
-    const bg = mode === 'light' ? LIGHT_BGS['bg-base'] : DARK_BGS['bg-base']
-    const mine = Math.abs(yShift(hex(accent), bg, a))
-    const blue = Math.abs(yShift(BLUE, bg, 0.08))
-    if (mine <= blue + 2) pass('终末地灰 hero 光晕 ' + mode + ' α=' + a + '：|ΔY| ' + mine.toFixed(2) + ' <= ' + (blue + 2).toFixed(2))
-    else fail('终末地灰 hero glow ' + mode + ' |ΔY| ' + mine.toFixed(2) + ' exceeds the blue budget')
-  }
-}
+const ay = varIn(palettes['谷地黄'], '--edge-accent')
+if (ay !== null && /^#[0-9a-f]{6}$/i.test(ay)) pass('谷地黄 强调色为 6 位十六进制：' + ay)
+else fail('谷地黄 --edge-accent should be a 6-digit hex value, got ' + ay)
 
 /* ---------- 12. the signal arrow vs the FILL it is drawn on ----------
    The merged motion design slides an accent-ink arrow into the new-session CTA,
@@ -326,26 +231,6 @@ for (const [name, block] of Object.entries(palettes)) {
     else fail(name + ' signal arrow on ' + label + ' is only ' + r.toFixed(2) + ':1 — the bar disappears')
   }
 }
-/* 终末地灰 owns both schemes: its ink flips (dark on the light fill, white on the
-   dark one), so the pairing is checked against each scheme's own block. */
-{
-  const darkGray = grayDarkBlock || grayBlock
-  const pairs = [
-    [varIn(grayBlock, '--edge-accent-ink'), varIn(grayBlock, '--edge-accent'), '亮色'],
-    [varIn(grayBlock, '--edge-accent-ink'), varIn(grayBlock, '--edge-accent-deep'), '亮色加深'],
-    [varIn(darkGray, '--edge-accent-ink'), varIn(darkGray, '--edge-accent'), '暗色'],
-    [varIn(darkGray, '--edge-accent-ink'), varIn(darkGray, '--edge-accent-deep'), '暗色加深'],
-  ]
-  let worst = Infinity
-  for (const [ink, fill, label] of pairs) {
-    if (ink === null || fill === null) { fail('终末地灰 ' + label + ' 的 accent-ink / 填充未定义'); continue }
-    const r = ratio(hex(ink), hex(fill))
-    worst = Math.min(worst, r)
-  }
-  if (worst >= 3) pass('终末地灰 信号箭头(accent-ink) / 两模式强调底：最差 ' + worst.toFixed(2) + ':1 (>=3)')
-  else fail('终末地灰 signal arrow contrast is only ' + worst.toFixed(2) + ':1')
-}
-
 /* ---------- 13. the 划词灰 pair and its three 2026-10 applications ----------
    The model-menu / permission current rows and the composer + hover paint with
    the ::selection pair (--edge-select-fill / --edge-select-ink). The VALUES are
@@ -690,16 +575,6 @@ for (const [name, block] of Object.entries(palettes)) {
       if (r >= 1.06 && r <= 1.6) pass('看板斜纹 · ' + label + '色合成 = ' + r.toFixed(2) + ':1（装饰区间，与会话列底纹同档）')
       else fail('看板斜纹 ' + label + '色出装饰区间：' + r.toFixed(2) + ':1')
     }
-  }
-}
-
-/* ---------- 11. three palettes must actually differ ---------- */
-{
-  const accents = [varIn(palettes['谷地黄'], '--edge-accent'), varIn(palettes['武陵青'], '--edge-accent'), varIn(grayBlock, '--edge-accent')]
-  if (new Set(accents.map((v) => v && v.toLowerCase())).size === 3) pass('三套配色的强调色各不相同：' + accents.join(' / '))
-  else fail('palette accents collide: ' + accents.join(' / '))
-  for (const v of accents) {
-    if (v !== null && !/^#[0-9a-f]{6}$/i.test(v)) fail('accent should be a 6-digit hex value, got ' + v)
   }
 }
 

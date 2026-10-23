@@ -11,16 +11,17 @@
  * near-white on signal yellow: measured 1.05:1 from a real screenshot — invisible.
  *
  * Two things make this worth a dedicated test rather than a one-line fix:
- *   1. It is palette-dependent. On 武陵青 the same pairing is 2.61:1 — still bad,
- *      but visible enough that the bug hides until someone uses 谷地黄.
+ *   1. It is scheme-dependent: the pairing only broke in dark mode (in light the
+ *      app's own label ink already read on the fill), so a light-only probe
+ *      would have stayed green. (When switchable palettes shipped, 武陵青 at
+ *      2.61:1 also hid the bug until someone screenshotted the yellow.)
  *   2. The theme's broad hover-inversion rule deliberately EXCLUDES plain buttons
  *      (so a yellow toggle keeps black text and the white-on-dark send button keeps
  *      white), which is exactly why this button fell through the gap.
  *
  * Strategy: render the real theme stylesheet over the real upstream button CSS in a
  * headless browser, force :hover via a same-specificity class swap (a screenshot
- * cannot hover), and assert the composited contrast in BOTH palettes and BOTH
- * schemes.
+ * cannot hover), and assert the composited contrast in BOTH schemes.
  *
  * Usage: node test/settings-buttons.test.js
  */
@@ -189,8 +190,6 @@ const run=(paletteName)=>{
 }
 
 run('谷地黄')
-document.body.classList.add('theme-endfield-wuling')
-run('武陵青')
 
 document.title='DONE '+JSON.stringify(window.__RESULTS__)
 </script></body></html>`)

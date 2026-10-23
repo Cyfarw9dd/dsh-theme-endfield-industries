@@ -43,16 +43,13 @@ const fail = (m) => { console.error('FAIL  ' + m); failures++ }
   if (norm(served) === norm(local)) pass('served bundle is byte-identical to client.js (symlink is live)')
   else fail('the served bundle DIFFERS from client.js — the GUI is running older code')
 
-  /* The palette contract, checked against what the browser will actually run. */
+  /* The palette contract, checked against what the browser will actually run.
+     One palette ships: 谷地黄 #fff500 on the plain body block. The switchable
+     palettes and their setting row are gone, so their remains must be ABSENT
+     from the served bundle as well as the local one. */
   const required = [
-    ['body.theme-endfield-wuling {', '武陵青 palette block'],
-    ['--edge-accent: #14d0d0', '武陵青 accent = #14d0d0'],
-    ['--edge-accent-rgb: 20, 208, 208', '武陵青 channel list (same colour, for rgba washes)'],
-    ['--edge-accent: #fff500', '谷地黄 accent (default)'],
-    ["'dsh-theme-endfield-palette'", 'palette storage key'],
-    ['切换武陵青', 'settings row offers 武陵青'],
-    ['切换谷地黄', 'settings row offers 谷地黄'],
-    ['#14d0d0', 'row states the accent in hex'],
+    ['--edge-accent: #fff500', '谷地黄 accent (the one palette)'],
+    ['--edge-accent-rgb: 255, 245, 0', '谷地黄 channel list (same colour, for rgba washes)'],
         ["dark: 'var(--edge-accent)'", 'brand token follows the palette'],
   ]
   for (const [needle, label] of required) {
@@ -60,9 +57,18 @@ const fail = (m) => { console.error('FAIL  ' + m); failures++ }
     else fail('live bundle is missing ' + label + ' (' + needle + ')')
   }
 
-  /* Default must be gray: only the exact strings 'valley'/'wuling' select a bright palette. */
-  if (/stored === 'valley' \|\| stored === 'wuling' \? stored : 'gray'/.test(served)) pass('live: default palette falls back to 终末地灰')
-  else fail('live bundle does not default to 终末地灰')
+  const forbidden = [
+    ['body.theme-endfield-wuling', '武陵青 override block'],
+    ['body.theme-endfield-gray', '终末地灰 override block'],
+    ["'dsh-theme-endfield-palette'", 'palette storage key'],
+    ['切换武陵青', 'settings row offering 武陵青'],
+    ['切换谷地黄', 'settings row offering 谷地黄'],
+    ['#14d0d0', '武陵青 accent hex'],
+  ]
+  for (const [needle, label] of forbidden) {
+    if (!served.includes(needle)) pass('live: no leftover ' + label)
+    else fail('live bundle still carries the removed ' + label + ' (' + needle + ')')
+  }
 
   console.log('')
   if (failures) { console.error(failures + ' live check(s) failed'); process.exit(1) }

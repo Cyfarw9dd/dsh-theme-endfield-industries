@@ -51,7 +51,9 @@
  * <settings.yaml> section from a prior build) keep scanning identically:
  *   default-ON switches store  '1'  and read as  !== '0'
  *   default-OFF switches store '0'  and read as  === '1'
- *   palette/radius/fps/speed  store one of their documented literals.
+ *   multi-literal fields (radius, glass, texture, motion) store one of
+ *   their documented literals. (A `palette` field existed until 2026-10;
+ *   values for it may linger in old documents but nothing reads them.)
  * FIELD_DEFAULTS is the shipped fallback and mirrors index.js.
  *
  * Resilience. Before the transport hands us a section (boot), or in an

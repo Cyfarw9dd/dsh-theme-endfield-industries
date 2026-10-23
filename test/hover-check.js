@@ -156,8 +156,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     window.__setScheme__=(s)=>{ scheme=s
       if(s==='dark') document.body.setAttribute('data-ds-dark-theme',''); else document.body.removeAttribute('data-ds-dark-theme')
       if(last) applyTokens(last) }
-    window.__setPalette__=(p)=>{ document.body.classList.toggle('theme-endfield-wuling', p==='wuling')
-      document.body.classList.toggle('theme-endfield-gray', p==='gray') }
     window.__statusdark__=()=>getComputedStyle(document.body).getPropertyValue('--edge-status-dark').trim()
     window.__selectfill__=()=>getComputedStyle(document.body).getPropertyValue('--edge-select-fill').trim()
     localStorage.setItem('dsh-theme-endfield-enabled','1')
@@ -251,14 +249,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       else fail(label + '  [' + detail + ']  <- 悬停时文字与底色对比不足')
     }
 
-    for (const palette of ['valley', 'wuling', 'gray']) {
-      const paletteLabel = palette === 'wuling' ? '武陵青' : (palette === 'gray' ? '终末地灰' : '谷地黄')
-      for (const scheme of ['light', 'dark']) {
-        await evaluate("window.__setPalette__('" + palette + "')")
+    /* One shipped palette (谷地黄) — the loop is the scheme pair only. */
+    for (const scheme of ['light', 'dark']) {
+      {
         await evaluate("window.__setScheme__('" + scheme + "')")
         await sleep(150)
         const accent = hexRgb(await evaluate('window.__accent__()'))
-        const tag = paletteLabel + ' · ' + scheme
+        const tag = '谷地黄 · ' + scheme
 
         /* 1. 编辑 — the accent fill is on the button itself (it needs ink on it). */
         inkCheck(tag + ' · 编辑 真实 :hover', await hoverSample('edit'), 4.5)
@@ -293,11 +290,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
         const rest = JSON.parse(await evaluate('JSON.stringify(window.__style__("composerAdd"))'))
         const restColor = rest.rgb
         if (scheme === 'dark') {
-          /* The rest ink reads --edge-status-dark, which EQUALS the accent for the
-             bright palettes but is deliberately lighter for 终末地灰 (the dark fill
-             gray is AA under white text yet too dim as text itself). */
-          const restTarget = palette === 'gray'
-            ? hexRgb(await evaluate('window.__statusdark__()')) : accent
+          /* The rest ink reads --edge-status-dark, which EQUALS the accent for
+             谷地黄 — read it from the page so the rule stays honest even if the
+             two roles ever split again. */
+          const restTarget = hexRgb(await evaluate('window.__statusdark__()'))
           if (near(restColor, restTarget, 4)) pass(tag + ' · 输入区 + 常态仍为强调色墨  [color=' + rest.color + ']')
           else fail(tag + ' · 输入区 + 常态应为强调色墨  [color=' + rest.color + ' vs ' + rgbText(restTarget) + ']')
         } else {
@@ -316,7 +312,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
        step -> rgba(0,0,0,.04) composited on paper) must flip, and the ACTIVE
        tab carries the deeper official wash (#e5e5e5 step -> rgba(0,0,0,.09))
        at rest — and keeps it while hovered (official keeps #e5e5e5). */
-    await evaluate("window.__setScheme__('light')"); await evaluate("window.__setPalette__('gray')")
+    await evaluate("window.__setScheme__('light')")
     await sleep(200)
     const afterSel = await evaluate("window.__pseudo__('tabSel','::after','backgroundColor')")
     const afterSelW = await evaluate("window.__pseudo__('tabSel','::after','width')")
@@ -433,11 +429,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
        The chips come from eight packages but all consume the
        --dsw-alias-interactive-bg-* family; the theme remaps the tokens inside the
        _tools/_modes/_standardControls rows to the 划词灰 pair. Real pointer, both
-       schemes, expectations read from the live --edge-select-* tokens. Run under
-       谷地黄 (the palette where the yellow was reported; on the default gray
-       palette accent == select-fill and the test could not tell remap from leak).
-       The guard button (seat, outside the rows) must keep the accent wash. */
-    await evaluate("window.__setPalette__('valley')")
+       schemes, expectations read from the live --edge-select-* tokens. The
+       accent (#fff500) differs from the select gray (#d9d9d9), so the probe can
+       tell a genuine remap from an accent leak. The guard button (seat, outside
+       the rows) must keep the accent wash. */
     for (const scheme of ['light', 'dark']) {
       await evaluate("window.__setScheme__('" + scheme + "')"); await sleep(150)
       const wantFill = await evaluate("getComputedStyle(document.body).getPropertyValue('--edge-select-fill').trim()")
@@ -467,7 +462,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
         await parkPointer(); await sleep(120)
       }
     }
-    await evaluate("window.__setPalette__('gray')")
 
     cdp.close()
   } finally {

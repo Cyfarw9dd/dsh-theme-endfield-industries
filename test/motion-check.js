@@ -35,8 +35,9 @@
  *
  * The same fixture carries the 划词灰 (selection-gray) assertions — the model
  * menu / permission popup current rows and the composer + hover all use the
- * ::selection fill/ink pair, in both schemes and (for the value-level proof)
- * under a palette where that gray differs from the accent.
+ * ::selection fill/ink pair, in both schemes. The accent is the one shipped
+ * palette (谷地黄 #fff500), which differs from the selection gray, so the
+ * value-level proof can tell the pair from the accent.
  *
  * Plus two controls that keep the test honest:
  *   - `off` (attribute removed, exactly what syncMotion does) must produce
@@ -62,8 +63,9 @@ const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /* Colour expectations are read from the DOCUMENT, never restated as literals:
-   the fixture declares the gray palette's tokens (the theme's default) and the
-   expected colour is whatever the page resolves the variable to. */
+   the fixture declares the app's own --dsw-* tokens, the theme sheet (injected
+   after it) supplies the --edge-* accent block, and the expected colour is
+   whatever the page resolves the variable to. */
 /* ---------------- fixture ----------------
    Hash-free class names, because the theme's hooks are all suffix/substring
    matches ('_newSession', '_sessionRow', '_optionLabel'). The app shapes below
@@ -77,12 +79,6 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
 <style>
   html,body{margin:0}
   body{
-    --edge-accent:#d9d9d9;
-    --edge-accent-deep:#cccccc;
-    --edge-accent-onpaper:#666666;
-    --edge-accent-ink:#101110;
-    --edge-accent-rgb:126, 126, 126;
-    --edge-status-dark:#d9d9d9;
     --dsw-alias-bg-base:#e8e8e2;
     --dsw-alias-bg-layer-1:#f2f2ec;
     --dsw-alias-bg-layer-2:#dcddd6;
@@ -637,9 +633,8 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
         ink: await evaluate("window.__var__('--edge-select-ink')"),
         accent: await evaluate("window.__var__('--edge-accent')"),
       })
-      /* value-level proof under a palette where the gray differs from the
-         accent: valley's accent is #fff500, the selection gray stays #d9d9d9. */
-      await evaluate("document.body.classList.add('theme-endfield-valley')")
+      /* value-level proof: the accent (#fff500) differs from the selection
+         gray, so the assertions below can tell the pair from the accent. */
       await sleep(120)
       const pair = await readPair()
       const selFill = toRgb(pair.fill), selInk = toRgb(pair.ink), accentV = toRgb(pair.accent)
@@ -704,7 +699,6 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
         fail('划词灰 · 暗色方案下未跟随  [model=' + modelD.backgroundColor + ' perm=' + permD.backgroundColor + ' 期望 ' + pairD.fill + ']')
       }
       await evaluate("document.body.removeAttribute('data-ds-dark-theme')")
-      await evaluate("document.body.classList.remove('theme-endfield-valley')")
       await sleep(120)
     }
 

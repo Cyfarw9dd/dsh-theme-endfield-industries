@@ -98,8 +98,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
 
     /* ---------- motion: the <body> attribute/class sync layer ----------
        Extracted into src/client/motion/sync.js (TODO 清单第 3 项): radius
-       class, motion/glass/texture attributes, palette classes, plus the DOM
-       predicates (scheme / reduced-motion / app-frame). Injected: prefs +
+       class, motion/glass/texture attributes, plus the DOM predicates
+       (scheme / reduced-motion / app-frame). Injected: prefs +
        the master-switch reader. The entry calls motionSync.syncAll() at every
        reconcile point and motion.detach() on unmount; the panel write-through
        paths use the per-surface readers/syncs. */
@@ -166,9 +166,9 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       disposeStyles()
       disposeToken = () => {}
       disposeStyles = () => {}
-      // The radius/palette classes and the glass attribute must go with the
-      // stylesheet that gives them meaning (guarded like every other body
-      // touch: an unload race must not throw here).
+      // The radius class and the glass attribute must go with the stylesheet
+      // that gives them meaning (guarded like every other body touch: an
+      // unload race must not throw here).
       motionSync.detach()
       // The plate is styled by the theme stylesheet just torn down — an orphaned
       // plate would sit there as an unstyled black-less div, so drop it too.
@@ -213,7 +213,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
        (<profile>/cordis.patch.yml on 0.1.7, <dshHome>/settings.yaml before it),
        or the host reverts a value). It mirrors the initial mount block above so a
        runtime change re-paints exactly the live surfaces it can: the master switch mounts/unmounts
-       the token + stylesheet layers, then radius/palette/watermark/
+       the token + stylesheet layers, then radius/watermark/
        the notification cards re-derive from the new value. The boot loader is deliberately not
        replayed here: it is a once-per-page-load plate, so a mid-session section
        change must not slam a startup animation over a running app. The one thing

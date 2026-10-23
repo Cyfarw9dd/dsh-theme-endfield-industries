@@ -153,10 +153,12 @@ const CASES = [
     expect: /palette variable\(s\) never DEFINED/,
   },
   {
-    name: 'the 武陵青 palette block is removed (switch becomes inert)',
+    name: 'a removed palette override block sneaks back into the sheet',
     file: 'tokens.css',
-    mutate: (s) => s.replace('body.theme-endfield-wuling {', 'body.theme-endfield-wuling-DISABLED {'),
-    expect: /no body\.theme-endfield-wuling block/,
+    /* The switchable palettes are gone; 谷地黄 lives only on the plain body
+       block. Re-adding any leftover override block must fail the guard. */
+    mutate: (s) => s.replace('      body {', '      body.theme-endfield-gray {\n        --edge-accent: #d9d9d9;\n      }\n      body {'),
+    expect: /block is still in the sheet|palette it belongs to was removed/,
   },
   {
     name: 'a token-reading --edge-* variable is moved back to :root (computes EMPTY)',

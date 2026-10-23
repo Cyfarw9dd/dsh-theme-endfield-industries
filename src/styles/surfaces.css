@@ -350,8 +350,9 @@
          owning the foreground — so in dark mode the label stayed label-primary
          (#f5f5f0) on signal yellow. Measured from a real screenshot of the 编辑
          button: 63 px of #f5f5f0 sitting on #fff500 = 1.05:1, i.e. the word was
-         invisible. On 武陵青 the same pairing is 2.61:1 — still failing, just less
-         obviously, which is how it stayed hidden.
+         invisible. (When switchable palettes shipped, the same pairing measured
+         2.61:1 on 武陵青 — still failing, just less obviously, which is how it
+         stayed hidden until someone screenshotted the yellow.)
 
          Why the existing hover-inversion rule did not already cover it: that
          selector deliberately EXCLUDES plain buttons, because a button's own fill
@@ -411,8 +412,7 @@
       :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled),
       :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled) svg,
       :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled) svg path {
-        /* Accent-ink on accent: 16.50:1 on 谷地黄, 6.62:1 on 武陵青, white on
-           终末地灰's #626262 6.10:1 — all AA through --edge-accent-ink. */
+        /* Accent-ink on accent: 16.50:1 — AA through --edge-accent-ink. */
         color: var(--edge-accent-ink, #101110) !important;
         fill: currentColor !important;
       }

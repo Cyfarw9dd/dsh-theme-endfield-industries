@@ -23,8 +23,8 @@
  *      field is volatile with the shipped default — a non-volatile field is
  *      silently dropped from the form, which is the modern spelling of
  *      "settings won't save";
- *   2. a served form is bound and its values are adopted (the stored palette is
- *      applied to <body>);
+ *   2. a served form is bound and its values are adopted (the stored radius
+ *      class lands on <body>);
  *   3. `set()` resolving false / the namespace not being served yet means the
  *      edit is HELD rather than reported as saved, and is replayed once the
  *      form becomes durable — the same guarantee settings-durable-hold.test.js
@@ -278,7 +278,6 @@ function panelSelectTrigger(client, ariaLabel) {
   return walk(tree).find((n) => n.type === 'button' && n.props
     && n.props['aria-label'] === ariaLabel && n.props['aria-haspopup'] === 'menu')
 }
-const panelPaletteSelect = (client) => panelSelectTrigger(client, '主题配色')
 const findButton = (buttons, re) => buttons.find((b) => re.test(textOf(b)))
 /** The radius row is this test's write-probe across every transport scenario.
     Every value row is the unified dropdown now, so the probe drives it the way
@@ -367,27 +366,30 @@ async function main() {
      2. A served entry is bound and its stored values are adopted.
      ======================================================================= */
   {
-    const stub = configFormsStub({ 'theme-endfield': { palette: 'wuling' } }, { served: ['theme-endfield'] })
+    const stub = configFormsStub({ 'theme-endfield': { radius: 'round' } }, { served: ['theme-endfield'] })
     const client = bootClient({ configForms: stub.service })
 
-    if (client.classList.contains('theme-endfield-wuling')) {
-      pass('stored palette read through configForms was applied to <body>')
+    if (client.classList.contains('theme-endfield-round')) {
+      pass('stored radius read through configForms was applied to <body>')
     } else {
-      fail('configForms value was not adopted: <body> lacks theme-endfield-wuling')
+      fail('configForms value was not adopted: <body> lacks theme-endfield-round')
     }
 
-    const radius = panelRadiusSelect(client)
-    if (!radius) {
-      fail('no radius select rendered')
+    /* The write probe drives the dropdown to 直角: the section already holds
+       radius=round (the adoption read above), and the store-derived handler
+       no-ops a re-selection of the stored value — so the OPPOSITE option is
+       the one that must reach the wire. */
+    const step = panelRadiusWrite(client, '直角')
+    if (step !== 'ok') {
+      fail('radius dropdown could not be driven: ' + step)
     } else {
-      radius.props.onChange({ target: { value: 'round' } })
       const w = stub.writes
-      if (w.length === 1 && w[0].ns === 'theme-endfield' && w[0].field === 'radius' && w[0].value === 'round') {
-        pass('panel toggle wrote radius=round through form.set on the entry namespace')
+      if (w.length === 1 && w[0].ns === 'theme-endfield' && w[0].field === 'radius' && w[0].value === 'square') {
+        pass('panel toggle wrote radius=square through form.set on the entry namespace')
       } else {
-        fail('expected one write {ns:theme-endfield, field:radius, value:round}, saw ' + JSON.stringify(w))
+        fail('expected one write {ns:theme-endfield, field:radius, value:square}, saw ' + JSON.stringify(w))
       }
-      if (stub.sectionOf('theme-endfield').radius === 'round') pass('accepted write lands in the served section')
+      if (stub.sectionOf('theme-endfield').radius === 'square') pass('accepted write lands in the served section')
       else fail('section did not receive the accepted write: ' + JSON.stringify(stub.sectionOf('theme-endfield')))
       await drain()
     }
@@ -573,7 +575,7 @@ async function main() {
            bound configForms ns= theme-endfield ; initial status= loading
              writable= false mode= host valueKeys= 0
            ...user flips a switch...
-           commit palette = wuling via configForms theme-endfield status= ready
+           commit radius = round via configForms theme-endfield status= ready
 
          The section arrives AFTER the bind, as ONE `loading -> ready`
          subscription event. `prefsOnScopeChange` used to early-return on
@@ -647,34 +649,33 @@ async function main() {
   /* =======================================================================
      11. REGRESSION (the reported bug) — "刷新后设置就重置了".
 
-         The panel seeds all sixteen `useState` hooks from prefsGet() during its
-         FIRST render. That render happens while the Host is still sending the
-         section, so every read falls back to the schema default. Nothing
-         re-synced those hooks when the section arrived: the theme's own surfaces
-         recovered (reconcileFromPrefs re-derives them) but the PANEL's React
-         state had no such path, so every switch came back at its default on each
-         page load — even though the values were on disk and were being applied.
+          The panel seeds all sixteen `useState` hooks from prefsGet() on FIRST
+          render. That render happens while the Host is still serving the
+          section, so every read falls back to the schema default; without a
+          re-sync the switches stayed frozen at those defaults for the whole
+          session even though the values were on disk and the theme's own
+          surfaces (which read the store live) had applied them.
 
-         This case changes NOTHING in-session: the section is simply served
-         late, exactly as a real reload does. `palette` is served away from its
-         default 'valley', so the panel can only show 'wuling' by adopting the
-         settled section. Asserted through the rendered tree, which is what the
-         user actually sees, and through the hook slots, which is what a no-op
-         setter would otherwise leave frozen.
-     ======================================================================= */
+          This case changes NOTHING in-session: the section is simply served
+          late, exactly as a real reload does. `radius` and `texture` are served
+          away from their defaults, so the panel can only show 圆角/轻 by
+          adopting the settled section. Asserted through the rendered tree,
+          which is what the user actually sees, and through the hook slots,
+          which is what a no-op setter would otherwise leave frozen.
+      ======================================================================= */
   {
     const stub = configFormsStub(
-      { 'theme-endfield': { palette: 'wuling', radius: 'round' } },
+      { 'theme-endfield': { radius: 'round', texture: 'subtle' } },
       { served: [], loading: ['theme-endfield'] },
     )
     const client = bootClient({ configForms: stub.service })
     if (stub.writes.length !== 0) fail('read-only boot wrote to the transport: ' + JSON.stringify(stub.writes))
 
     // Boot render: the section is still in flight, so the panel shows defaults.
-    const before = panelPaletteSelect(client)
-    if (!before) fail('no palette select rendered (late-section read case)')
-    else if (!textOf(before).includes('终末地灰')) {
-      fail('precondition: palette trigger should start on 终末地灰, got ' + textOf(before))
+    const before = panelSelectTrigger(client, '主题圆角')
+    if (!before) fail('no radius select rendered (late-section read case)')
+    else if (!textOf(before).includes('直角')) {
+      fail('precondition: radius trigger should start on 直角, got ' + textOf(before))
     } else {
       pass('precondition: panel starts on the schema default while the section is in flight')
     }
@@ -688,65 +689,67 @@ async function main() {
     // bug ("the panel's state never moved off its boot defaults") and it cannot
     // be confused by anything in the render helper.
     const hooks = client.hooks()
-    /* 0-indexed: the 5th useState is `palette` (enabled, wmOn, wmPersist, loader, palette).
-       Keep this list in step with the panel's useState order in src/client/ui/settings/section.js. */
-    const paletteSlot = hooks[4]
-    if (paletteSlot === 'wuling') {
-      pass('panel hook state adopted the served palette (slot moved off its default)')
+    /* 0-indexed: the 7th useState is `mode` (radius: enabled, wmOn, wmPersist,
+       loader, glass, texture, mode). Keep this list in step with the panel's
+       useState order in src/client/ui/settings/section.js. */
+    const radiusSlot = hooks[6]
+    if (radiusSlot === 'round') {
+      pass('panel hook state adopted the served radius (slot moved off its default)')
     } else {
-      fail('panel hook state stayed on the default after the section settled: palette slot='
-        + JSON.stringify(paletteSlot) + ' (this is the reported reset bug)')
+      fail('panel hook state stayed on the default after the section settled: radius slot='
+        + JSON.stringify(radiusSlot) + ' (this is the reported reset bug)')
     }
 
-    const after = panelPaletteSelect(client)
-    // The trigger's visible text reflects the settled palette (武陵青), not the default.
-    if (after && textOf(after).includes('武陵青')) {
-      pass('panel re-synced onto the late-served palette (wuling), not the default')
+    const after = panelSelectTrigger(client, '主题圆角')
+    // The trigger's visible text reflects the settled radius (圆角), not the default.
+    if (after && textOf(after).includes('圆角')) {
+      pass('panel re-synced onto the late-served radius (round), not the default')
     } else {
       fail('panel did NOT re-sync after the section settled — trigger shows '
         + (after ? textOf(after) : '(none)') + ' (this is the reported reset bug)')
     }
 
-    // The served radius must show up too: the trigger text mirrors the state.
-    const radius = panelSelectTrigger(client, '主题圆角')
-    if (radius && textOf(radius).includes('圆角')) {
-      pass('panel re-synced the radius switch onto the served section as well')
+    // The served texture must show up too: the trigger text mirrors the state.
+    const texture = panelSelectTrigger(client, '工业底纹')
+    if (texture && textOf(texture).includes('轻')) {
+      pass('panel re-synced the texture switch onto the served section as well')
     } else {
-      fail('radius switch did not re-sync: ' + (radius ? JSON.stringify(textOf(radius)) : 'no select'))
+      fail('texture switch did not re-sync: ' + (texture ? JSON.stringify(textOf(texture)) : 'no select'))
     }
 
     // Adopting a served section must never be mistaken for a user edit.
-    if (stub.writes.some((w) => w.field === 'palette' || w.field === 'radius')) {
+    if (stub.writes.some((w) => w.field === 'radius' || w.field === 'texture')) {
       fail('the theme WROTE back the served values instead of adopting them: ' + JSON.stringify(stub.writes))
     } else {
       pass('late-served section was adopted for reading without being rewritten')
     }
   }
 
+
   /* =======================================================================
      12. REGRESSION (the live boot report) — the settings page mounts AFTER the
-         section has already settled, and NOTHING emits afterwards.
+          section has already settled, and NOTHING emits afterwards.
 
-         A `boot report` from the real page read:
+          A `boot report` from the real page read:
 
-           status= ready   valueKeys= 16   settled= true
-           panelMounted= true   panelResynced= 0     <-- the tell
+            status= ready   valueKeys= 16   settled= true
+            panelMounted= true   panelResynced= 0     <-- the tell
 
-         The panel was live and the store held every value, yet the switches
-         showed defaults: its subscription was registered only after the ready
-         transition had already been emitted, and the mirror emits nothing again
-         until the Host document changes or the connection resets. So a purely
-         event-driven re-sync can never converge in that ordering — the panel has
-         to re-derive once when it mounts.
+          The panel was live and the store held every value, yet the switches
+          showed defaults: its subscription was registered only after the ready
+          transition had already been emitted, and the mirror emits nothing again
+          until the Host document changes or the connection resets. So a purely
+          event-driven re-sync can never converge in that ordering — the panel has
+          to re-derive once when it mounts.
 
-         The upstream case differs on purpose: there the panel is up during the
-         transition (resynced >= 1). Here the section is served FIRST and the
-         panel renders only afterwards, which is what opening 设置 on an already
-         loaded page does.
-     ======================================================================= */
+          The upstream case differs on purpose: there the panel is up during the
+          transition (resynced >= 1). Here the section is served FIRST and the
+          panel renders only afterwards, which is what opening 设置 on an already
+          loaded page does.
+      ======================================================================= */
   {
     const stub = configFormsStub(
-      { 'theme-endfield': { palette: 'wuling', radius: 'round' } },
+      { 'theme-endfield': { radius: 'round', texture: 'subtle' } },
       { served: [], loading: ['theme-endfield'] },
     )
     const client = bootClient({ configForms: stub.service })
@@ -757,21 +760,21 @@ async function main() {
     await drain()
 
     // Only now does the settings page mount (the user opens 设置).
-    const toggle = panelPaletteSelect(client)
-    if (!toggle) fail('no palette select rendered (post-settle mount case)')
-    else if (textOf(toggle).includes('武陵青')) {
-      pass('panel mounting after the section settled shows the stored palette, not the default')
+    const toggle = panelSelectTrigger(client, '主题圆角')
+    if (!toggle) fail('no radius select rendered (post-settle mount case)')
+    else if (textOf(toggle).includes('圆角')) {
+      pass('panel mounting after the section settled shows the stored radius, not the default')
     } else {
       fail('panel mounted after the section settled but still shows the default: '
         + textOf(toggle) + ' — this is the live boot-report defect')
     }
 
-    const radius = panelSelectTrigger(client, '主题圆角')
-    if (radius && textOf(radius).includes('圆角')) {
-      pass('panel mounting after the section settled shows the stored radius too')
+    const texture = panelSelectTrigger(client, '工业底纹')
+    if (texture && textOf(texture).includes('轻')) {
+      pass('panel mounting after the section settled shows the stored texture too')
     } else {
-      fail('radius did not converge on a post-settle mount: '
-        + (radius ? JSON.stringify(textOf(radius)) : 'no button'))
+      fail('texture did not converge on a post-settle mount: '
+        + (texture ? JSON.stringify(textOf(texture)) : 'no button'))
     }
 
     if (stub.writes.length !== 0) {
@@ -781,36 +784,41 @@ async function main() {
     }
   }
 
+
   /* =======================================================================
-     13. A toggle decides from the STORE, never from stale React state.
+     13. A dropdown decides from the STORE, never from stale React state.
 
-         The live defect this pins: the panel's useState seeds from prefsGet()
-         while the Host section is still 'loading', so it captures the schema
-         DEFAULT. If the user clicks before any re-sync pass corrected it, a
-         handler that computed `next = !enabled` (React state) wrote the DEFAULT
-         back to the durable section — overwriting a real stored choice. The
-         symptom is precisely "I change it, it looks changed, and after a refresh
-         it is back to the old value", because the wrong value was persisted.
+          The live defect this pins: the panel's useState seeds from prefsGet()
+          while the Host section is still 'loading', so it captures the schema
+          DEFAULT. If the user clicks before any re-sync pass corrected it, a
+          handler that derived its write from the React state wrote the DEFAULT
+          back to the durable section — overwriting a real stored choice. The
+          symptom is precisely "I change it, it looks changed, and after a refresh
+          it is back to the old value", because the wrong value was persisted.
 
-         A handler that derives `next` from the store (isEnabled()/readPalette()/…)
-         is immune: it decides against the durable value it is about to replace.
-     ======================================================================= */
+          A handler that derives `next` from the store (isEnabled()/readGlass()/…)
+          is immune: it decides against the durable value it is about to replace.
+
+          Vehicle: the 磨砂玻璃 dropdown. The Host holds glass=strong, the panel
+          rendered during 'loading' shows the default 关闭, and the user picks
+          标准 — a value differing from BOTH, so the write proves it carried the
+          CHOSEN option rather than anything derived from the stale state.
+      ======================================================================= */
   {
-    // The Host holds palette=wuling and radius=round; the panel is rendered while
-    // the section is still in flight, so its useState slots captured the defaults.
-    const stub = configFormsStub({ 'theme-endfield': { palette: 'wuling', radius: 'round' } }, { served: ['theme-endfield'], loading: ['theme-endfield'] })
+    // The Host holds glass=strong; the panel is rendered while the section is
+    // still in flight, so its useState slots captured the defaults.
+    const stub = configFormsStub({ 'theme-endfield': { glass: 'strong' } }, { served: ['theme-endfield'], loading: ['theme-endfield'] })
 
     // Render the panel while loading, so its state seeds from the schema default.
     const client = bootClient({ configForms: stub.service })
-    const buttons = panelButtons(client)
 
-    const toggle = panelPaletteSelect(client)
+    const toggle = panelSelectTrigger(client, '磨砂玻璃')
     if (!toggle) {
-      fail('no palette select rendered (stale-state case)')
+      fail('no glass select rendered (stale-state case)')
     } else {
       const before = textOf(toggle)
-      // The panel was rendered during 'loading', so it shows the default (终末地灰).
-      if (before.includes('终末地灰')) pass('precondition: panel shows the schema default palette while the section is in flight')
+      // The panel was rendered during 'loading', so it shows the default (关闭).
+      if (before.includes('关闭')) pass('precondition: panel shows the schema default glass while the section is in flight')
       else pass('precondition: panel rendered during loading (shows ' + before + ')')
 
       // Now the Host serves the stored value. No re-sync pass has run for the
@@ -819,35 +827,34 @@ async function main() {
       stub.settle('theme-endfield')
       await drain()
 
-      /* Drive the dropdown through the real menu path: open it, pick 谷地黄.
-         (The stale display says 终末地灰; picking a DIFFERENT option is the only
-         reachable user action in this window, and it is the one that must write
-         the CHOSEN value — never a value derived from the stale React state.) */
+      /* Drive the dropdown through the real menu path: open it, pick 标准.
+         (The stale display says 关闭; the CHOSEN option is what must reach the
+         durable section — never a value derived from the stale React state.) */
       const tOpen = client.render()
       const trigOpen = walk(tOpen).find((n) => n.type === 'button' && n.props
-        && n.props['aria-label'] === '主题配色' && n.props['aria-haspopup'] === 'menu')
-      if (!trigOpen) fail('no palette trigger to open (stale-state case)')
+        && n.props['aria-label'] === '磨砂玻璃' && n.props['aria-haspopup'] === 'menu')
+      if (!trigOpen) fail('no glass trigger to open (stale-state case)')
       else {
         trigOpen.props.onClick()
         const tMenu = client.render()
-        const menu = walk(tMenu).find((n) => n.props && n.props.role === 'menu' && n.props['aria-label'] === '主题配色')
-        const opt = menu ? walk(menu).find((n) => n.props && n.props.role === 'menuitemradio' && textOf(n) === '谷地黄') : null
-        if (!opt) fail('no 谷地黄 option in the palette menu (stale-state case)')
+        const menu = walk(tMenu).find((n) => n.props && n.props.role === 'menu' && n.props['aria-label'] === '磨砂玻璃')
+        const opt = menu ? walk(menu).find((n) => n.props && n.props.role === 'menuitemradio' && textOf(n) === '标准') : null
+        if (!opt) fail('no 标准 option in the glass menu (stale-state case)')
         else opt.props.onClick()
       }
       await drain()
 
-      // The stored value was wuling; the dropdown writes the CHOSEN value. The
+      // The stored value was strong; the dropdown writes the CHOSEN value. The
       // store-derived handler validates it, so a stale React state cannot
       // overwrite a real stored choice.
       const w = stub.writes
       if (w.length === 0) {
-        fail('a palette selection against a settled section wrote nothing')
-      } else if (w[0].field === 'palette' && w[0].value === 'valley') {
-        pass('palette dropdown wrote its chosen value (valley) from the store')
+        fail('a glass selection against a settled section wrote nothing')
+      } else if (w[0].field === 'glass' && w[0].value === 'standard') {
+        pass('glass dropdown wrote its chosen value (standard) from the store')
       } else {
-        fail('palette dropdown wrote from stale React state: wrote '
-          + JSON.stringify(w[0]) + ', expected {field:palette, value:valley}')
+        fail('glass dropdown wrote from stale React state: wrote '
+          + JSON.stringify(w[0]) + ', expected {field:glass, value:standard}')
       }
     }
   }

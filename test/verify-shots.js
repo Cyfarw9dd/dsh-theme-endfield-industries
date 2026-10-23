@@ -1,7 +1,10 @@
 /**
- * verify-shots.js — measure the four rendered PNGs instead of describing them.
+ * verify-shots.js — measure the rendered PNGs instead of describing them.
  * Decodes each screenshot and reports the accent-coloured pixel population, so
- * "the palette actually switched" is a number rather than an impression.
+ * "the yellow actually painted" is a number rather than an impression.
+ * (Born while three palettes shipped and the file proved they DIFFERED; with
+ * 谷地黄 as the only palette the checks are that yellow leads, cyan stays at
+ * the anti-aliasing floor, and the paper/ink body stays neutral-dominant.)
  *
  * PNG decoding is done with zlib only (no dependency): the shots are written by
  * Chrome as 8-bit RGB/RGBA, non-interlaced.
@@ -58,7 +61,7 @@ const decodePng = (file) => {
   return { w, h, channels, data: out }
 }
 
-/* Classify a pixel by hue family, which is what "did the palette change" means.
+/* Classify a pixel by hue family, which is what "did the accent paint" means.
    Yellow: red and green both high, blue low. Cyan: green and blue both clearly
    above red. Neutral greys and the paper/ink surfaces fall through. */
 const classify = (r, g, b) => {
@@ -74,7 +77,7 @@ const SHOTS = path.join(ROOT, '.kagent', 'shots')
 let failures = 0
 const results = {}
 
-for (const name of ['shot-valley-light', 'shot-valley-dark', 'shot-wuling-light', 'shot-wuling-dark', 'shot-gray-light', 'shot-gray-dark']) {
+for (const name of ['shot-valley-light', 'shot-valley-dark', 'shot-valley-light-wm']) {
   const file = path.join(SHOTS, name + '.png')
   if (!fs.existsSync(file)) { console.error('FAIL  missing ' + name + '.png (run node test/shoot.js)'); failures++; continue }
   const img = decodePng(file)
@@ -95,32 +98,21 @@ const check = (label, ok, detail) => {
   if (ok) console.log('ok    ' + label + (detail ? '  [' + detail + ']' : ''))
   else { console.error('FAIL  ' + label + (detail ? '  [' + detail + ']' : '')); failures++ }
 }
-for (const scheme of ['light', 'dark']) {
+for (const scheme of ['light', 'dark', 'light-wm']) {
   const v = results['shot-valley-' + scheme]
-  const w = results['shot-wuling-' + scheme]
-  const g = results['shot-gray-' + scheme]
-  if (!v || !w) continue
-  // 谷地黄 must be dominated by yellow accent pixels, and carry essentially no cyan.
-  check(scheme + ' 谷地黄 以黄色强调为主', v.yellow > w.yellow * 3 && v.yellow > 3000,
-    'valley yellow=' + v.yellow + ' wuling yellow=' + w.yellow)
-  // 武陵青 must be dominated by cyan, and lose the yellow.
-  check(scheme + ' 武陵青 以青色强调为主', w.cyan > v.cyan * 3 && w.cyan > 3000,
-    'wuling cyan=' + w.cyan + ' valley cyan=' + v.cyan)
-  if (g) {
-    /* 终末地灰's accent is a NEUTRAL gray, so hue classification cannot see it —
-       that is the point. The classifier still reports a few thousand 'yellow'/
-       'cyan' pixels in EVERY shot (semantic colours like the warn/error chips plus
-       warm anti-aliased edges, none of which follow the palette), so the bar is
-       the OTHER palette's baseline — valley's own yellow floor and wuling's own
-       cyan floor — not zero. Gray must sit near those floors while the palette-
-       OWNED surfaces flipped to neutral (which is why neutral climbs to ~98.6%). */
-    check(scheme + ' 终末地灰 无残留黄面', g.yellow < w.yellow * 1.5,
-      'gray yellow=' + g.yellow + ' (non-yellow baseline wuling=' + w.yellow + ')')
-    check(scheme + ' 终末地灰 无残留青面', g.cyan < v.cyan * 1.5,
-      'gray cyan=' + g.cyan + ' (non-cyan baseline valley=' + v.cyan + ')')
-    check(scheme + ' 终末地灰 保持中性纸墨主体', g.neutral / g.total > 0.8,
-      'neutral=' + (g.neutral / g.total * 100).toFixed(1) + '%')
-  }
+  if (!v) continue
+  /* 谷地黄 must be dominated by the yellow accent. The floor is absolute: the
+     accent chips/rows/badges paint far more than 3000 px at this viewport, so a
+     sheet that stopped following the palette block falls under it. */
+  check(scheme + ' 谷地黄 以黄色强调为主', v.yellow > 3000, 'yellow=' + v.yellow)
+  /* The official wave artwork is BLUE line art (palette-independent
+     decoration), so cyan is expected in the thousands — but the accent must
+     still OUT-POPULATE it: the solid chips/rows are bigger than the waves. */
+  check(scheme + ' 黄色强调多于官方波纹的蓝', v.cyan < v.yellow, 'cyan=' + v.cyan + ' vs yellow=' + v.yellow)
+  /* The paper/ink body stays neutral-dominant: the accent is a signal, not a
+     repaint of the page. */
+  check(scheme + ' 保持中性纸墨主体', v.neutral / v.total > 0.8,
+    'neutral=' + (v.neutral / v.total * 100).toFixed(1) + '%')
 }
 
 console.log('')

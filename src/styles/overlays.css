@@ -325,10 +325,9 @@
       }
       /* Settings page group headers (rendered by the settings.section slot).
          The label is accent ink that stays AA on both surfaces: light mode uses
-         the darkened accent stops (--edge-status-light: #6b5d00 / #006a6a),
-         dark mode the bright ones (--edge-status-dark: #fff500 / #14d0d0) — the
-         same measured pairs the turn-status shimmer uses. The palette class
-         flips both variables, so the header follows the palette for free. */
+         the darkened accent stops (--edge-status-light: #6b5d00), dark mode the
+         bright ones (--edge-status-dark: #fff500) — the same measured pairs the
+         turn-status shimmer uses. */
       .endfield-settings-group-title {
         color: var(--edge-status-light);
       }

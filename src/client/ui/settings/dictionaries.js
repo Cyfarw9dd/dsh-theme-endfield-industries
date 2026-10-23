@@ -8,7 +8,7 @@
  * back to the raw key string in the UI, which is why the test suite compares the
  * two key sets rather than trusting review.
  *
- * Naming: keys are grouped by row (theme*, palette*, notify*) so a row copy
+ * Naming: keys are grouped by row (theme*, radius*, notify*) so a row copy
  * stays discoverable next to its switch.
  */
 export const ENDFIELD_NS = 'settings.theme-endfield'
@@ -27,13 +27,6 @@ export const LOCALE_ZH = {
   groupAnim: '动画',
   groupNotify: '通知',
   themeRow: '终末地主题',
-  paletteRow: '主题配色',
-  paletteGray: '终末地灰',
-  paletteValley: '谷地黄',
-  paletteWuling: '武陵青',
-  paletteHintGray: '官网工业灰：悬停/选中用灰阶（亮 #d9d9d9 · 暗 #6a6a6a），默认',
-  paletteHintValley: '信号黄 #fff500（终末地官网强调色）',
-  paletteHintWuling: '青碧色强调 #14d0d0，用于按钮、悬停与选中行',
   radiusRow: '主题圆角',
   radiusRound: '圆角',
   radiusSquare: '直角',
@@ -45,7 +38,7 @@ export const LOCALE_ZH = {
   wmPersistHintOff: '仅在新建会话页显示水印',
   wmPersistNeedWm: '请先开启背景水印',
   loaderRow: '启动加载动画',
-  loaderHintOn: '刷新页面时播放 ENDFIELD 启动加载屏（左侧进度轨 + 百分比，跟随当前配色）',
+  loaderHintOn: '刷新页面时播放 ENDFIELD 启动加载屏（左侧进度轨 + 百分比，信号黄强调色）',
   loaderHintOff: '默认关闭；开启后每次刷新页面播放一次',
   loaderNeed: '请先开启启动加载动画',
   preview: '预览',
@@ -128,13 +121,6 @@ export const LOCALE_EN = {
   groupAnim: 'ANIMATION',
   groupNotify: 'NOTIFY',
   themeRow: 'Endfield theme',
-  paletteRow: 'Accent palette',
-  paletteGray: 'Endfield Gray',
-  paletteValley: 'Valley Yellow',
-  paletteWuling: 'Wuling Cyan',
-  paletteHintGray: 'Official industrial gray for hover/selection (light #d9d9d9, dark #6a6a6a); default',
-  paletteHintValley: 'Signal yellow #fff500 (the Endfield site accent)',
-  paletteHintWuling: 'Teal-cyan accent #14d0d0 for buttons, hover and selected rows',
   radiusRow: 'Corners',
   radiusRound: 'Rounded',
   radiusSquare: 'Square',
@@ -146,7 +132,7 @@ export const LOCALE_EN = {
   wmPersistHintOff: 'Shown only on the new-session screen',
   wmPersistNeedWm: 'Turn on the background wordmark first',
   loaderRow: 'Boot animation',
-  loaderHintOn: 'Plays the ENDFIELD boot screen on reload (progress rail + percentage, following the palette)',
+  loaderHintOn: 'Plays the ENDFIELD boot screen on reload (progress rail + percentage, in the signal-yellow accent)',
   loaderHintOff: 'Off by default; plays once on every page reload when enabled',
   loaderNeed: 'Turn on the boot animation first',
   preview: 'Preview',

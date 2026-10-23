@@ -48,7 +48,6 @@
 
 const FIELD_DEFAULTS = {
   enabled: '1',
-  palette: 'gray',
   radius: 'square',
   glass: 'off',
   texture: 'standard',
@@ -81,7 +80,6 @@ const FIELD_DEFAULTS = {
 /** UI/store key -> schema field. Mirrors client.js PREFS_KEY_TO_FIELD. */
 const KEY_TO_FIELD = {
   'dsh-theme-endfield-enabled': 'enabled',
-  'dsh-theme-endfield-palette': 'palette',
   'dsh-theme-endfield-radius': 'radius',
   'dsh-theme-endfield-glass': 'glass',
   'dsh-theme-endfield-texture': 'texture',

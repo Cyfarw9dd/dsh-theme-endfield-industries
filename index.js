@@ -99,13 +99,14 @@ const NAMESPACE = LEGACY_NAMESPACE;
  * instead of by an "absent key" check, and documented in docs/features.md):
  *   - default-ON switches store '1' and the client reads them as `!== '0'`;
  *   - default-OFF switches store '0' and the client reads them as `=== '1'`;
- *   - palettes / radii / frame-rate / speed each store exactly one of their
- *     documented literals ('gray'/'valley'/'wuling'; 'square'/'round'; glass in
- *     off/subtle/standard/strong), with the shipped default filled in here.
+ *   - multi-literal fields each store exactly one of their documented
+ *     literals ('square'/'round'; glass in off/subtle/standard/strong; texture
+ *     in off/subtle/standard; motion 'signal'/'off'), with the shipped default
+ *     filled in here. (A three-state `palette` field shipped until 2026-10;
+ *     the theme now paints only 谷地黄 and no longer declares or reads it.)
  */
 const FIELD_DEFAULTS = {
   enabled: '1',             // 终末地主题 —— default on
-  palette: 'gray',          // 主题配色 —— 终末地灰 (gray default; 官网灰阶交互语法)
   glass: 'off',             // optional local frost; original material by default
   texture: 'standard',      // 工业底纹 —— off/subtle/standard；默认 standard＝官网 /operator 那套
   motion: 'signal',          // 按钮动效 —— 合并设计（'signal'=开 / 'off'=关；旧方案名读取时并轨为开）

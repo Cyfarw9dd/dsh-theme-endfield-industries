@@ -45,10 +45,14 @@
       /* ================= accent palette =================================
          Every accent value in this stylesheet reads from the variables below
          instead of a literal, so the whole theme repaints from ONE declaration
-         block. Two palettes ship:
+         block. ONE palette ships:
 
-           谷地黄 (default)  signal yellow  #fff500 — the Endfield site accent
-           武陵青            teal-cyan      #14d0d0
+           谷地黄   signal yellow  #fff500 — the Endfield site accent
+
+         (An earlier build also offered 终末地灰 / 武陵青 as switchable body
+         classes; both went away with their setting row in 2026-10. The role
+         variables below survive because rules throughout the sheet speak them —
+         they all resolve to the one yellow now.)
 
          WHY THIS BLOCK IS ON body AND NOT :root. The app applies its theme
          tokens as INLINE STYLES ON <body> (dsh-client-ui-layout does
@@ -63,11 +67,12 @@
          rules falling back. Moving them onto body is what makes them resolve
          (see test/probe-edge-line.js).
 
-         The same fact is what makes the palette switch free: the theme's
-         token overrides are values like var(--edge-accent), body carries the
-         palette class, so flipping the class re-resolves every token and
-         every rule below with NO JavaScript repaint at all — verified in a
-         real browser (test/probe-css.js), not assumed.
+         The same fact is what keeps the accent indirection free: the theme's
+         token overrides are values like var(--edge-accent), resolved on the
+         same element where the palette block declares it, so every token and
+         every rule below paints through the variables with NO JavaScript
+         repaint involved — verified in a real browser (test/probe-css.js),
+         not assumed.
 
          --edge-accent-rgb is the same colour as a bare comma list, because
          rgba() needs channels rather than a hex; substituting a comma-list
@@ -77,17 +82,18 @@
 
          Values are MEASURED, not chosen — see test/palette-contrast.test.js,
          which fails the build if any of them stops clearing its bar:
-           ink #101110 on 谷地黄 16.50:1 · on 武陵青 6.62:1   (AA, solid chips)
-           accent as dark-mode icon ink   15.26:1  ·  6.12:1  (>=3 icon floor) */
+           ink #101110 on 谷地黄 16.50:1   (AA, solid chips)
+           accent as dark-mode icon ink  15.26:1  (>=3 icon floor) */
       body {
         --edge-accent: #fff500;
         --edge-accent-rgb: 255, 245, 0;
-        /* Text paired with the accent as a SOLID FILL. The bright palettes carry
-           ink-coloured text on their accents; 终末地灰's dark-scheme fill (#626262)
-           needs white instead, so the pairing travels as its own token. */
+        /* Text paired with the accent as a SOLID FILL. The accent carries
+           ink-coloured text, and the pairing travels as its own token so a
+           future fill that needs a different ink can flip it in one
+           declaration instead of chasing every rule. */
         --edge-accent-ink: #101110;
         /* Hover/pressed step of the accent, still carrying ink-coloured text:
-           谷地黄 13.60:1 · 武陵青 5.31:1. */
+           谷地黄 13.60:1. */
         --edge-accent-deep: #e8e000;
         /* The one place the accent must survive on CREAM as a fill (the light
            deepseek-450 slot): pure signal yellow is nearly paper-white there,
@@ -97,10 +103,8 @@
            Gradient text paints glyphs with EVERY stop, and reduced-motion pins
            the mid band permanently inside the letters, so all four clear AA
            against both surfaces of their mode:
-             谷地黄 light #6b5d00 5.35 / mid #3f3600 9.82
-                    dark  #fff500 15.26 / mid #a08a00 5.11
-             武陵青 light #006a6a 5.22 / mid #003f3f 9.58
-                    dark  #14d0d0 9.14 / mid #7ee7e7 12.06 */
+             light #6b5d00 5.35 / mid #3f3600 9.82
+             dark  #fff500 15.26 / mid #a08a00 5.11 */
         --edge-status-light: #6b5d00;
         --edge-status-light-mid: #3f3600;
         --edge-status-dark: #fff500;
@@ -110,117 +114,6 @@
            the hero reads compared with the app's own #6187D8 at 8%. */
         --edge-glow-light: 0.08;
         --edge-glow-dark: 0.05;
-      }
-      /* ---------- 武陵青 (teal-cyan, #14d0d0) ----------
-         Only the palette changes here; paper, ink, borders and the semantic
-         state colours (error red, success green, warn amber) are shared, so
-         this block is exactly the set of values that carry the accent hue.
-
-         BRIGHTNESS. The first version shipped #0daaaa (the literal
-         rgb(13, 170, 170) that was asked for) and read as too dark next to the
-         signal yellow it alternates with — measured, that is not a matter of
-         taste: relative luminance was 31.7% against the yellow's 86.6%, so on a
-         near-black page the cyan chip carried barely a third of the presence.
-         #14d0d0 keeps the same hue axis (R low, G == B, so it is still the same
-         teal rather than drifting toward grey-cyan) and lifts luminance to
-         49.8% — 57% brighter — while every measured invariant still holds:
-           ink #101110 on the chip   6.62 -> 9.88:1   (AA, and now better)
-           chip as dark-mode ink     6.62 -> 9.88:1   (icon floor is 3)
-         It is deliberately NOT taken to the yellow's luminance: past ~#16dcdc
-         the light-mode chip stops separating from cream (1.39:1 at #16dcdc
-         versus 1.56:1 here), and a cyan that pale reads white-ish rather than
-         teal. This is the brightest step that still looks like 武陵青 in both
-         schemes. */
-      body.theme-endfield-wuling {
-        --edge-accent-ink: #101110;
-        --edge-accent: #14d0d0;
-        /* Same colour, channel-list form, for the ~30 rgba() washes. Derived from
-           the hex above and kept beside it so the two cannot drift. */
-        --edge-accent-rgb: 20, 208, 208;
-        /* Hover step. Chosen to match the PERCEPTUAL drop the yellow palette uses
-           (#fff500 -> #e8e000 is ΔY 19.9) rather than a copied percentage, so
-           hover feels equally strong in both palettes: ΔY 19.7 here, 7.72:1 under
-           ink text. */
-        --edge-accent-deep: #10b8b8;
-        /* Cyan is still far darker than yellow under ink (9.88 vs 16.50), so it
-           needs no separate on-cream step — the accent itself reads on paper. */
-        --edge-accent-onpaper: #14d0d0;
-        /* Light mode dips deep, exactly as the yellow palette does: on cream no
-           tint above #007070 clears AA on both surfaces, and that is a property of
-           the paper, not of how bright the accent is — so these two are unchanged
-           by the brightening. */
-        --edge-status-light: #006a6a;
-        --edge-status-light-mid: #003f3f;
-        --edge-status-dark: #14d0d0;
-        /* Dark mode LIFTS for its mid band instead of dipping like yellow's
-           #a08a00: a darker cyan mid stop measured 3.54:1 and failed, because cyan
-           at this lightness has less headroom below it than yellow does. Raised
-           with the accent so the shimmer keeps a visible band: #7ee7e7 is 12.06:1
-           and ΔY 40.6 from the accent (the old #4fd6d6 would now sit only ΔY 27.8
-           away and read flatter). */
-        --edge-status-dark-mid: #7ee7e7;
-        /* Cyan carries real luminance where yellow is nearly neutral on cream, so
-           the glow alphas are measured rather than inherited. Both stay inside the
-           depth of the #6187D8 glow they replace (budget: light 9.90, dark 11.28).
-           Dark comes down from 0.05 to 0.04 because the brighter accent lifts a
-           near-black page faster: 0.05 now measures |ΔY| 7.6 where the old cyan
-           measured 6.0. */
-        --edge-glow-light: 0.08;
-        --edge-glow-dark: 0.04;
-      }
-      /* ---------- 终末地灰 (Endfield industrial gray) ----------
-         The official site's own interaction language, measured from its shipped
-         CSS (endfield.hypergryph.com bundles on web.hycdn.cn): hover and selection
-         surfaces are a GRAY SCALE — dark button hover #484848, list hover #626262,
-         light hover #f0f0f0 / #d9d9d9 — while yellow stays a rare signal. This
-         palette makes the theme follow that grammar by default.
-
-         WHY ACCENT AND STATUS SPLIT HERE. No mid-gray is AA in BOTH directions
-         on near-black: white text on the fill needs luminance <= 0.183 while
-         gray-as-text-on-ink needs >= 0.200 — the intervals do not overlap. The
-         palette therefore uses the roles the architecture already provides:
-           --edge-accent / -deep   FILLS, paired with --edge-accent-ink text
-           --edge-status-dark/-mid 'accent as text' roles in dark mode
-         The bright palettes keep status-dark == accent, so for them the split
-         changes nothing visually.
-
-         Values are MEASURED (WCAG, test/palette-contrast.test.js):
-           light fill #d9d9d9 + ink   13.41:1 · hover #cccccc + ink 11.78:1
-           dark  fill #6a6a6a + white  5.41:1 · hover #424242 + white 10.04:1
-           dark  status #d9d9d9        13.41 / 12.40:1 (base / layer-1)
-           dark  status-mid #b3b3b3     9.03 /  8.35:1
-           light status #666666         4.67 /  5.11:1
-           light status-mid #4a4a4a     7.20 /  7.89:1
-           dark  accent as icon ink     3.49 / 3.28:1 (>= 3 floor, both surfaces) */
-      body.theme-endfield-gray {
-        --edge-accent-ink: #101110;
-        --edge-accent: #d9d9d9;
-        /* Neutral wash base shared by both schemes: on cream a gray wash reads as
-           soft shading, on ink as a soft lift — the same 'composited contrast'
-           doctrine the translucent surfaces follow. */
-        --edge-accent-rgb: 126, 126, 126;
-        --edge-accent-deep: #cccccc;
-        /* The one slot the accent must carry as a FILL on cream: a light gray
-           would dissolve into the paper, so it dips to the official #666666. */
-        --edge-accent-onpaper: #666666;
-        --edge-status-light: #666666;
-        --edge-status-light-mid: #4a4a4a;
-        --edge-status-dark: #d9d9d9;
-        --edge-status-dark-mid: #b3b3b3;
-        --edge-glow-light: 0.08;
-        --edge-glow-dark: 0.04;
-      }
-      /* Dark scheme flips the FILL role only: an official-family mid gray
-         (#6a6a6a, between the site's #666 and #7e7e7e) under WHITE ink, hover
-         deepens to official #424242. #6a6a6a is the darkest gray that still
-         clears the 3:1 NON-TEXT floor on BOTH dark surfaces (3.49:1 on bg-base,
-         3.28:1 on layer-1) — the caret, focus ring and scrollbar hover read the
-         accent directly. Text roles stay on the light grays in both schemes. */
-      body.theme-endfield-gray[data-ds-dark-theme] {
-        --edge-accent-ink: #ffffff;
-        --edge-accent: #6a6a6a;
-        --edge-accent-deep: #424242;
-        --edge-accent-onpaper: #6a6a6a;
       }
       /* Token-derived aliases. These MUST be on body, not :root — see above. */
       body {
