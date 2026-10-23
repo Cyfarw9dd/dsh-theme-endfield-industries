@@ -1,6 +1,6 @@
 # 音频通知（fork 增量）— 实现说明
 
-本文件描述 `dsh-theme-endfield` 这个工作树相对上游 `b3e60dc` 新增的**音频通知**功能。
+本文件描述 `dsh-theme-endfield-industries` 这个工作树相对上游 `b3e60dc` 新增的**音频通知**功能。
 上游原版的说明在 `README.md`（主题本身的用法）。
 
 > 播报词（Terminal 语音文案）见工作区外层的 `endfield-audio-voice-lines.md`；

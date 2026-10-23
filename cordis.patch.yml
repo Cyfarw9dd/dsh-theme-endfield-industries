@@ -1,4 +1,4 @@
-# dsh-theme-endfield bundle patch
+# dsh-theme-endfield-industries bundle patch
 #
 # This file is the `dsh.bundle.patch` layer of the package: when installed
 # through the official CLI —
@@ -6,12 +6,17 @@
 #   dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries
 #
 # — the command reconciles `dsh.profile.bundles` against installed packages
-# and, seeing this declaration, appends `dsh-theme-endfield` to the bundle
-# stack. Profile boot then merges THIS patch (a single `insert` of the plugin
-# row) exactly like a manual cordis.patch.yml mount line. No profile file
+# and, seeing this declaration, appends `dsh-theme-endfield-industries` to the
+# bundle stack. Profile boot then merges THIS patch (a single `insert` of the
+# plugin row) exactly like a manual cordis.patch.yml mount line. No profile file
 # edits needed — one command installs and mounts. The same row is also the
 # `dsh.client` browser-roster entry the web modules half scans for the client
 # bundle (exports["./client"] -> client.js).
+#
+# The row `name` follows the package name (the loader resolves the installed
+# package by it, and the browser bundle is served at /plugins/<name>/client.js);
+# the row `id` is the settings namespace and the user-data join key, so it
+# deliberately keeps the historical spelling `theme-endfield` across renames.
 - insert:
     - id: theme-endfield
-      name: 'dsh-theme-endfield'
+      name: 'dsh-theme-endfield-industries'
