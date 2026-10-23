@@ -12,7 +12,7 @@
  */
 import { ENDFIELD_NS, LOCALE_ZH, LOCALE_EN } from './dictionaries.js'
 
-export function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio }) {
+export function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio, react }) {
   const { isEnabled, mount, unmount, enabledKey: ENABLED_KEY } = themeApi
   /* The locale service is optional, exactly like `theme` and `sessions`: the
      in-process settings tests mount this theme with a ctx carrying only
@@ -61,7 +61,19 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
         localeReady ? { locale: ENDFIELD_NS } : {}
       ),
       () => {
-        const R = (typeof React !== 'undefined') ? React : ((typeof require === 'function') ? require('react') : null)
+        /* React arrives BY INJECTION, not by lookup from here. Two facts make
+           every ambient lookup wrong on a real page: (1) the app ships no
+           global React (the framework bundle keeps it module-scoped), and (2)
+           after the tsdown restructure the panel's component closures live at
+           the IIFE top level of the artifact — hoisted out of the
+           factory(require) body — so even `typeof require` is 'undefined'
+           here. The entry (index.js) resolves React inside apply(), which the
+           artifact DOES keep inside the factory body, and passes it down as
+           `react`; the global spelling stays as a fallback for hosts and test
+           doubles that expose it. null means "no panel" — the slot then
+           renders nothing, which is exactly what a React-less page must do
+           rather than crash the settings dialog. */
+        const R = react || ((typeof React !== 'undefined') ? React : null)
         if (!R) return null
         const [enabled, setEnabled] = R.useState(isEnabled())
         const [wmOn, setWmOn] = R.useState(watermark.isOn())

@@ -2188,7 +2188,7 @@
 	* that lived in the entry — including its useState ORDER, which
 	* test/settings-config-forms.test.js pins by index (hooks[4] === glass).
 	*/
-	function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio }) {
+	function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio, react }) {
 		const { isEnabled, mount, unmount, enabledKey: ENABLED_KEY } = themeApi;
 		const locale = services.locale();
 		let t = (key) => Object.prototype.hasOwnProperty.call(LOCALE_ZH, key) ? LOCALE_ZH[key] : key;
@@ -2216,7 +2216,7 @@
 				order: 35,
 				label: () => t("nav")
 			}, localeReady ? { locale: ENDFIELD_NS } : {}), () => {
-				const R = typeof React !== "undefined" ? React : typeof require === "function" ? require("react") : null;
+				const R = react || (typeof React !== "undefined" ? React : null);
 				if (!R) return null;
 				const [enabled, setEnabled] = R.useState(isEnabled());
 				const [wmOn, setWmOn] = R.useState(watermark.isOn());
@@ -3255,6 +3255,7 @@
 						attention.sync();
 					} else attention.stop();
 				});
+				const react = typeof React !== "undefined" ? React : typeof require === "function" ? require("react") : null;
 				const disposeSettings = createSettingsSection({
 					services,
 					prefs,
@@ -3269,7 +3270,8 @@
 					loader,
 					toasts,
 					attention,
-					audio
+					audio,
+					react
 				});
 				services.effect(() => () => {
 					unmount();

@@ -25,6 +25,7 @@ const root = __dirname
 const checkSrc = fs.readFileSync(path.join(root, 'check.js'), 'utf8')
 const realClient = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 const realClientSrc = fs.readFileSync(path.join(root, 'src', 'client', 'index.js'), 'utf8')
+const realSectionSrc = fs.readFileSync(path.join(root, 'src', 'client', 'ui', 'settings', 'section.js'), 'utf8')
 /* The sheet is layered (STYLE_FILES); keep one pristine copy of every layer so
    each case can mutate one file and resetTree() can restore all of them. The
    layer list is read from the manifest, never re-typed here. */
@@ -67,6 +68,7 @@ function stageTree() {
 function resetTree() {
   fs.writeFileSync(tmpClient, realClient)
   fs.writeFileSync(path.join(tmpRoot, 'src', 'client', 'index.js'), realClientSrc)
+  fs.writeFileSync(path.join(tmpRoot, 'src', 'client', 'ui', 'settings', 'section.js'), realSectionSrc)
   for (const name of manifest.STYLE_FILES) {
     fs.writeFileSync(path.join(tmpRoot, 'src', 'styles', name), realStyles[name])
   }
@@ -199,9 +201,42 @@ const CASES = [
     mutate: (s) => s.replace('(function() {', '(function() { /* broken'),
     expect: /does not parse|compiles|threw|SyntaxError/,
   },
+  {
+    name: 'the panel resolves React from its own closure again (blank settings on real pages)',
+    /* Reproduces the shipped blank-panel bug exactly: the component closure
+       goes back to the ambient lookup. On the artifact those closures sit in
+       the hoisted region before factory(require), so the pre-factory guard
+       must catch the `typeof require` even though the code would still
+       parse (and still pass on a page with a global React). */
+    file: 'client',
+    mutate: (s) => s.replace(
+      'const R = react || (typeof React !== "undefined" ? React : null);',
+      'const R = (typeof require === "function") ? require("react") : ((typeof React !== "undefined" ? React : null));'),
+    expect: /hoisted region|lexical require/,
+  },
+  {
+    name: 'the entry stops resolving require(\'react\') inside the factory scope',
+    /* Without the in-factory resolution there is no React source at all on a
+       real page: the panel closure only falls back to the (absent) global. */
+    file: 'client',
+    mutate: (s) => s.replace(
+      'typeof require === "function" ? require("react") : null;',
+      'null;'),
+    expect: /factory body no longer calls require|resolves require\('react'\)/,
+  },
+  {
+    name: 'section.js drops the injected React for an ambient require lookup',
+    /* The source-level twin of the artifact case: the panel must read the
+       injected `react` first, never its own `require`. */
+    file: 'settings-src',
+    mutate: (s) => s.replace(
+      "const R = react || ((typeof React !== 'undefined') ? React : null)",
+      "const R = ((typeof require === 'function') ? require('react') : ((typeof React !== 'undefined') ? React : null))"),
+    expect: /looks up `require` from its closures|must read the injected `react` first/,
+  },
 ]
 
-const pristine = Object.assign({ client: realClient, 'client-src': realClientSrc }, realStyles)
+const pristine = Object.assign({ client: realClient, 'client-src': realClientSrc, 'settings-src': realSectionSrc }, realStyles)
 let bad = 0
 
 try {
@@ -231,7 +266,8 @@ try {
        surfaces.css, …); 'theme' no longer exists as a file. */
     const target = c.file === 'client' ? tmpClient
       : c.file === 'client-src' ? path.join(tmpRoot, 'src', 'client', 'index.js')
-        : path.join(tmpRoot, 'src', 'styles', c.file)
+        : c.file === 'settings-src' ? path.join(tmpRoot, 'src', 'client', 'ui', 'settings', 'section.js')
+          : path.join(tmpRoot, 'src', 'styles', c.file)
     fs.writeFileSync(target, mutated)
     const r = runCheck()
     if (!r.failed) {
