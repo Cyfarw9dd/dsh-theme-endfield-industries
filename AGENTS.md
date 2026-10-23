@@ -23,8 +23,10 @@ DSH Web 主题插件（终末地工业终端风格）。改任何东西前先过
 
 ```bash
 node check.js        # 秒级，任何改动前先跑
-CHROME_PATH=<chrome> npm test   # 样式/行为改动必须全绿（757+ 项）
+CHROME_PATH=/usr/bin/chromium-browser npm test   # 样式/行为改动必须全绿（757+ 项）
 ```
+
+本机已装系统 Chromium（`/usr/bin/chromium-browser`）：Fedora 拼法不在测试夹具的自动发现列表里，**裸 `npm test` 找不到它，必须带 `CHROME_PATH`**。其他机器换成各自的 Chrome/Edge 路径；备选浏览器是 `~/.cache/puppeteer/chrome/linux-*/chrome-linux64/chrome`（Chrome for Testing）。若 Chromium 启动即崩（crashpad 报 `--database is required`），排查线索见 [docs/development.md](docs/development.md) 的环境一节。
 
 ## 文档
 

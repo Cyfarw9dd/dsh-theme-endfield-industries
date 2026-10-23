@@ -124,7 +124,7 @@
 当 DSH 发布新版本时：
 
 1. `dsh plugin --profile web update dsh-theme-endfield`（或直接 link 开发）
-2. `CHROME_PATH=<chrome> npm test` —— 全套跑完看绿
+2. `CHROME_PATH=/usr/bin/chromium-browser npm test` —— 全套跑完看绿（其他机器换各自的 Chrome/Edge 路径）
 3. 如果 selector-guard 失败 → upstream 改了 CSS module 后缀 → 对照新 bundle 更新后缀匹配
 4. 如果 attention-watch 失败 → upstream 改了数据属性标记 → 更新 `ATTENTION_MARKERS`
 5. 如果 palette-resolve 失败 → 令牌名变了 → 检查 `overrideTokens` 的映射
