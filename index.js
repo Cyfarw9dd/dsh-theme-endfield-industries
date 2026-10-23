@@ -173,7 +173,7 @@ let SCHEMA_MODE = null;
       `import z from "schemastery"` and it resolves). Those are covered by the
       first tries below.
    2) A DEV-LINK bundle (this repo symlinked into the profile's node_modules,
-      e.g. `"dsh-theme-endfield": "link:E:/..."`) does NOT: Node resolves the
+      e.g. `"dsh-theme-endfield-industries": "link:E:/..."`) does NOT: Node resolves the
       symlink to its real path first, so this file's own require chain starts at
       the repo (E:\…), where no schemastery lives — the bare requires throw
       MODULE_NOT_FOUND and the profile's node_modules is never consulted. So

@@ -11,7 +11,7 @@ const path = require('path')
 const http = require('http')
 
 const BASE = process.argv[2] || 'http://127.0.0.1:3080'
-const URL_PATH = '/plugins/dsh-theme-endfield/client.js'
+const URL_PATH = '/plugins/dsh-theme-endfield-industries/client.js'
 const ROOT = path.resolve(__dirname, '..')
 
 const get = (url) => new Promise((resolve, reject) => {

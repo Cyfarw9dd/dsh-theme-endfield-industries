@@ -1,7 +1,7 @@
 {
-  "name": "dsh-theme-endfield",
+  "name": "dsh-theme-endfield-industries",
   "version": "0.2.1-rc.3",
-  "description": "DeepSeek Harness web theme: the industrial editorial look of the Arknights: Endfield official site — cream paper, ink text, signal-yellow accents, zero radius. Settings persist through the DSH 0.1.7 volatile Config + configForms transport, with a ctx.settingsScope fallback for older hosts.",
+  "description": "DeepSeek Harness web theme: the industrial editorial look of the Arknights: Endfield official site — cream paper, ink text, signal-yellow accents, zero radius. Settings persist through the DSH volatile Config + configForms transport (requires DSH >= 0.2.0).",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -13,6 +13,11 @@
     "client"
   ],
   "license": "MIT",
+  "author": "Cyfarwydd <cyfarw9dd@outlook.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cyfarw9dd/dsh-theme-endfield-industries.git"
+  },
   "main": "index.js",
   "scripts": {
     "check": "node scripts/build-client.js --check && node scripts/build-emblem.js --check && node scripts/build-logo.js --check && node scripts/build-texture.js --check && node check.js",
