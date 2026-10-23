@@ -17,8 +17,7 @@
 node scripts/build-client.js --check   # 产物必须与源码一起提交；这条要 fresh
 node check.js                          # 静态不变量
 node selftest.js                       # 变异验证 check 真能抓到
-CHROME_PATH=/home/sunwing/.cache/puppeteer/chrome/linux-152.0.7977.54/chrome-linux64/chrome \
-  npm test                             # exit 0、0 行 FAIL
+CHROME_PATH=/usr/bin/chromium-browser npm test   # exit 0、0 行 FAIL（其他机器换各自的 Chrome/Edge 路径）
 ```
 
 - 行为不变的纯搬移重构：**不新增/不改变外部契约**；删功能/字段按
@@ -57,11 +56,11 @@ CHROME_PATH=/home/sunwing/.cache/puppeteer/chrome/linux-152.0.7977.54/chrome-lin
 
 ## 已完成（入口瘦身这条线）
 
-- [x] 偏好键词汇表 → `src/client/prefs/keys.js`（`d016114`）
-- [x] 旧字段拼写修复 → `src/client/prefs/legacy.js`（`98035ed`）
-- [x] 偏好层显式化：散落的闭包状态 → `createPrefsStore(services)`（`c91ef1a`）
+- [x] 偏好键词汇表 → `src/client/prefs/keys.js`（`f2b0166`）
+- [x] 旧字段拼写修复 → `src/client/prefs/legacy.js`（`33ee418`）
+- [x] 偏好层显式化：散落的闭包状态 → `createPrefsStore(services)`（`0897907`）
 - [x] store/transport 搬文件：`prefs/store.js` + `prefs/transport.js`，
-  entry 退化为组合根（`1961d70`）；entry `3536 → 2789` 行（-747，约 -21%）
+  entry 退化为组合根（`0fd77f9`）；entry `3536 → 2789` 行（-747，约 -21%）
 - [x] `decor/` 拆分 → `src/client/decor/`（`watermark.js` / `hero-logo.js` /
   `loader.js` + 共享的 `body-observer.js`），依赖显式注入（prefs、isEnabled、
   findAppFrame、isAudioOn/previewSlot）；entry `2789 → 2128` 行（-661，约 -24%）

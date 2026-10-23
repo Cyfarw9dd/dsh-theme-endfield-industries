@@ -9,6 +9,11 @@
   - 夹具的自动发现列表只认 `/usr/bin/google-chrome`、`/usr/bin/chromium`，**不含 Fedora 拼法**，所以裸 `npm test` 会报 `Set CHROME_PATH`——用 `CHROME_PATH=/usr/bin/chromium-browser npm test`；
   - 若启动即崩（`chrome_crashpad_handler: --database is required` 后跟 SIGTRAP 核心转储）：crashpad 初始化要写 `$HOME` 下的路径，家目录只读时会这样死；把 `HOME` 指到可写目录即可绕过（`HOME=$(mktemp -d) CHROME_PATH=/usr/bin/chromium-browser npm test`）。本机 2026-10 曾复现，后自行消失。
   - 备选浏览器：`~/.cache/puppeteer/chrome/linux-*/chrome-linux64/chrome`（Chrome for Testing，同样以 `CHROME_PATH` 指定）。命令行截图通道（`--screenshot`/`--virtual-time-budget`）在新版 Chrome/Chromium 上已不可靠，截图一律走 CDP 夹具（见 testing.md）
+- 首次安装构建依赖（devDependency 只有 tsdown，构建只要它的闭包）：
+  `env -u npm_config_allow_scripts npm install --legacy-peer-deps --package-lock=false --ignore-scripts --cache .npm-cache`
+  - npm 12 的 `allow-scripts` 策略会经环境变量（`npm_config_allow_scripts`）从启动器继承进子进程，项目级安装直接 `EALLOWSCRIPTS` 拒绝（npm 的 `resolve-allow-scripts.js` 对 env 层策略在项目作用域一律报错）——先 `env -u` 摘掉再装（2026-10-23 本机首建实测）；
+  - `--legacy-peer-deps`：不加会把 peerDependencies 的整个 `@deepseek-ai/dsh`（约 660 包，含 koffi/node-pty 等带安装脚本的原生包）拖进树；tsdown 自己的闭包只有 55 包且无脚本包（lockfile 核对过）；
+  - `--package-lock=false` 不动 lockfile；`--cache .npm-cache` 把缓存落在仓库目录（数百 MB，`.gitignore` 已列），不写 `~/.npm`
 - 安装到 profile 用 link 方式（改仓库文件即生效）：
   `dsh plugin --profile web add <本仓库路径>`
 
