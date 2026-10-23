@@ -72,7 +72,7 @@ node selftest.js     # 反向验证 check.js 真能抓到那些问题
 npm test             # 上述 + 配色/设置页/渲染/动效性能等全套
 ```
 
-`npm test` 覆盖样式不变量、配色对比度、设置页（configForms transport）、真实浏览器渲染、动画可访问性与性能预算（layout/帧间隔/主线程）。部分测试需要本机安装 Chrome 或 Edge。跑测试请用 Node 22+（浏览器 fixture 依赖全局 `WebSocket`/`fetch`，版本不足会在测试处明确报错；插件本身的运行没有这个要求）。测试原则：**从真实 `client.js` 里读值，不复述数值；每条断言都做过变异验证**——方法论见 [docs/testing.md](docs/testing.md)。
+`npm test` 覆盖样式不变量、配色对比度、设置页（configForms transport）、真实浏览器渲染、动画可访问性与性能预算（layout/帧间隔/主线程）。部分测试需要本机安装 Chrome、Chromium 或 Edge。跑测试请用 Node 22+（浏览器 fixture 依赖全局 `WebSocket`/`fetch`，版本不足会在测试处明确报错；插件本身的运行没有这个要求）。测试原则：**从真实 `client.js` 里读值，不复述数值；每条断言都做过变异验证**——方法论见 [docs/testing.md](docs/testing.md)。
 
 ## 项目结构
 

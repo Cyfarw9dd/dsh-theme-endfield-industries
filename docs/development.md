@@ -5,6 +5,10 @@
 ## 环境
 
 - Node 22+；浏览器测试需要本机 Chrome/Chromium（`CHROME_PATH` 指定路径）
+- 本机浏览器＝系统 Chromium 155（`/usr/bin/chromium-browser`，Fedora 包装脚本指向 `/usr/lib64/chromium-browser/`）。注意两点：
+  - 夹具的自动发现列表只认 `/usr/bin/google-chrome`、`/usr/bin/chromium`，**不含 Fedora 拼法**，所以裸 `npm test` 会报 `Set CHROME_PATH`——用 `CHROME_PATH=/usr/bin/chromium-browser npm test`；
+  - 若启动即崩（`chrome_crashpad_handler: --database is required` 后跟 SIGTRAP 核心转储）：crashpad 初始化要写 `$HOME` 下的路径，家目录只读时会这样死；把 `HOME` 指到可写目录即可绕过（`HOME=$(mktemp -d) CHROME_PATH=/usr/bin/chromium-browser npm test`）。本机 2026-10 曾复现，后自行消失。
+  - 备选浏览器：`~/.cache/puppeteer/chrome/linux-*/chrome-linux64/chrome`（Chrome for Testing，同样以 `CHROME_PATH` 指定）。命令行截图通道（`--screenshot`/`--virtual-time-budget`）在新版 Chrome/Chromium 上已不可靠，截图一律走 CDP 夹具（见 testing.md）
 - 安装到 profile 用 link 方式（改仓库文件即生效）：
   `dsh plugin --profile web add <本仓库路径>`
 

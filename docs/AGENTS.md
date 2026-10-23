@@ -27,7 +27,7 @@
 
 ## 贡献前置（对所有改动，不只文档）
 
-1. `node check.js` 必须绿；样式/行为改动加跑 `CHROME_PATH=<chrome> npm test`
+1. `node check.js` 必须绿；样式/行为改动加跑 `CHROME_PATH=/usr/bin/chromium-browser npm test`（本机系统 Chromium，自动发现列表不含它，必须带变量；其他机器换各自的 Chrome/Edge 路径）
 2. 生成物（音效、徽标掩码）只改源与脚本，`--check` 防漂移
 3. 素材来源政策：只从官方渠道下载；第三方来源需显式批准并在
    `scripts/build-*.js` 头注与 [credits.md](credits.md)「素材归属」双重登记

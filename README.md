@@ -74,7 +74,7 @@ node selftest.js     # reverse-verifies that check.js actually catches those pro
 npm test             # all of the above + palette/settings/rendering/motion-performance suites
 ```
 
-`npm test` covers style invariants, palette contrast, the settings page (both transport generations), real-browser rendering, animation accessibility and performance budgets (layout/frame intervals/main thread). Some tests require Chrome or Edge installed locally. Run tests with Node 22+ (browser fixtures depend on global `WebSocket`/`fetch`; older versions fail loudly at that point — running the plugin itself has no such requirement). Testing principles: **read values from the real `client.js`, never restate numbers; every assertion has been mutation-tested** — methodology in [docs/testing.md](docs/testing.md).
+`npm test` covers style invariants, palette contrast, the settings page (both transport generations), real-browser rendering, animation accessibility and performance budgets (layout/frame intervals/main thread). Some tests require a local Chrome, Chromium or Edge. Run tests with Node 22+ (browser fixtures depend on global `WebSocket`/`fetch`; older versions fail loudly at that point — running the plugin itself has no such requirement). Testing principles: **read values from the real `client.js`, never restate numbers; every assertion has been mutation-tested** — methodology in [docs/testing.md](docs/testing.md).
 
 ## Project layout
 
