@@ -2189,6 +2189,7 @@
 	* test/settings-config-forms.test.js pins by index (hooks[4] === glass).
 	*/
 	function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio, react }) {
+		let warnedNoReact = false;
 		const { isEnabled, mount, unmount, enabledKey: ENABLED_KEY } = themeApi;
 		const locale = services.locale();
 		let t = (key) => Object.prototype.hasOwnProperty.call(LOCALE_ZH, key) ? LOCALE_ZH[key] : key;
@@ -2217,7 +2218,15 @@
 				label: () => t("nav")
 			}, localeReady ? { locale: ENDFIELD_NS } : {}), () => {
 				const R = react || (typeof React !== "undefined" ? React : null);
-				if (!R) return null;
+				if (!R) {
+					if (!warnedNoReact) {
+						warnedNoReact = true;
+						try {
+							console.warn("[dsh-theme-endfield] settings panel has no React: the section will render blank. Neither the injected `react` nor a global React was available where the panel component runs.");
+						} catch (e) {}
+					}
+					return null;
+				}
 				const [enabled, setEnabled] = R.useState(isEnabled());
 				const [wmOn, setWmOn] = R.useState(watermark.isOn());
 				const [wmPersist, setWmPersist] = R.useState(watermark.isPersistOn());

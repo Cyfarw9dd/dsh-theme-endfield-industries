@@ -13,6 +13,12 @@
 import { ENDFIELD_NS, LOCALE_ZH, LOCALE_EN } from './dictionaries.js'
 
 export function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio, react }) {
+  /* A React-less render is a SILENT blank page (nav row present, body empty)
+     — the exact shape of the 2026-10 blank-panel regression, which shipped
+     unnoticed precisely because nothing was printed. Warn once per run
+     instead of once per render (the section outlet re-invokes this factory
+     on every settings re-render, so an unguarded warn would flood). */
+  let warnedNoReact = false
   const { isEnabled, mount, unmount, enabledKey: ENABLED_KEY } = themeApi
   /* The locale service is optional, exactly like `theme` and `sessions`: the
      in-process settings tests mount this theme with a ctx carrying only
@@ -74,7 +80,13 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
            renders nothing, which is exactly what a React-less page must do
            rather than crash the settings dialog. */
         const R = react || ((typeof React !== 'undefined') ? React : null)
-        if (!R) return null
+        if (!R) {
+          if (!warnedNoReact) {
+            warnedNoReact = true
+            try { console.warn('[dsh-theme-endfield] settings panel has no React: the section will render blank. Neither the injected `react` nor a global React was available where the panel component runs.') } catch (e) { /* console may be absent */ }
+          }
+          return null
+        }
         const [enabled, setEnabled] = R.useState(isEnabled())
         const [wmOn, setWmOn] = R.useState(watermark.isOn())
         const [wmPersist, setWmPersist] = R.useState(watermark.isPersistOn())
