@@ -21,7 +21,6 @@ export const PREFS_ENTRY = 'theme-endfield'
 export const PREFS_NS = 'dsh-theme-endfield'
 export const PREFS_FIELD_DEFAULTS = {
   enabled: '1',
-  palette: 'gray',
   radius: 'square',
   glass: 'off',
   texture: 'standard',
@@ -85,7 +84,6 @@ export const prefsFieldFromKey = (rawKey) => {
    Keys are therefore listed EXPLICITLY, never computed. */
 export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-enabled': 'enabled',
-  'dsh-theme-endfield-palette': 'palette',
   'dsh-theme-endfield-radius': 'radius',
   'dsh-theme-endfield-glass': 'glass',
   'dsh-theme-endfield-texture': 'texture',

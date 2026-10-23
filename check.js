@@ -237,20 +237,23 @@ const body = cssText
     if (missing.length === 0) pass(`all ${paletteVars.length} palette variables are defined in live CSS`)
     else fail(`palette variable(s) never DEFINED in live CSS: ${missing.join(', ')}`)
 
-    // Non-default palettes must exist as override blocks, or their switches are inert.
-    for (const cls of ['theme-endfield-wuling', 'theme-endfield-gray']) {
-      if (new RegExp('body\\.' + cls + '\\s*\\{').test(stripped)) {
-        pass('palette block (body.' + cls + ') is present')
+    // The switchable palettes (终末地灰 / 武陵青 / a class-carried 谷地黄) were
+    // removed in 2026-10: 谷地黄 lives ONLY on the plain body base block, and a
+    // leftover override block would be dead weight that still wins the cascade
+    // the moment someone re-adds the class in JS. Assert they stay gone.
+    for (const cls of ['theme-endfield-wuling', 'theme-endfield-gray', 'theme-endfield-valley']) {
+      if (!new RegExp('body\\.' + cls + '\\s*\\{').test(stripped)) {
+        pass('no leftover palette override block (body.' + cls + ')')
       } else {
-        fail('no body.' + cls + ' block — that palette switch would do nothing')
+        fail('body.' + cls + ' block is still in the sheet — the palette it belongs to was removed')
       }
     }
-    // The gray palette's dark-scheme fill flip must exist too: without it dark
-    // mode keeps the light #d9d9d9 fill and every ink-on-accent pair breaks.
-    if (/body\.theme-endfield-gray\[data-ds-dark-theme\]\s*\{/.test(stripped)) {
-      pass('终末地灰 dark-scheme override block is present')
+    // And their preference key must not come back either: nothing reads it, so a
+    // re-added key would silently persist a value with no effect.
+    if (!sources.concatClientJs().includes('dsh-theme-endfield-palette')) {
+      pass('the removed palette preference key stays out of the client source')
     } else {
-      fail('no body.theme-endfield-gray[data-ds-dark-theme] block — dark fills would stay light-gray')
+      fail('the client source references dsh-theme-endfield-palette — a palette field that no stylesheet answers to')
     }
     // The embedded emblem mask must be a real SVG data URI INSIDE a body{} rule:
     // a bare top-level declaration is invalid CSS whose error recovery eats the

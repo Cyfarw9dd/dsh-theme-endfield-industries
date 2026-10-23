@@ -127,7 +127,7 @@
 2. `CHROME_PATH=<chrome> npm test` —— 全套跑完看绿
 3. 如果 selector-guard 失败 → upstream 改了 CSS module 后缀 → 对照新 bundle 更新后缀匹配
 4. 如果 attention-watch 失败 → upstream 改了数据属性标记 → 更新 `ATTENTION_MARKERS`
-5. 如果 palette-switch 失败 → 令牌名变了 → 检查 `overrideTokens` 的映射
+5. 如果 palette-resolve 失败 → 令牌名变了 → 检查 `overrideTokens` 的映射
 6. 如果 font-scope 失败 → 字体令牌行为变了 → 检查 `--edge-font` 的声明位置
 
 **核心信念**：上游的每个面都是防御式消费——缺什么就降级什么，永远不崩溃。主题的 635+ 测试不是为了证明功能正常，而是为了**在 upstream 改变时第一时间报警**。

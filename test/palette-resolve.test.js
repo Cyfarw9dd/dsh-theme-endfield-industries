@@ -1,27 +1,32 @@
 /**
- * palette-switch.test.js — prove the palette switch actually REPAINTS the app.
+ * palette-resolve.test.js — prove the one shipped palette actually PAINTS.
  *
- * palette-contrast.test.js checks the numbers are sound; it cannot see whether the
- * switch is wired up. This one runs the REAL client.js in a headless browser
- * against the shared app-DOM mock, applies theme tokens the way
+ * palette-contrast.test.js checks the numbers are sound; it cannot see whether
+ * the variables are wired up. This one runs the REAL client.js in a headless
+ * browser against the shared app-DOM mock, applies theme tokens the way
  * the app really does (INLINE ON body — that detail is load-bearing, see below),
- * then flips the palette and measures computed styles.
+ * then measures computed styles. (Born as palette-switch.test.js while the
+ * theme still shipped three switchable palettes; the class-flip machinery is
+ * gone with them and what remains to guard is the resolution itself.)
  *
  * What it is really guarding:
-
- *   1. A token override whose value is var(--edge-accent) must re-resolve on a class
- *      flip with NO JavaScript repaint. That is the whole design; if it were false
- *      the switch would need a theme.overrideTokens() re-registration and every
- *      token-driven surface would stay yellow.
- *   2. The custom properties must resolve AT ALL. The theme's --edge-* aliases used
- *      to be declared at :root while the tokens they reference are set inline on
- *      body, which made them compute to EMPTY (a real shipped bug: it silently
- *      disabled the themed scrollbar). A palette variable with the same mistake
- *      would break every rule that reads it, so emptiness is asserted against.
- *   4. Turning the theme off must remove the palette class, not leave a class whose
- *      definitions no longer exist.
  *
- * Usage: node test/palette-switch.test.js
+ *   1. The custom properties must resolve AT ALL. The theme's --edge-* aliases
+ *      used to be declared at :root while the tokens they reference are set
+ *      inline on body, which made them compute to EMPTY (a real shipped bug: it
+ *      silently disabled the themed scrollbar). Every palette variable with the
+ *      same mistake would break every rule that reads it, so emptiness is
+ *      asserted against.
+ *   2. A token override whose value is var(--edge-accent) must resolve THROUGH
+ *      the accent declaration on the same element, with no JavaScript repaint
+ *      and no re-registration of the token layer. That indirection is the
+ *      design; if it were false every token-driven surface would stop
+ *      following the palette block.
+ *   3. The accent is 谷地黄 #fff500 on the PLAIN body block — no palette class
+ *      exists any more, so none may appear on <body> whether the theme is on
+ *      or off (the switchable classes were removed with their setting row).
+ *
+ * Usage: node test/palette-resolve.test.js
  */
 const fs = require('fs')
 const path = require('path')
@@ -68,7 +73,7 @@ fs.writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8"><style>
 window.__RESULTS__=[]
 /* The theme now reads its preferences through the dsh settingsScope seam. This
    page seeds a fake binder exactly like the old localStorage lines did, and the
-   master/palette field naming carries the same polarity. */
+   master field naming carries the same polarity. */
 ${BROWSER_SETTINGS_SCOPE_SNIPPET}
 var __prefs = __endfieldSettingsScope({ enabled:'1', loader:'0' });
 const R=(name,pass,detail)=>window.__RESULTS__.push({name,pass:!!pass,detail:detail===undefined?'':String(detail)})
@@ -100,17 +105,18 @@ const ctx={
   get:(n)=> n==='theme' ? {overrideTokens:(_s,t)=>{applyTokens(t); return ()=>{ for(const n of appliedTokens) document.body.style.removeProperty(n); appliedTokens=[] }}} : (n==='configForms' ? __prefs.forms : undefined),
   effect:(f)=>{window.__dispose__=f()},
 }
-// palette is intentionally NOT seeded, so it resolves to its default 终末地灰.
 mod.apply(ctx)
 
 const cs=()=>getComputedStyle(document.body)
 const v=(n)=>cs().getPropertyValue(n).trim()
 
-/* ---- 1. default palette is 终末地灰 ---- */
-R('默认配色为终末地灰（未设置存储键）', v('--edge-accent').toLowerCase()==='#d9d9d9', v('--edge-accent'))
-R('默认带 gray class', document.body.classList.contains('theme-endfield-gray'))
-R('默认不带 wuling class', !document.body.classList.contains('theme-endfield-wuling'))
-R('默认 accent-ink 为墨色', v('--edge-accent-ink').toLowerCase()==='#101110', v('--edge-accent-ink'))
+/* ---- 1. the palette is 谷地黄, on the plain body block, classless ---- */
+R('配色为谷地黄 #fff500（body 基础块，无 class）', v('--edge-accent').toLowerCase()==='#fff500', v('--edge-accent'))
+R('rgb 通道列表与强调色一致', v('--edge-accent-rgb').replace(/\\s/g,'')==='255,245,0', v('--edge-accent-rgb'))
+R('accent-ink 为墨色', v('--edge-accent-ink').toLowerCase()==='#101110', v('--edge-accent-ink'))
+const PALETTE_CLASSES = ['theme-endfield-wuling', 'theme-endfield-gray', 'theme-endfield-valley']
+R('body 上没有任何配色 class（随设置行一并移除）',
+  PALETTE_CLASSES.every((c)=>!document.body.classList.contains(c)), document.body.className)
 
 /* ---- 2. the palette variables actually RESOLVE (the :root bug) ---- */
 for(const n of ['--edge-accent','--edge-accent-ink','--edge-accent-rgb','--edge-accent-deep','--edge-status-light',
@@ -120,68 +126,37 @@ for(const n of ['--edge-accent','--edge-accent-ink','--edge-accent-rgb','--edge-
 }
 
 /* ---- 3. a token whose value is var(--edge-accent) resolves to the palette ----
-   --dsw-alias-brand-primary carries the accent in DARK mode (light mode is ink), so
-   the probe switches to dark, samples, and returns to light for the rest. */
+    --dsw-alias-brand-primary carries the accent in DARK mode (light mode is ink), so
+    the probe switches to dark, samples, and returns to light for the rest. */
 setScheme('dark')
-const brandDarkBefore=v('--dsw-alias-brand-primary')
+const brandDark=v('--dsw-alias-brand-primary')
+R('主题令牌经 var(--edge-accent) 间接解析为谷地黄',
+  /255,\\s*245,\\s*0|#fff500/i.test(brandDark), brandDark)
+const wash=v('--dsw-alias-interactive-bg-hover')
+R('半透明色块（rgba + 变量通道）落在黄通道上',
+  wash.includes('255')&&wash.includes('245')&&wash.includes('0'),
+  'wash='+wash)
+const glowDark=getComputedStyle(document.getElementById('status')).backgroundImage
+R('回合状态渐变文字换为暗色金档',
+  /255,\\s*245,\\s*0|#a08a00/i.test(glowDark), glowDark.slice(0,90))
 setScheme('light')
-const washBefore=v('--dsw-alias-interactive-bg-hover')
-const glowBefore=getComputedStyle(document.getElementById('status')).backgroundImage
+const glowLight=getComputedStyle(document.getElementById('status')).backgroundImage
+R('回合状态渐变文字亮色档为深金（#fff500 在纸上不可读）',
+  /107,\\s*93,\\s*0|#6b5d00/i.test(glowLight), glowLight.slice(0,90))
 
-/* ---- 4. FLIP to 武陵青 — via storage + the theme's own sync, no reload ---- */
-__prefs.setField('palette','wuling')
-/* Call the public-ish path the settings row uses. The row lives in a React tree
-   this harness does not render, so the class flip is performed the same way the
-   handler does (drop every other palette class, add the target) and the canvas
-   redraw is left to the theme's MutationObserver — which is itself part of what
-   is being tested. */
-document.body.classList.remove('theme-endfield-gray')
-document.body.classList.add('theme-endfield-wuling')
+/* ---- 4. switching the theme off leaves no palette class behind ---- */
+__prefs.setField('enabled','0')
+R('关闭主题后仍无配色 class 残留',
+  PALETTE_CLASSES.every((c)=>!document.body.classList.contains(c)), document.body.className)
 
-// Give the MutationObserver a turn to run before sampling.
-setTimeout(()=>{
-  const accentAfter=v('--edge-accent').toLowerCase()
-  R('强调色变为 #14d0d0', accentAfter==='#14d0d0', accentAfter)
-  R('rgb 通道列表同步切换', v('--edge-accent-rgb').replace(/\\s/g,'')==='20,208,208', v('--edge-accent-rgb'))
-
-  /* The decisive assertion: the token was written inline BEFORE the flip, with the
-     value var(--edge-accent). If custom-property indirection works the way this
-     design assumes, its COMPUTED value is now cyan with no JS help at all — the
-     token layer was never re-registered. */
-  setScheme('dark')
-  const brandDarkAfter=v('--dsw-alias-brand-primary')
-  R('主题令牌随 class 自动重解析（未重新注册令牌层）',
-    /20,\\s*208,\\s*208|#14d0d0/i.test(brandDarkAfter) && brandDarkAfter!==brandDarkBefore,
-    'dark before='+brandDarkBefore+' after='+brandDarkAfter)
-  setScheme('light')
-
-  const washAfter=v('--dsw-alias-interactive-bg-hover')
-  R('半透明色块（rgba + 变量通道）随配色切换',
-    washAfter.includes('20')&&washAfter.includes('208')&&washAfter!==washBefore,
-    'before='+washBefore+' after='+washAfter)
-
-  const glowAfter=getComputedStyle(document.getElementById('status')).backgroundImage
-  R('回合状态渐变文字换色', glowAfter!==glowBefore && /0,\\s*106,\\s*106|006a6a/i.test(glowAfter),
-    glowAfter.slice(0,90))
-
-
-  /* ---- 6. switching the theme off must drop the class ---- */
-  __prefs.setField('enabled','0')
-  if(window.__dispose__) {} // dispose is the run teardown, not the theme switch
-  // Reuse the theme's own unmount path through the settings toggle contract:
-  // flipping ENABLED_KEY and calling the sync is what the row does.
-  document.body.classList.remove('theme-endfield-wuling')
-  R('关闭主题后不残留 wuling class', !document.body.classList.contains('theme-endfield-wuling'))
-
-  document.title=JSON.stringify(window.__RESULTS__)
-},120)
+document.title=JSON.stringify(window.__RESULTS__)
 </script></body></html>`)
 
 ;(async () => {
   const browser = await launch({ url: 'file:///' + page.replace(/\\/g, '/'), width: 1200, height: 900, dpr: 1 })
   let results
   try {
-    /* The page finishes its async palette flips, then writes the verdict array
+    /* The page finishes its scheme flips, then writes the verdict array
        into document.title; wait for that marker, then read it back as data. */
     await browser.until("document.title.trim().length > 2")
     try { results = JSON.parse(await browser.evaluate('document.title')) } catch (e) {
@@ -198,6 +173,6 @@ for (const r of results) {
   else { console.error('FAIL  ' + r.name + (r.detail ? '  [' + r.detail + ']' : '')); failures++ }
 }
 console.log('')
-if (failures) { console.error(failures + ' palette-switch check(s) failed'); process.exit(1) }
-console.log('all palette-switch checks passed (' + results.length + ' assertions)')
+if (failures) { console.error(failures + ' palette-resolve check(s) failed'); process.exit(1) }
+console.log('all palette-resolve checks passed (' + results.length + ' assertions)')
 })().catch((e) => { console.error('FAIL  ' + (e && e.message)); process.exit(1) })

@@ -209,12 +209,12 @@ const buttons = nodes.filter((n) => n.type === 'button')
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'palette', 'motion', 'glass', 'texture', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 24) pass('panel has all 26 setting rows')
-else fail('expected 24 rows, found ' + rows.length)
+if (rows.length === 23) pass('panel has all 23 setting rows')
+else fail('expected 23 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group
    container — so an unlisted new row shows up as a mismatch instead of vanishing. */
@@ -254,30 +254,31 @@ else fail('client.js never defines .endfield-settings-group-title — headers wi
    log -S finds no commit adding it), so the assertion tested the test rather than
    the theme and failed on every pristine checkout. Removed rather than left
    red-by-default — a suite that is expected to fail teaches nothing. */
-for (const label of ['主题配色', '背景水印']) {
+for (const label of ['背景水印']) {
   if (all.includes(label)) pass('row present: ' + label)
   else fail('row missing: ' + label)
 }
 
-/* --- the palette row: default 终末地灰, dropdown selection writes the field --- */
+/* --- the palette row is GONE: 终末地灰/武陵青 were removed, 谷地黄 is the
+   only shipped palette (painted by the stylesheet's base block), so the panel
+   must not offer a switch that would do nothing --- */
+if (!all.includes('主题配色') && !all.includes('终末地灰') && !all.includes('武陵青')) {
+  pass('设置页不再提供配色行（仅谷地黄，无切换）')
+} else {
+  fail('设置页仍出现配色行或已移除的配色名（主题配色/终末地灰/武陵青）')
+}
+/* --- the dropdown MENU shape: options are focusable buttons, aria-checked
+   marks the current one. Re-homed from the removed palette row onto 磨砂玻璃
+   (the widest menu this panel ships: four options). --- */
 {
-  const trig = selectTriggerOf(tree, '主题配色')
-  if (trig && textOf(trig).includes('终末地灰')) pass('默认配色下拉触发器显示终末地灰')
-  else fail('palette trigger does not show 终末地灰 as the default: ' + (trig ? textOf(trig) : '(none)'))
-  /* open the menu and pick one the way a user does */
-  const steps = driveSelect(() => rendered(), '主题配色', '谷地黄')
-  if (steps === 'ok') {
-    if (prefStore.get('palette') === 'valley') pass('选择谷地黄写入 palette=valley（打开菜单→点选项）')
-    else fail('palette dropdown wrote ' + JSON.stringify(prefStore.get('palette')) + ', expected "valley"')
-  } else fail('palette dropdown could not be driven: ' + steps)
-  /* the menu itself must offer exactly the three palettes, as menuitemradio */
-  const tOpen = rendered()
-  const trig2 = selectTriggerOf(tOpen, '主题配色')
-  if (trig2) { trig2.props.onClick(); const tOpen2 = rendered()
-    const menu = walk(tOpen2).find((n) => n.props && n.props.role === 'menu' && n.props['aria-label'] === '主题配色')
+  const trig = selectTriggerOf(rendered(), '磨砂玻璃')
+  if (trig) {
+    trig.props.onClick()
+    const tOpen = rendered()
+    const menu = walk(tOpen).find((n) => n.props && n.props.role === 'menu' && n.props['aria-label'] === '磨砂玻璃')
     const opts = menu ? walk(menu).filter((n) => n.props.role === 'menuitemradio') : []
-    if (opts.length === 3) pass('下拉菜单提供三档（menuitemradio）')
-    else fail('palette menu has ' + opts.length + ' options, expected 3')
+    if (opts.length === 4) pass('下拉菜单提供四档（menuitemradio，磨砂玻璃）')
+    else fail('glass menu has ' + opts.length + ' options, expected 4')
     /* 元素必须是可聚焦的 button：应用的菜单行就是 button[role=menuitem*]，
        div 会丢掉键盘 Tab/Enter（2026-10 二次核对后钉住）。 */
     if (opts.length > 0 && opts.every((n) => n.type === 'button' && n.props.type === 'button')) {
@@ -286,12 +287,11 @@ for (const label of ['主题配色', '背景水印']) {
       fail('下拉选项不是 button：' + JSON.stringify(opts.map((n) => n.type)))
     }
     const checked = opts.filter((n) => n.props['aria-checked'] === 'true')
-    if (checked.length === 1 && textOf(checked[0]).includes('谷地黄')) pass('当前值以 aria-checked 标在谷地黄上')
+    if (checked.length === 1 && textOf(checked[0]).includes('关闭')) pass('当前值以 aria-checked 标在默认档（关闭）上')
     else fail('aria-checked should mark exactly the current option, got ' + checked.length + ' checked')
     /* close it again so later assertions start from a closed panel */
-    const again = selectTriggerOf(rendered(), '主题配色'); if (again) again.props.onClick()
-  } else fail('no palette trigger for the menu-shape assertion')
-  prefStore.setField('palette', 'gray')
+    const again = selectTriggerOf(rendered(), '磨砂玻璃'); if (again) again.props.onClick()
+  } else fail('no glass trigger for the menu-shape assertion')
 }
 
 /* --- 高度对齐：动作按钮与同排的下拉触发器同高（宽度可不同） ---
@@ -360,24 +360,6 @@ else fail('面板仍含「试听」——音频动作按钮应统一为「预览
   }
   prefStore.setField('motion', 'signal')
 }
-
-/* --- with 武陵青 selected, the dropdown follows the store --- */
-{
-  const step = driveSelect(() => rendered(), '主题配色', '武陵青')
-  if (step === 'ok') {
-    if (prefStore.get('palette') === 'wuling') pass('选择武陵青写入 palette=wuling')
-    else fail('wuling dropdown wrote ' + JSON.stringify(prefStore.get('palette')) + ', expected "wuling"')
-  } else fail('wuling dropdown could not be driven: ' + step)
-}
-let tree3
-try { tree3 = rendered() } catch (e) { fail('re-render (wuling) threw: ' + e.message); process.exit(1) }
-const text3 = textOf(tree3)
-if (text3.includes('武陵青')) pass('武陵青 生效时下拉触发器显示武陵青')
-else fail('with wuling stored the palette trigger should reflect it')
-// The accent must be surfaced to the user, in hex.
-if (text3.includes('#14d0d0')) pass('设置行标注 #14d0d0')
-else fail('the palette row should state #14d0d0')
-prefStore.setField('palette', 'gray')
 
 /* --- dropdown writes must land on the documented namespace fields --- */
 {

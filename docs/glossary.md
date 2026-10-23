@@ -6,9 +6,7 @@
 
 | 术语 | 含义 |
 | --- | --- |
-| **终末地灰**（gray） | 默认调色板：官网灰阶交互语法（亮 `#d9d9d9` / 暗 `#6a6a6a` 填充） |
-| **谷地黄**（valley） | 官网信号黄 `#fff500`，CSS 基础块即它的定义（无 class 态） |
-| **武陵青**（wuling） | 青碧 `#14d0d0`，`body.theme-endfield-wuling` |
+| **谷地黄** | 唯一调色板：官网信号黄 `#fff500`，CSS 基础块即它的定义（无 class 态）。早期的终末地灰 / 武陵青可切换配色已随设置行移除（2026-10） |
 | **交互灰** | 不随调色板的固定灰：选中/光标专属（见 [endfield-ui-research.md](endfield-ui-research.md)） |
 
 ## 核心令牌（声明在 `body`，绝不在 `:root`）
@@ -16,7 +14,7 @@
 | 令牌 | 用途 |
 | --- | --- |
 | `--edge-accent` / `-deep` / `-onpaper` | 强调色填充三档（悬停加深 / 压纸深档） |
-| `--edge-accent-ink` | 强调底上的**文字**配对色（灰暗色=白，其余=墨） |
+| `--edge-accent-ink` | 强调底上的**文字**配对色（谷地黄下=墨；角色保留以备未来拆分） |
 | `--edge-accent-rgb` | 逗号通道表，供 ~30 处 `rgba()` 半透明色块 |
 | `--edge-status-light/-mid`、`--edge-status-dark/-mid` | 「强调作文字」角色（回合状态渐变两档） |
 | `--edge-select-fill/-ink`、`--edge-caret` | 交互灰三件套（不随调色板） |

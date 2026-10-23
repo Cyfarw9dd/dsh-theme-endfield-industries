@@ -38,14 +38,14 @@
  */
 const BROWSER_SETTINGS_SCOPE_SNIPPET = `
 var __endfieldFieldDefaults = {
-  enabled:'1', palette:'gray', radius:'square', glass:'off', motion:'signal', watermark:'1',
+  enabled:'1', radius:'square', glass:'off', motion:'signal', watermark:'1',
   watermarkPersist:'0', loader:'0', watermark:'0', watermarkPersist:'0',
   audioEnabled:'0', audioVolume:'100', audioBoot:'1', audioTurnStart:'1', audioTurnDone:'1',
   audioAttention:'1', audioTurnFail:'1', audioDebounceMs:'2500', audioSoundDir:'',
   audioHumanOnly:'1', audioDiag:'0'
 };
 var __endfieldKeyToField = {
-  'dsh-theme-endfield-enabled':'enabled', 'dsh-theme-endfield-palette':'palette',
+  'dsh-theme-endfield-enabled':'enabled',
   'dsh-theme-endfield-glass':'glass',
   'dsh-theme-endfield-radius':'radius',
   'dsh-theme-endfield-watermark':'watermark',

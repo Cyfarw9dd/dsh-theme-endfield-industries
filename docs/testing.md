@@ -72,20 +72,20 @@ _centerCol > _header > _titleRow > _titleCluster > _headerActions
 ## 配色
 
 ```bash
-node test/palette-contrast.test.js   # 两套配色每个角色的对比度（从真实 CSS 里读值）
-node test/palette-switch.test.js     # 真实浏览器里切换配色，22 项断言
+node test/palette-contrast.test.js   # 谷地黄每个角色的对比度（从真实 CSS 里读值）
+node test/palette-resolve.test.js    # 真实浏览器里验证配色解析与令牌间接层，21 项断言
 node test/settings-buttons.test.js   # 强调色底上的按钮文字对比度（32 项，含回归守卫）
 node test/hover-check.js             # 用 CDP 真的移动鼠标，验证真实 :hover 规则（3 个面，24 项）
 node test/verify-shots.js            # 解码四张截图统计强调色像素
 ```
 
-**`palette-contrast.test.js`** 从 `src/styles/*.css` 的实际样式表里把变量读出来再验算（JS 侧的令牌字面量读 `concatClientJs()`，令牌层在 `src/client/ui/tokens.js`）。覆盖约 20 项：实心底 + 墨色字达 AA、悬停底同样达标、渐变文字四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、hero 光晕不比原品牌蓝更响、两配色确实不同、强调色写成 6 位十六进制，以及**武陵青的亮度必须落在 45%–56% 区间且留在青碧色轴上**。
+**`palette-contrast.test.js`** 从 `src/styles/*.css` 的实际样式表里把变量读出来再验算（JS 侧的令牌字面量读 `concatClientJs()`，令牌层在 `src/client/ui/tokens.js`）。覆盖：实心底 + 墨色字达 AA、悬停底同样达标、渐变文字四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、hero 光晕不比原品牌蓝更响、强调色写成 6 位十六进制，以及**切换配色的覆盖块不得回流**（终末地灰/武陵青已移除，谷地黄只住在 body 基础块）。
 
-**`palette-switch.test.js`** 在真实浏览器里跑真实 `client.js`，并**按应用的真实方式把令牌写成 `<body>` 行内样式**——用样式表 `:root` 假装会让测试通过而线上坏掉，这种不对称正是它存在的理由。断言：默认是谷地黄且不带 class；11 个变量全部**非空**；`--dsw-alias-brand-primary` 在切换后**自动**变成青色（令牌层没有重新注册）；`rgba(var(--rgb), α)` 型半透明色块随之切换；渐变文字换色；**画布被重绘且新描边偏青**（B 通道高于 R）；关闭主题后不残留 class。
+**`palette-resolve.test.js`**（更名自 palette-switch——配色不再可切换，守的是解析本身）在真实浏览器里跑真实 `client.js`，并**按应用的真实方式把令牌写成 `<body>` 行内样式**——用样式表 `:root` 假装会让测试通过而线上坏掉，这种不对称正是它存在的理由。断言：配色为谷地黄 `#fff500` 且 body 上没有任何配色 class；12 个变量全部**非空**（:root 旧 bug 的守卫）；`--dsw-alias-brand-primary` 经 `var(--edge-accent)` 间接解析为黄（令牌层无需重注册）；`rgba(var(--rgb), α)` 型半透明色块落在黄通道；渐变文字亮/暗两档各自正确；关闭主题后无 class 残留。
 
 **`settings-buttons.test.js`** 读计算样式，用同特异度的 `.HOVERPROBE` 类替代 `:hover`。这是合理的层叠等价，但反向对照暴露了它的边界（见[验证方法论](engineering-notes.md#计算样式触发不了-hover)），因此有了下一个脚本。
 
-**`hover-check.js`** 通过 DevTools 协议**真的移动鼠标**到按钮上，再截图量字形与填充的对比度。夹具用的是**当前安装态 bundle 里逐字抄下来的上游 CSS**，覆盖三个面：设置 › 模型的 `编辑`（`_secondaryButton`，强调底落在按钮自己身上）、`添加模型提供商`（`_addButton` **及其外层 `_addActions` 包裹层**——这一条就是模型设置页那次反馈）、输入区 `+`（`_add` 钩子的真实目标，收敛作用域后必须仍在反色）。每个面在两种配色 × 两种模式下各测字形对比度；添加按钮额外断言**外层容器不得被实心强调色填充**，输入区 `+` 额外断言悬停底色**仍是实心强调色**、常态墨色在暗色下仍是强调色、亮色下**不被暗色规则上色**。反向对照：把 `client.js` 换回修复前那版，模型页两条断言在暗色下报 1.06:1 / 1.75:1 红，与反馈截图吻合。
+**`hover-check.js`** 通过 DevTools 协议**真的移动鼠标**到按钮上，再截图量字形与填充的对比度。夹具用的是**当前安装态 bundle 里逐字抄下来的上游 CSS**，覆盖三个面：设置 › 模型的 `编辑`（`_secondaryButton`，强调底落在按钮自己身上）、`添加模型提供商`（`_addButton` **及其外层 `_addActions` 包裹层**——这一条就是模型设置页那次反馈）、输入区 `+`（`_add` 钩子的真实目标，收敛作用域后必须仍在反色）。每个面在两种模式下各测字形对比度；添加按钮额外断言**外层容器不得被实心强调色填充**，输入区 `+` 额外断言悬停底色**仍是实心强调色**、常态墨色在暗色下仍是强调色、亮色下**不被暗色规则上色**。反向对照：把 `client.js` 换回修复前那版，模型页两条断言在暗色下报 1.06:1 / 1.75:1 红，与反馈截图吻合。
 
 **`verify-shots.js`** 只用 `zlib` 解码 PNG（不引依赖），按色相家族统计像素，用「黄 5.47% → 0.39%、青 0.42% → 5.40%、中性约 93% 不变」这样的数字代替「看起来像换了」。
 
@@ -157,7 +157,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 **`settings-rows.test.js`** 不用浏览器也不用 React：以**记录型 `React` / `slots` + 假的设置 transport**（`test/fixtures/settings-scope.js`）在进程内跑一次真实 `apply()`，抓下设置面板真正的元素树。设置页是用户唯一能碰到这些开关的入口，而那里的错误（抛异常、漏 key、开关写错了 DSH 设置的字段）check.js 与画布测试都看不见。
 
 
-**`settings-durable-hold.test.js`**（两代皆适用的写入 gate / 补写契约）用**两阶段假 `ctx.configForms`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 武陵青」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
+**`settings-durable-hold.test.js`**（两代皆适用的写入 gate / 补写契约）用**两阶段假 `ctx.configForms`** 复现那条历史告警：宿主半部 `ctx.settings.register(...)` 尚未跑、命名空间还没进 Host 的 served 列表前，scope 快照是 `{ status:'unavailable', writable:true, mode:'host' }`——单看 `writable` 会照写不误却落不到盘。它先在未就绪态切「圆角 / 磨砂玻璃」，断言**没有任何 `scope.set` 出线**（旧 bug 会打 `commit … status= unavailable` 并静默丢脏）；随后模拟文档 committed、命名空间进入 served 列表、快照翻为 `status:'ready'`，断言订阅路径把两份 held 编辑**自动补写**进文档，且不会重复写两遍（replay 有 re-entrancy 护栏）。
 
 **`settings-mode-gate.test.js`** 钉住快照 `mode` 键的**缺失语义**：DSH 0.2.1-rc.2 从快照里删掉了这个字段，而写入 gate 若逐字要求 `mode==='host'`，门在 0.2.1 宿主上永远打不开（写入全部被挂起后放弃，刷新复位——无声，因为读不存在的字段得到 `undefined`）。它用三个**只差 `mode` 键**的 ready+writable 快照各跑一次真实 `apply()`：缺失（0.2.1+ 形状）与显式 `'host'` 都必须让写入出线，显式 `'memory'`（0.1.7 非回环页）必须拒写——防止「缺失即 durable」将来被改成「永远 durable」。对修复前的判定做过变异验证（场景 A 必失败）。浏览器夹具相应新增 `omitMode` 选项以建模 0.2.1 快照形状；教训是**桩必须建模生产契约的每一代形状**，只写 `mode:'host'` 等于把 0.1.7 冻结进套件。
 
@@ -165,7 +165,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 
 - **两半的 entry id 一致**：`client.js` 的 `PREFS_ENTRY` == `index.js` 的 `SETTINGS_ENTRY` == `cordis.patch.yml` 里那一行的 `id`（命名空间是 entry id，任一处对不上就全程读不到）；
 - **Host `Config` 真的可编辑**：27 个字段齐全、无多余字段、**每个字段都带 `.volatile()`** 且默认值等于 `FIELD_DEFAULTS`——漏一个 volatile 就是 0.1.7 版的「设置保存不了」（该断言在拿不到 schemastery 的环境里自动跳过，CI 无 DSH 时不会误报——**也正因为会跳过，它没能在唯一要紧的环境里发现问题**：本机 web profile 恰好就是「拿不到可用的 schemastery」这台机器，于是这一整段断言空跑，`Config` 缺失一路绿灯。字段契约与选择顺序现由 `settings-config-fallback.test.js` 无条件断言）；
-- **被 served 的表单会被绑定并采纳**（存档里的 `palette: wuling` 直接落到 `<body>` 的 class）；
+- **被 served 的表单会被绑定并采纳**（存档里的 `radius: round` 直接落到 `<body>` 的 class）；
 - **entry id 是探测出来的**：只 served `include:theme-endfield` 时写入也落在那个拼写上；
 - **拒写与未就绪都算 held**：`set()` 解析为 `false`、或命名空间尚未 served 时，编辑不改变文档、也不假装保存；一旦拒写解除（下一次快照）或命名空间进入 served，held 编辑被自动补写；
 - **memory 模式（非 loopback 页面）永不下盘**：一次写都不发生；
@@ -192,7 +192,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 
 **`settings-off.test.js`** 守的是设置页自己最脆弱的时刻：**开关按钮的强调色底来自主题样式表，而样式表随主题关闭被移除**。它在真实浏览器里加载真实 `client.js`，以应用**自己的默认令牌**（亮 / 暗两套）把主题关掉，用 `slots` 桩抓出真实元素树并物化成 DOM，然后断言每个按钮的合成对比度 ≥ 4.5。
 
-> 这个测试抓到过真 bug：修复前暗色模式下「切换武陵青」与「切为静态」两个常亮按钮是 `#000` 落在透明底上、对深色面板仅约 1.1:1，修复后全部 ≥ 11.5:1。
+> 这个测试抓到过真 bug：修复前暗色模式下「切换武陵青」（该行已随配色切换移除）与「切为静态」两个常亮按钮是 `#000` 落在透明底上、对深色面板仅约 1.1:1，修复后全部 ≥ 11.5:1。
 
 **`settings-locale.test.js`** 配一个按运行时契约造形的假 `locale` 服务（`register(ns, dicts)` / `bind(ns)`，含 `active → en → 键名` 的查找链，并**复现真实服务对重复 `(ns, locale)` 的抛错**）。覆盖：注册了自己的命名空间；**en 与 zh 键集完全一致**、无空译文、且两种语言实质不同（防止「翻译」其实是复制）；注册声明了 `locale:`、`label` 是 thunk 且随语言变化；zh 渲染为中文而 **en 渲染无任何残留中文与中日韩标点**；未知语言回退到 en 而不漏键名；词典只注册一次、可随 `ctx.effect` 注销并重新注册；以及**完全没有 locale 服务时页面照常渲染为中文、且不声明 `locale:`**。
 
@@ -269,7 +269,7 @@ node test/hero-logo.test.js
 ## 截图辅助
 
 ```bash
-npm run shots          # 输出亮/暗 × 两配色共四张截图
+npm run shots          # 输出亮/暗两张截图 + 一张水印开截图（谷地黄）
 npm run shots:verify   # 上面 + 解码统计强调色像素
 ```
 

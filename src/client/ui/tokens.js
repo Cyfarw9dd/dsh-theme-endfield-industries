@@ -64,10 +64,10 @@ export const THEME_TOKEN_OVERRIDES = {
         /* The one ACCENT-carrying token in this layer, so it is the one that must
            not be a literal. A token value may itself be a var() reference: the app
            writes these as inline properties on <body>, the palette variables are
-           declared on <body> too, so the reference resolves on the same element and
-           re-resolves when the palette class flips — no re-registration of this
-           layer, no JS repaint. Verified by test/palette-switch.test.js, which
-           caught exactly this token still reading #fff500 after a flip. */
+           declared on <body> too, so the reference resolves on the same element —
+           no re-registration of this layer, no JS repaint. (When switchable
+           palettes shipped, this was also what made a class flip repaint every
+           token for free; the mechanism is verified by test/palette-resolve.test.js.) */
         dark: 'var(--edge-accent)',
       },
       '--dsw-alias-label-primary': {

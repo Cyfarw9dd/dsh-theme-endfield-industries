@@ -156,9 +156,7 @@ const run=(paletteName)=>{
   }
 }
 
-run('默认灰')
-document.body.classList.add('theme-endfield-wuling')
-run('武陵青')
+run('谷地黄')
 
 document.title='DONE '+JSON.stringify(window.__RESULTS__)
 </script></body></html>`)

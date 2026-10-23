@@ -35,7 +35,7 @@ const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 
 const FIELD_DEFAULTS = {
-  enabled: '1', palette: 'wuling', radius: 'square',
+  enabled: '1', radius: 'square',
   watermark: '1', watermarkPersist: '0',
   loader: '0', thunder: '0', thunderAnim: '0',
   audioEnabled: '0', audioVolume: '100', audioBoot: '1', audioTurnStart: '1', audioTurnDone: '1',

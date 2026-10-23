@@ -31,7 +31,7 @@ const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 
 const FIELD_DEFAULTS = {
-  enabled: '1', palette: 'wuling', radius: 'square',
+  enabled: '1', glass: 'off', radius: 'square',
   watermark: '1', watermarkPersist: '0',
   loader: '0', thunderAnim: '0',
   audioEnabled: '0', audioVolume: '100', audioBoot: '1', audioTurnStart: '1', audioTurnDone: '1',
@@ -45,7 +45,7 @@ const pass = (m) => console.log('ok    ' + m)
 
 /* Recording React — STATEFUL now: the panel's unified dropdowns keep their
    open/close in React state, so the held-edit probes below (open the radius /
-   palette menu, click an option) need a setter that actually stores the write
+   glass menu, click an option) need a setter that actually stores the write
    and a slot counter that resets before each rendered() pass. */
 const makeReact = () => {
   const state = []
@@ -198,8 +198,9 @@ const tree = rendered()
 const buttons = walk(tree).filter((n) => n.type === 'button')
 const findBtn = (re) => buttons.find((b) => re.test(textOf(b)))
 
-/* The reported symptom was radius=round and palette=wuling. Toggle BOTH while
-   the namespace is unserved; the old bug would fire scope.set for each. */
+/* The reported symptom was two dropdown edits made while the namespace was
+   unserved; the old bug would fire scope.set for each. Driven here as
+   radius=round and glass=standard. */
 /* Every value row is the unified dropdown now: drive it the way a user does
    (open the menu, click the option). The held-edit scenario is unchanged. */
 const driveSelect = (ariaLabel, optionText) => {
@@ -218,8 +219,8 @@ const driveSelect = (ariaLabel, optionText) => {
 }
 const radiusStep = driveSelect('主题圆角', '圆角')
 if (radiusStep !== 'ok') { fail('radius dropdown could not be driven: ' + radiusStep); process.exit(1) }
-const paletteStep = driveSelect('主题配色', '谷地黄')
-if (paletteStep !== 'ok') { fail('palette dropdown could not be driven: ' + paletteStep); process.exit(1) }
+const glassStep = driveSelect('磨砂玻璃', '标准')
+if (glassStep !== 'ok') { fail('glass dropdown could not be driven: ' + glassStep); process.exit(1) }
 
 /* Phase A: nothing durable yet, so NOTHING may reach the wire and both edits
    must be HELD (page-local) for the later replay. `section` in this fake always
@@ -235,18 +236,18 @@ scope2.serve()
 if (scope2.served === true) pass('served the namespace: snapshot flipped to ready')
 
 const writes = scope2.wireWrites
-/* The toggle ran while the namespace was unserved, so it decided against the
-   client's own fallback default (终末地灰) and wrapped to valley; the served
-   document holds wuling, so a replayed write of valley both proves the replay
-   and differs from what the host already had. */
-const palReplayed = writes.some(([f, v]) => f === 'palette' && v === 'valley')
+/* Both toggles ran while the namespace was unserved, so each decided against
+   the client's own fallback default and away from the served document's stored
+   value (glass=off), so a replayed write both proves the replay and differs
+   from what the host already had. */
+const glassReplayed = writes.some(([f, v]) => f === 'glass' && v === 'standard')
 const radReplayed = writes.some(([f, v]) => f === 'radius' && v === 'round')
-if (palReplayed) pass('held palette=valley replayed once the namespace became ready')
-else fail('palette=valley was never replayed; write list = ' + JSON.stringify(writes))
+if (glassReplayed) pass('held glass=standard replayed once the namespace became ready')
+else fail('glass=standard was never replayed; write list = ' + JSON.stringify(writes))
 if (radReplayed) pass('held radius=round replayed once the namespace became ready')
 else fail('radius=round was never replayed; write list = ' + JSON.stringify(writes))
-if (scope2.wireValue('radius') === 'round' && scope2.wireValue('palette') === 'valley') pass('host section now holds both held edits')
-else fail('host section did not receive both edits: radius=' + scope2.wireValue('radius') + ' palette=' + scope2.wireValue('palette'))
+if (scope2.wireValue('radius') === 'round' && scope2.wireValue('glass') === 'standard') pass('host section now holds both held edits')
+else fail('host section did not receive both edits: radius=' + scope2.wireValue('radius') + ' glass=' + scope2.wireValue('glass'))
 
 if (failures === 0) pass('all durable-hold checks passed')
 else { console.error('\n' + failures + ' durable-hold check(s) FAILED'); process.exit(1) }

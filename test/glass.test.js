@@ -6,8 +6,8 @@ const {launch,boot}=require('./fixtures/chrome-cdp.js')
   await boot(browser,path.resolve(__dirname,'..'))
   assert.equal(await browser.evaluate('document.body.hasAttribute("data-endfield-glass")'),false)
   const original=await browser.evaluate('JSON.stringify(document.querySelector("[data-composer-card]").getBoundingClientRect().toJSON())')
-  for(const dark of [false,true])for(const palette of ['valley','wuling']) {
-    await browser.evaluate(`document.body.toggleAttribute('data-ds-dark-theme',${dark});__prefs.setItem('dsh-theme-endfield-palette',${JSON.stringify(palette)})`)
+  for(const dark of [false,true]) {
+    await browser.evaluate(`document.body.toggleAttribute('data-ds-dark-theme',${dark})`)
     for(const [level,radius,alpha] of [['subtle',8,dark?.64:.68],['standard',14,dark?.76:.8],['strong',22,dark?.88:.9]]){
       await browser.evaluate(`__prefs.setItem('dsh-theme-endfield-glass',${JSON.stringify(level)})`)
       const material=await browser.evaluate(`(()=>{const e=document.querySelector('[data-composer-card]'),s=getComputedStyle(e);return {filter:s.backdropFilter,background:s.backgroundColor,box:JSON.stringify(e.getBoundingClientRect().toJSON())}})()`)
@@ -29,7 +29,7 @@ const {launch,boot}=require('./fixtures/chrome-cdp.js')
     assert.notDeepEqual(colors.hover,colors.selection)
     assert.ok(contrast(colors.ink,colors.hover)>=4.5)
     assert.ok(contrast(colors.selectedInk,colors.selection)>=4.5)
-    console.log('PASS:',dark?'dark':'light',palette,'glass tiers, stable geometry, readable hover and selection')
+    console.log('PASS:',dark?'dark':'light','glass tiers, stable geometry, readable hover and selection')
   }
   await browser.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'}]})
   assert.equal(await browser.evaluate('getComputedStyle(document.querySelector("[data-composer-card]")).backdropFilter'),'none')

@@ -1,39 +1,32 @@
 /**
  * shoot.js — render the real client.js over a mock of the app and save PNGs for
- * visual review: both colour schemes x both accent palettes (谷地黄 / 武陵青).
- * Correctness checks live in the .test.js files; this exists purely so the result
- * can be LOOKED at.
+ * visual review: both colour schemes under the one shipped accent palette
+ * (谷地黄 #fff500), plus one watermark shot. Correctness checks live in the
+ * .test.js files; this exists purely so the result can be LOOKED at.
  *
  * Usage: node test/shoot.js
  */
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
-const { execFileSync } = require('child_process')
+/* Browser plumbing (launch + CDP screenshot) is shared — see
+   test/fixtures/chrome-cdp.js. The old spawnSync(--screenshot) path hung on
+   this page under Chrome 152's Chrome-for-Testing build: headless screenshot
+   mode never reached its idle determination while the theme's observers were
+   alive, and --virtual-time-budget only made the hang stochastic. CDP lets the
+   harness decide when the page is painted and capture on demand. */
+const { launch } = require('./fixtures/chrome-cdp.js')
 
 const ROOT = path.resolve(__dirname, '..')
 /* Unlike the .test.js files this one deliberately KEEPS its output (the PNGs are
    the point), so it writes to a gitignored scratch directory rather than a temp
    dir that is hard to find afterwards. */
 const OUT = path.join(ROOT, '.kagent', 'shots')
-const chrome = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/usr/bin/chromium-browser',
-  '/usr/bin/chromium',
-].filter(Boolean).find((p) => fs.existsSync(p))
-if (!chrome) { console.error('no chrome (set CHROME_PATH)'); process.exit(1) }
 
 /* Mock of the real conversation page. Class names and the opaque bg-base fills
    are copied from the installed @deepseek-ai bundles so the screenshot exercises
-   the same background-stacking problem the live app has.
-   `wuling` selects the 武陵青 palette exactly the way the settings row does: by
-   putting the class on <body>. Nothing else differs between the two renders,
-   which is the point — if a surface does not change colour, it is not reading
-   the palette variables. */
-const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta charset="utf-8"><style>
+   the same background-stacking problem the live app has. The accent is 谷地黄,
+   declared on the plain body block — no palette class exists to flip. */
+const mk = (dark, watermark) => `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
   :root{
     --dsw-alias-bg-base:${dark ? '#101110' : '#e8e8e2'};
@@ -113,7 +106,7 @@ const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta chars
     <div class="pI_x6G_sidebarCol"><div class="side">
       <button class="x_newSession">+ 新建会话</button>
       <b>Sessions</b>
-      <div class="row selected">武陵青 / 谷地黄 配色</div>
+      <div class="row selected">谷地黄 配色</div>
       <div class="row">theme tokens</div>
           <div class="row">watermark</div>
     </div></div>
@@ -128,16 +121,16 @@ const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta chars
       </div>
       <div class="wSkVaW_viewArea"><div class="col">
         <div class="turn"><div class="who">User</div>
-          <div class="msg">帮我做一个新配色，可以在设置切换使用黄色和这个配色（武陵青 #14d0d0）。</div></div>
+          <div class="msg">把整套界面的强调色换成终末地官网的信号黄 #fff500，只保留这一套配色。</div></div>
         <div class="turn"><div class="who">Assistant</div>
-          <div class="msg">Every accent in the stylesheet now reads from one palette variable
-          block, so the whole theme repaints from a single class on &lt;body&gt;. This paragraph
-          exists to prove body text keeps full contrast in either palette — the background
-          sits behind it, and the accent never touches running text.</div>
-          <table><thead><tr><th>role</th><th>谷地黄</th><th>武陵青</th></tr></thead>
-          <tbody><tr><td>solid fill + ink</td><td>16.50:1</td><td>6.62:1</td></tr>
-          <tr><td>dark icon ink</td><td>15.26:1</td><td>6.12:1</td></tr></tbody></table>
-          <div class="card">palette ${palette === 'wuling' ? '武陵青 #14d0d0' : palette === 'gray' ? '终末地灰 #d9d9d9/#6a6a6a' : '谷地黄 #fff500'} · scheme ${dark ? 'dark' : 'light'}${watermark ? ' · watermark' : ''}</div>
+          <div class="msg">Every accent in the stylesheet now reads from the palette variable
+          block on &lt;body&gt;, so the whole theme paints the one yellow through tokens and
+          rules alike. This paragraph exists to prove body text keeps full contrast —
+          the background sits behind it, and the accent never touches running text.</div>
+          <table><thead><tr><th>role</th><th>谷地黄</th></tr></thead>
+          <tbody><tr><td>solid fill + ink</td><td>16.50:1</td></tr>
+          <tr><td>dark icon ink</td><td>15.26:1</td></tr></tbody></table>
+          <div class="card">palette 谷地黄 #fff500 · scheme ${dark ? 'dark' : 'light'}${watermark ? ' · watermark' : ''}</div>
         </div>
       </div></div>
       <div class="wSkVaW_composerSeat"><div class="composer">Message DeepSeek Harness…</div></div>
@@ -151,7 +144,7 @@ const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta chars
      the localStorage store, so the LS.setItem calls this page used to make were
      silently ignored — every shot rendered the default palette. */
   const __prefs=(()=>{
-    const sec={enabled:'1',palette:${JSON.stringify(palette)},radius:'square',watermark:${watermark ? "'1'" : "'0'"},watermarkPersist:${watermark ? "'1'" : "'0'"},loader:'0',thunder:'0',thunderAnim:'0'}
+    const sec={enabled:'1',radius:'square',watermark:${watermark ? "'1'" : "'0'"},watermarkPersist:${watermark ? "'1'" : "'0'"},loader:'0',thunder:'0',thunderAnim:'0'}
     const ls=[]
     return { binder:{ bind:()=>({
       getSnapshot:()=>({status:'ready',value:sec,writable:true,mode:'host'}),
@@ -180,25 +173,34 @@ const mk = (dark, palette, watermark) => `<!doctype html><html><head><meta chars
 
 fs.mkdirSync(OUT, { recursive: true })
 fs.copyFileSync(path.join(ROOT, 'client.js'), path.join(OUT, 'client.js'))
-/* Three palettes x two schemes, plus one watermark-on shot of the default
-   palette so the official-emblem lockup (emblem + ENDFIELD letters) lands in a
-   real render that a human can open next to the assertions. */
-const shots = []
-for (const palette of ['valley', 'wuling', 'gray']) {
-  for (const dark of [false, true]) shots.push({ palette, dark, watermark: false })
-}
-shots.push({ palette: 'gray', dark: false, watermark: true })
-for (const { palette, dark, watermark } of shots) {
-  const name = 'shot-' + palette + '-' + (dark ? 'dark' : 'light') + (watermark ? '-wm' : '')
-  const page = path.join(OUT, name + '.html')
-  fs.writeFileSync(page, mk(dark, palette, watermark))
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shot-'))
-  execFileSync(chrome, [
-    '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--virtual-time-budget=4000', '--window-size=1440,900',
-    '--user-data-dir=' + tmp,
-    '--screenshot=' + path.join(OUT, name + '.png'),
-    'file:///' + page.replace(/\\/g, '/'),
-  ], { timeout: 120000, stdio: ['ignore', 'ignore', 'ignore'] })
-  console.log('wrote ' + path.join(OUT, name + '.png'))
-}
+/* Both schemes under the one palette, plus one watermark-on shot so the
+   official-emblem lockup (emblem + ENDFIELD letters) lands in a real render
+   that a human can open next to the assertions. */
+const shots = [
+  { dark: false, watermark: false },
+  { dark: true, watermark: false },
+  { dark: false, watermark: true },
+]
+;(async () => {
+  for (const { dark, watermark } of shots) {
+    const name = 'shot-valley-' + (dark ? 'dark' : 'light') + (watermark ? '-wm' : '')
+    const page = path.join(OUT, name + '.html')
+    fs.writeFileSync(page, mk(dark, watermark))
+    const browser = await launch({
+      width: 1440, height: 900, dpr: 1,
+      url: 'file://' + page.replace(/\\/g, '/'),
+      args: ['--hide-scrollbars'],
+    })
+    try {
+      await browser.until("document.readyState === 'complete'", 15000)
+      /* The theme mounts synchronously during load (the fixture nudges the
+         observers before load completes); one paint frame is enough for the
+         watermark and accent surfaces to land in the capture. */
+      await browser.sleep(400)
+      await browser.screenshotTo(path.join(OUT, name + '.png'))
+    } finally {
+      await browser.close()
+    }
+    console.log('wrote ' + name + '.png')
+  }
+})().catch((e) => { console.error(e && e.stack ? e.stack : e); process.exit(1) })

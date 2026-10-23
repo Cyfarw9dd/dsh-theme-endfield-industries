@@ -8,7 +8,7 @@
  * unmount) and every feature surface it writes through (motionSync, watermark,
  * loader, toasts, attention, audio). The panel is otherwise verbatim the code
  * that lived in the entry — including its useState ORDER, which
- * test/settings-config-forms.test.js pins by index (hooks[4] === palette).
+ * test/settings-config-forms.test.js pins by index (hooks[4] === glass).
  */
 import { ENDFIELD_NS, LOCALE_ZH, LOCALE_EN } from './dictionaries.js'
 
@@ -67,7 +67,6 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
         const [wmOn, setWmOn] = R.useState(watermark.isOn())
         const [wmPersist, setWmPersist] = R.useState(watermark.isPersistOn())
         const [loaderOn, setLoaderOn] = R.useState(loader.isOn())
-        const [palette, setPalette] = R.useState(motionSync.readPalette())
         const [glass, setGlass] = R.useState(motionSync.readGlass())
         const [texture, setTexture] = R.useState(motionSync.readTexture())
         const [mode, setMode] = R.useState(prefs.get(motionSync.RADIUS_KEY) || 'square')
@@ -135,8 +134,8 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
             setNotifyDone(toasts.isDoneOn())
             setNotifyQuestion(toasts.isQuestionOn())
             setNotifyApprove(toasts.isApproveOn())
-            setPalette(motionSync.readPalette())
             setGlass(motionSync.readGlass())
+            setTexture(motionSync.readTexture())
             setMode(prefs.get(motionSync.RADIUS_KEY) || 'square')
             setMotion(motionSync.readMotion())
             /* The 音频 rows seed themselves from the same store, so they are
@@ -230,7 +229,7 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
            variable of the same name. Those two can disagree, and when they do
            the toggle writes the WRONG value to the durable section:
 
-             - the initial useState(readPalette()) runs while the Host section
+             - the initial useState(read*()) runs while the Host section
                is still 'loading', so it seeds the schema DEFAULT;
              - the mount effect re-derives it, but that pass and any later
                subscription pass only run on a store event, so a panel that
@@ -255,16 +254,6 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
              would stay dead until the next page load. (The reconciler
              installed below covers the same cases on the next section echo;
              this keeps the panel's own click path immediate.) */
-        }
-        /* Palette selection via <select>. Everything visual is carried by the
-           class flip inside syncPaletteClass(); a select fires onChange with
-           the chosen value, so no cycle order is needed. */
-        const setPaletteValue = (value) => {
-          if (value !== 'gray' && value !== 'valley' && value !== 'wuling') return
-          if (value === motionSync.readPalette()) return
-          prefs.set(motionSync.PALETTE_KEY, value)
-          setPalette(value)
-          motionSync.syncPaletteClass()
         }
         const toggleWm = () => {
           const next = !watermark.isOn()
@@ -332,8 +321,8 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
           else loader.destroy()
         }
         const replayLoader = () => { loader.replay() }
-        /* Radius as a select (was a cycle button): the same shape as the
-           palette row — the current value preselects, onChange writes through. */
+        /* Radius as a select (was a cycle button): the current value
+           preselects, onChange writes through. */
         const setRadiusValue = (value) => {
           if (value !== 'square' && value !== 'round') return
           if (value === (prefs.get(motionSync.RADIUS_KEY) || 'square')) return
@@ -605,23 +594,6 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
                 value: enabled ? '1' : '0', ariaLabel: t('themeRow'),
                 options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
                 onChange: setThemeValue,
-              })
-            ]),
-            row('palette', false, [
-              R.createElement('span', { style: labelStyle },
-                t('paletteRow'),
-                R.createElement('span', { style: hintStyle },
-                  t('paletteHint' + (palette === 'gray' ? 'Gray' : palette === 'wuling' ? 'Wuling' : 'Valley'))
-                )
-              ),
-              endfieldSelect({
-                value: palette, ariaLabel: t('paletteRow'),
-                options: [
-                  { value: 'gray', label: t('paletteGray') },
-                  { value: 'valley', label: t('paletteValley') },
-                  { value: 'wuling', label: t('paletteWuling') },
-                ],
-                onChange: setPaletteValue,
               })
             ]),
             row('motion', false, [
