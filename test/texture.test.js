@@ -80,10 +80,21 @@ const varIn = (block, name) => {
    the attribute's PRESENCE, and a stale 'off' value then painted the texture
    anyway (measured). The overlays are therefore gated on explicit values, and
    this assertion pins that: 'subtle' must name the overlay by value. */
-if (/body\[data-endfield-texture='subtle'\]:not\(:has\(> \[data-endfield-watermark\]\)\) \[class\$='_centerCol'\] \[class\$='_root'\]\[data-phase\]::before/.test(css)) {
-  pass('叠加层按值命中会话根（后代匹配，容忍插槽包装层；水印挂 body 时让位）')
+if (/body\[data-endfield-texture='subtle'\] \[class\$='_centerCol'\] \[class\$='_root'\]\[data-phase\]::before/.test(css)) {
+  pass('叠加层按值命中会话根（后代匹配，容忍插槽包装层）')
 } else {
   fail('叠加层没有按值匹配——属性残留 off 时纹理仍会画（按存在匹配的老写法）')
+}
+/* Tripwire: the hero watermark used to be a body-level child, which forced a
+   :not(:has(> [data-endfield-watermark])) exception on these rules and shipped
+   the hero page without grid/hatch. The mark now mounts inside the column in
+   BOTH modes (decor/watermark.js), so the exception must stay gone — if it
+   creeps back, the hero texture silently dies again. Comments are stripped so
+   the historical mention of the pattern (design notes) cannot self-trip this. */
+if (!/:not\(:has\(> \[data-endfield-watermark\]\)\)/.test(css.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+  pass('纹理不再对水印让位（水印已挂列内，hero 页同享底纹）')
+} else {
+  fail('纹理仍有水印例外——hero 页底纹会被静默关掉（水印已改挂列内，例外即回归）')
 }
 if (/data-endfield-texture='standard'/.test(css)) pass('CSS carries the standard tier')
 else fail('no CSS rules for tier standard')

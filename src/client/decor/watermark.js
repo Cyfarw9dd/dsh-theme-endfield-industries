@@ -13,16 +13,15 @@
  *   WATERMARK_PERSIST_KEY — "keep showing it off the hero page" (default OFF),
  *     which also paints it on an active conversation / settings / any other page.
  * On the hero page the mark is centred on the headline. Off the hero page there
- * is no headline to follow, so it is centred in the conversation column instead
- * and mounted INSIDE that column rather than on <body>: a fixed body child
- * paints above the message text (it has no z-index competitor to lose to),
- * which would wash out what the user is reading. See mountPointFor().
- *
- * Both placements must stay strictly BEHIND the app's own chrome. That is a
- * z-index question in the hero case and it is genuinely subtle -- see the long
- * note on s.zIndex in styleWatermark(); it is locked down by
- * test/watermark-stacking.test.js, which compares real screenshots because a
- * pointer-events:none layer cannot be hit-tested.
+ * is no headline to follow, so it is centred in the conversation column instead.
+ * Both modes mount INSIDE the column they decorate at z-index -1 (2026-10-24:
+ * the hero placement used to be a <body> child, which forced the texture
+ * stylesheet to skip the hero column's isolation and shipped the hero page
+ * without the grid/hatch overlays — history in the note on s.zIndex in
+ * styleWatermark()). Both placements must stay strictly BEHIND the app's own
+ * chrome; that is locked down by test/watermark-stacking.test.js, which
+ * compares real screenshots because a pointer-events:none layer cannot be
+ * hit-tested.
  */
 export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   const WATERMARK_KEY = 'dsh-theme-endfield-watermark'
@@ -37,13 +36,15 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
      data-phase is rendered ONLY on ConversationRoot (settling|hero|active) and
      a status dot, and only ConversationRoot's class ends in '_root', so
      [class$='_root'][data-phase=…] names the conversation column exactly. */
-  const isHeroVisible = () => {
-    if (typeof document === 'undefined') return false
+  const findHeroRoot = () => {
+    if (typeof document === 'undefined') return null
     const hero = document.querySelector('[class$="_root"][data-phase="hero"]')
-    if (!hero) return false
+    if (!hero) return null
     const r = hero.getBoundingClientRect()
-    return r.width > 0 && r.height > 0
+    if (r.width === 0 || r.height === 0) return null
+    return hero
   }
+  const isHeroVisible = () => findHeroRoot() !== null
   /** The visible conversation column — the persist-mode anchor and mount parent. */
   const findConversationRoot = () => {
     if (typeof document === 'undefined') return null
@@ -66,13 +67,19 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   let watermarkEl = null
   let watermarkRaf = null
   let watermarkHost = null
-  /* Where the mark belongs for the current page, and how it must stack there:
-       hero    -> <body>, above the (empty) hero backdrop, following the headline.
-       persist -> inside the conversation column, BEHIND the message text.
+  /* Where the mark belongs for the current page, and how it must stack there.
+     Both modes mount INSIDE the element they decorate (2026-10-24: hero used to
+     be a <body> child at z-index 0 — a body-level mark can never sit BETWEEN
+     the column's background and its content, which forced the texture
+     stylesheet to skip the hero column's isolation and ship the hero page
+     without grid/hatch; in-column at z-index -1 the whole question dissolves):
+       hero    -> the hero column root, centred on the headline (follow loop).
+       persist -> the conversation column, filling it, BEHIND the message text.
      Returning the parent alongside the mode keeps the two decisions in one place,
      so remount happens exactly when either the parent or the stacking changes. */
   const mountPointFor = () => {
-    if (isHeroVisible()) return { mode: 'hero', parent: document.body }
+    const hero = findHeroRoot()
+    if (hero !== null) return { mode: 'hero', parent: hero }
     const conv = findConversationRoot()
     if (conv !== null) return { mode: 'persist', parent: conv }
     // No conversation column on screen (e.g. a full-page settings view). A body
@@ -97,14 +104,23 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
     if (!headline) return
     const r = headline.getBoundingClientRect()
     if (r.width === 0 || r.height === 0) return
+    /* The mark is an absolutely positioned child of the hero column, so the
+       centre it aims at is the HOST's centre, not the viewport's (the old body
+       mount was a viewport-wide strip and used innerWidth/2 here). Both rects
+       are viewport coordinates, so the difference is host-relative and
+       scroll-stable: when the column scrolls, headline and host move together
+       and the written values simply stop changing. */
+    const host = watermarkEl.parentElement
+    if (!host) return
+    const hr = host.getBoundingClientRect()
     const cy = r.top + r.height / 2
     const cx = r.left + r.width / 2
     const vw = (typeof window !== 'undefined' && window.innerWidth) || (typeof document !== 'undefined' ? document.documentElement.clientWidth : 0)
     // Half the logo box: 13vw wide (240px cap) x square aspect / 2 (see the
     // ::after sizing and the height calc in styleWatermark).
     const half = vw * 0.13 * 0.51
-    const top = (cy - half) + 'px'
-    const tx = 'translateX(' + (cx - vw / 2) + 'px)'
+    const top = (cy - half - hr.top) + 'px'
+    const tx = 'translateX(' + (cx - (hr.left + hr.width / 2)) + 'px)'
     // Only write when the value actually changed, so a stable layout costs nothing.
     if (watermarkEl.style.top !== top) watermarkEl.style.top = top
     if (watermarkEl.style.transform !== tx) watermarkEl.style.transform = tx
@@ -149,29 +165,29 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
        needs a slightly HIGHER alpha than the letters to read as part of the
        same mark, and one element-level opacity cannot express that. */
     if (mode === 'hero') {
-      s.position = 'fixed'
+      /* In-column absolute (2026-10-24; was a body-level position:fixed strip).
+         The hero column gets isolation:isolate + position:relative from the
+         same :has() rule as the persist mode (tokens.css), so -1 paints above
+         the column's own opaque background and strictly below its content.
+         History of the body-level era: the hero composer wrapper
+         ('*_composerHero') is position:relative + z-index:1 and traps the
+         model-select menu's z-index:20 inside it; a body-level mark at
+         z-index:1 tied with it and won by DOM order, painting over the
+         dropdown (12027 changed px inside the opaque menu box, measured). The
+         z-index:0 fix lost those ties — but a body-level mark can never sit
+         BETWEEN the column's background and its content, which forced the
+         texture stylesheet to skip hero isolation and ship the hero page
+         without grid/hatch. Mounting in-column dissolves the question: the
+         mark (-1) < composerHero (1) < dropdown (20) all stack inside one
+         context. Verified by test/watermark-stacking.test.js. */
+      s.position = 'absolute'
       s.left = '0'
       s.right = '0'
       s.top = ''
       s.bottom = ''
       /* Logo-only box: 13vw wide (240px cap) x the square viewBox. */
       s.height = 'calc(min(13vw, 240px) * 1.02)'
-      /* z-index 0, NOT 1 — this is the fix for the wordmark painting on top of
-         the app's own popovers, and the cause was a z-index TIE:
-           the hero composer wrapper ('*_composerHero') is position:relative +
-           z-index:1, so it IS a stacking context and the model-select menu's
-           z-index:20 is trapped inside it; that 20 never competes at body level.
-         The mark used to be z-index:1 too — the same level as composerHero in
-         the root stacking context — and ties are broken by DOM order. Appended
-         to <body> last, the mark won every tie and painted over the whole
-         composer subtree, dropdown included (measured: 12027 changed pixels
-         inside the opaque menu box, matching 11002 px found in a real capture).
-         At 0 it loses to composerHero (1), the tabs (1) and the composer seat
-         (7), yet still paints ABOVE the app frame's own opaque bg-base: the
-         frame is position:relative with z-index:auto, so it creates no stacking
-         context, both boxes paint in the same step, and the mark is still the
-         later sibling. Verified by test/watermark-stacking.test.js. */
-      s.zIndex = '0'
+      s.zIndex = '-1'
       s.fontSize = '9.5vw'
       s.transform = ''
     } else {

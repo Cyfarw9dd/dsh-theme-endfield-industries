@@ -64,15 +64,16 @@
          data-phase 只出现在 ConversationRoot 上（水印查找器 findConversationRoot
          用的正是这个钩子），比标签后缀更精确。
 
-         **水印共存例外（:not(:has(> [data-endfield-watermark]))）**：水印挂 body
-         时（hero 页），隔离根会让整个根子树（含 z:20 的下拉框）变成一个
-         z:auto 单元，被 body 级水印按 DOM 顺序压过——水印自己修过的那类 bug
-         （见 test/watermark-stacking.test.js 头注）。所以**只在 body 直接挂着
-         水印时**不隔离；此时网格/斜纹两个叠加层随之不可见（落在根底色后面），
-         波纹/光晕是背景图层、不受影响。水印关闭或在会话内（挂根上）时，
-         hero 页也有完整底纹。这是水印 :has 条件隔离同一门派的用法。 */
-      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase],
-      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase] {
+         **水印不再需要例外（2026-10-24）**：hero 水印曾是 body 级子元素——隔离根
+         会让整个根子树（含 z:20 的下拉框）变成一个 z:auto 单元、被 body 级水印按
+         DOM 顺序压过，所以这里曾用 :not(:has(> [data-endfield-watermark])) 在
+         hero 页跳过隔离，代价是 hero 页没有网格/斜纹。现在水印两种模式都挂在
+         列内（z:-1，见 decor/watermark.js 与 tokens.css 的 :has 隔离规则），
+         层叠全部收进列这一个上下文：水印 (-1) < composerHero (1) < 下拉框 (20)，
+         hero 页与会话页同享完整底纹。回归由 test/watermark-stacking.test.js 的
+         像素比对看守。 */
+      body[data-endfield-texture='subtle'] [class$='_centerCol'] [class$='_root'][data-phase],
+      body[data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
         position: relative;
         isolation: isolate;
       }
@@ -80,8 +81,8 @@
       /* 网格：官方 decoFlag 的复刻。**颜色渐变自己带着那条 180° 淡出**（上半实、
          往下渐透明），SVG 遮罩只负责形状——两层职责分开，就不用碰多遮罩的合成
          语义（mask 列表默认 add=并集，并出来的结果是整面色块，实测过）。 */
-      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::before,
-      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::before {
+      body[data-endfield-texture='subtle'] [class$='_centerCol'] [class$='_root'][data-phase]::before,
+      body[data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase]::before {
         content: '';
         position: absolute;
         inset: 0;
@@ -100,8 +101,8 @@
 
       /* 斜纹：官方 shallowBg 的复刻——**底部一条带**（32.8125rem 高，窄视口收到
          45%），单一遮罩做 0° 淡出（底边最实、往上渐透明），纹路周期与停靠值照官方。 */
-      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::after,
-      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::after {
+      body[data-endfield-texture='subtle'] [class$='_centerCol'] [class$='_root'][data-phase]::after,
+      body[data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase]::after {
         content: '';
         position: absolute;
         left: 0;
