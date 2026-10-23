@@ -1,5 +1,5 @@
-chore(release): v0.2.1-rc.2 — validated against @deepseek-ai/dsh 0.2.1-rc.2
+chore(release): v0.2.1-rc.3 — validated against @deepseek-ai/dsh 0.2.1-rc.3
 
 - Contract drift probe + full test suite all green (found via the next channel)
-- dist-tags snapshot: {"latest":"0.2.0-rc.2","alpha":"0.2.1-alpha.5","next":"0.2.1-rc.2"}
-- Validation run: https://github.com/Cyfarw9dd/dsh-theme-endfield-industries/actions/runs/39122485295
+- dist-tags snapshot: {"alpha":"0.2.1-alpha.5","next":"0.2.1-rc.3","latest":"0.2.1-rc.2"}
+- Validation run: https://github.com/Cyfarw9dd/dsh-theme-endfield-industries/actions/runs/39948629004
