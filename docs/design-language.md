@@ -271,7 +271,7 @@ DSH 自带 DeepSeek 品牌蓝。主题把这些令牌整组重映射，否则会
 
 **锚点是会话根，不是 `_centerCol`**——`_centerCol` 里面还有一层**不透明的** `wSkVaW_root`（`background:var(--dsw-alias-bg-base); height:100%`）。挂在 `_centerCol` 上的 `z-index:-1` 叠加层会画在那层不透明底**之下**、整段纹理无声消失（像素实测零变化）；挂到根上才真正落在「根底色之上、正文之下」。侧栏与外框不挂纹理；往 `_frame`/`_sidebarCol` 上铺等于整窗平铺，测试里有绊线专门防这个回归。
 
-**水印共存是例外，且只在水印真挂 body 时**：选择器带 `:not(:has(> [data-endfield-watermark]))`——水印挂 body（hero 页）时隔离根会让整个根子树变成一个 z:auto 单元，被 body 级水印按 DOM 顺序压过（水印自己修过的那类 bug，见 `test/watermark-stacking.test.js` 头注）。此时网格/斜纹让位、波纹/光晕照常（背景图层不建层叠上下文）；水印关闭或在会话内时，hero 页也有完整底纹。这与水印自己的 `:has` 条件隔离是同一门派。另一个实测教训：**选择器不要求 root 是 centerCol 的直接子元素**——插槽挂载会有包装层，`>` 会整段静默失配（用户报「看不到底纹」的根因之一），所以用后代 + `[data-phase]`（只在 ConversationRoot 上出现，水印查找器用的同一钩子）。
+**水印与底纹同栈共存（2026-10-24 起）**：水印两种模式（hero / 保持显示）都挂在会话列内部、取 `z-index:-1`（该列在水印挂载期间由 `:has()` 守卫获得 `isolation:isolate` 与 `position:relative`）——层叠全部收进列这一个上下文：水印 (-1) < composerHero (1) < 下拉框 (20)，hero 页与会话页同享完整底纹，回归由 `test/watermark-stacking.test.js` 的像素比对看守。此前 hero 水印是 body 级子元素：隔离根会让整个根子树变成一个 z:auto 单元、被它按 DOM 顺序压过，于是底纹选择器曾带 `:not(:has(> [data-endfield-watermark]))` 在 hero 页跳过隔离（代价：hero 页没有网格/斜纹）；水印改挂列内后该例外整体删除。另一个实测教训：**选择器不要求 root 是 centerCol 的直接子元素**——插槽挂载会有包装层，`>` 会整段静默失配（用户报「看不到底纹」的根因之一），所以用后代 + `[data-phase]`（只在 ConversationRoot 上出现，水印查找器用的同一钩子）。
 
 四条实现要点，每条都是踩过才写下来的：
 

@@ -255,9 +255,9 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 
 真实截图里量到的越界像素为 11002 px（合成色 `#464844` = `#f5f5f0` 以 α0.13 叠在菜单底色 `#2c2e2a` 上，逐位吻合），与复现值同量级。
 
-### 保持显示的水印：会话列内部，`z-index: -1`
+### 水印的挂载：会话列内部，`z-index: -1`（两种模式同栈）
 
-非 hero 页面没有标题可跟随，而一个 fixed 的 body 子节点会画在消息文字**之上**（它没有 `z-index` 竞争者可输给）。所以改为挂进会话列内部并取 `z-index: -1`，需要该列同时具备两个属性（仅在水印挂载期间，由 `:has()` 守卫）：
+非 hero 页面没有标题可跟随，而一个 fixed 的 body 子节点会画在消息文字**之上**（它没有 `z-index` 竞争者可输给），所以保持显示模式从一开始就挂在会话列内部。2026-10-24 起 hero 模式改为同一挂法（原先挂 `<body>`：body 级元素永远无法插进「列底色与正文之间」，工业底纹被迫在 hero 页整体让位；见 [design-language.md](design-language.md) 底纹节与 `test/watermark-stacking.test.js`）。统一后两种模式都取列内 `z-index: -1`，需要该列同时具备两个属性（仅在水印挂载期间，由 `:has()` 守卫）：
 
 - `isolation: isolate` —— 没有层叠上下文时 `z-index:-1` 会逃到最近的祖先上下文，画到该列自己的不透明底色**后面**，即完全不可见；
 - `position: relative` —— 该列原生是 `position:static`，绝对定位子元素会对着应用外框解析，横跨侧栏溢出。

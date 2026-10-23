@@ -15,6 +15,17 @@
  * stacking context. A z-index tie is broken by DOM order and the watermark is
  * appended last, so it won every tie against the whole composer subtree.
  *
+ * ── The mount, as of 2026-10-24 ──────────────────────────────────────────────
+ * The hero mark no longer lives at <body>: it mounts INSIDE the hero column
+ * (the [class$='_root'][data-phase] element) at z-index:-1, on a column that
+ * gets isolation:isolate + position:relative from the :has() rule in
+ * tokens.css. The dropdown then beats it INSIDE the column's own stacking
+ * context (mark -1 < composerHero 1 < menu 20) — and the industrial-texture
+ * overlays can isolate the same column, which a body-level mark made
+ * impossible (it forced a watermark exception that shipped the hero page
+ * without grid/hatch). The test asserts the mount itself too: parent = the
+ * hero column, z-index = -1.
+ *
  * ── Why this test compares PIXELS and not elementsFromPoint ──────────────────
  * The first version of this file hit-tested with document.elementsFromPoint().
  * That can NEVER work here: the watermark sets `pointer-events:none !important`,
@@ -373,6 +384,25 @@ console.log('')
 
 if (!g.mounted) fail('watermark never mounted -- the mock does not reproduce the page')
 else pass('watermark mounted in ' + g.mode + ' mode')
+/* The mount itself is part of the contract: a body-level hero mark would force
+   the texture stylesheet back into skipping hero isolation (no grid/hatch on
+   the hero page), so pin parent + z-index here. */
+if (g.mode !== 'hero') {
+  fail('expected hero mode on the hero fixture, got ' + g.mode)
+} else {
+  pass('hero mode active')
+}
+if (g.parent === 'body' || !/_root$/.test(String(g.parent))) {
+  fail('hero watermark mounts at ' + g.parent + ' — it must live INSIDE the hero'
+    + '\n      column (a body-level mark forces the texture stylesheet to skip hero isolation)')
+} else {
+  pass('mark mounted inside the hero column (' + g.parent + ')')
+}
+if (g.zIndex !== '-1') {
+  fail('hero watermark z-index is ' + g.zIndex + ', expected -1 (in-column stacking)')
+} else {
+  pass('mark stacks at z-index -1 inside the isolated column')
+}
 
 // The comparison window must be the real popover, found in the pixels.
 if (!c.box || c.fillPx < 5000) {
@@ -415,8 +445,14 @@ if (c.outBox < 2000) {
    pointless. Contrast states that independently of the scheme's own colours.
    The ceiling is per-scheme because adding luminance to a near-black page reads
    louder than subtracting it from cream at the same ratio -- which is exactly
-   why dark mode carries the lower alpha. */
-const CEIL = DARK ? 1.32 : 1.40
+   why dark mode carries the lower alpha.
+   Light ceiling recalibrated 2026-10-24: the in-column mount changed the
+   transform's subpixel phase, and the most-changed-pixel sampler now lands on
+   a FULL-COVERAGE stroke pixel instead of an antialiased edge. The ink alphas
+   are unchanged (letters 0.13 -> 1.310:1, emblem 0.16 -> 1.400:1 over bg-base,
+   both computed); the measured 1.422 is the emblem's true stroke value, so the
+   old 1.40 was the understatement, not the mark getting stronger. */
+const CEIL = DARK ? 1.32 : 1.43
 if (c.ratio !== null && c.ratio !== undefined) {
   if (c.ratio > CEIL) {
     fail(scheme + '-mode watermark contrast is ' + c.ratio + ':1 -- too strong'
