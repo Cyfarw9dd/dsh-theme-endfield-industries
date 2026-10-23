@@ -24,13 +24,13 @@ dsh plugin --profile web rm dsh-theme-endfield-industries
 
 ## Features
 
-Adjust in **Settings › Endfield Theme Settings** (26 fields; all labels follow the DSH language setting, zh/en, switching live):
+Adjust in **Settings › Endfield Theme Settings** (23 fields; all labels follow the DSH language setting, zh/en, switching live):
 
 - **01 Theme**: master switch (off = native app look, no refresh needed, and the settings page stays readable while off); square/rounded corners; frosted glass (off by default); button motion (on by default, merged design: arrow slide-in on primary CTAs + 12px engineering corner brackets on session/search rows); industrial texture (off/light/full, **full** by default = the official `/operator` set: engineering grid + 45° hatching + two levels of waves and a top glow, anchored to the main content column only);
 - **02 Background**: the big `ENDFIELD` wordmark watermark (on by default, new-session page only, never intercepts interaction, protected against browser mistranslation) and a keep-showing toggle; the brand mark on the new-session page (the collab "Endfield Mark 3" above the headline, built as two alpha masks, painted in the asset's own colors in both light and dark);
 - **03 Animation**: boot loader animation (off by default; full-screen black + 10px progress rail on the left edge, ticks/percent travel with the fill head, with a hard failsafe timer and reduced-motion fallback);
-- **04 Notifications**: industrial-style notification cards (on by default) — task-done receipts auto-dismiss after 6s; question/approval cards persist until handled; sounds follow the audio-notification switch;
-- **05 Audio**: optional audio notifications (**master switch off by default**) — boot chime, turn start/end, needs-your-attention, plus a reserved error slot; volume, per-slot debounce interval, custom sound directory and a diagnostic log are adjustable. **Played by the host process**, not the browser, so you hear them even when the page is minimized. See [docs/cookbook/audio-notifications.md](docs/cookbook/audio-notifications.md).
+- **05 Notifications**: industrial-style notification cards (on by default) — task-done receipts auto-dismiss after 6s; question/approval cards persist until handled; sounds follow the audio-notification switch;
+- **06 Audio**: optional audio notifications (**master switch off by default**) — boot chime, turn start/end, needs-your-attention, plus a reserved error slot; volume, per-slot debounce interval, custom sound directory and a diagnostic log are adjustable. **Played by the host process**, not the browser, so you hear them even when the page is minimized. See [docs/cookbook/audio-notifications.md](docs/cookbook/audio-notifications.md).
 
 Several fixes are **automatic** and switchless: the official button contour material replicated on new-session/send/question-card buttons; conversation tabs restyled per the official SubpageTab language (gray wash on hover, steady highlight when active, `.2s` switching choreography); composer action chips hover in industrial gray; tooltips folded into the paper floating-surface family; the header preset badge restored to the accent color; contrast fixes for Settings › Models row actions, attachment carousel arrows, and more. The full list is in [docs/features.md § 其他自动生效的修正](docs/features.md).
 
