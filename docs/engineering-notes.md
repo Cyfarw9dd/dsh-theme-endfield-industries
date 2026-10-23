@@ -561,6 +561,22 @@ fO69Vq_addButton / _3nPmjq_addButton    （旧 `:not()` 排除的两个）
 
 > 亮色模式本来就不受影响（该规则是 `body[data-ds-dark-theme]` 限定），测试也如实只在暗色下报红——这本身就是"作用域写对了"的证据。
 
+### 九类：产物的作用域结构 ≠ 源码的作用域结构（设置面板整页空白）
+
+2026-10 的「设置 → 终末地主题设置」空白回归：导航行在、内容区空，**无异常无日志**。
+
+**根因是构建管线的，不是源码的。** 55e6a40 换 tsdown 管线后，rolldown 把 entry 以外的全部模块（`src/client/` 下除 `index.js` 外的一切，包括设置面板的组件闭包）**提升到产物 IIFE 顶层，挪出了 `factory(require)` 体**。真实页面上：
+
+- 组件闭包里 `typeof require` 是 `'undefined'`——`require` 只是 factory 的参数，词法上够不着被提升出去的代码；
+- DSH 前端**不下发全局 `React`**（框架代码封在模块作用域里，`window.React` 不存在）；
+- 于是组件里的 `typeof React !== 'undefined' ? React : require('react')` 两头落空，解析为 `null`，面板静默 `return null`。
+
+**为什么每道门都漏了**：`build-client --check` 是字节对比，证明不了产物的语义形状；进程内测试（包括已经在 vm 里执行产物的 `settings-rows.test.js`）把 React 桩挂在**沙箱全局**上——恰好走通查找的第一个分支，真实页面走的那条 require 路径从未被任何测试执行过。
+
+**修复**（083ac31）：React 的解析移进 `index.js` 的 `apply()`——产物里**唯一**留在 `factory(require)` 体内、模块种子 `require('react')` 可达的函数——作为 `react` 参数注入 `createSettingsSection`；组件首选注入值，全局拼写只作测试桩与宿主兜底；拿不到 React 时先 `console.warn` 一次再返回 `null`（静默空白不可诊断）。
+
+**铁律**：*产物里一段代码能看见什么变量，取决于 bundler 把它放进了哪个作用域。* 环境查找（全局、`require`）只允许发生在你能证明其作用域的地方（entry 的 `apply()`），结果一律通过参数传递。凡组件依赖运行环境提供的东西，必须有**产物级、环境形状一致**的测试兜底（`test/artifact-scope.test.js`：沙箱无全局 React，React 只经 factory 种子注入），`check.js` 第 8 节从结构上钉住契约两半。
+
 ---
 
 ## 验证方法论
@@ -653,3 +669,9 @@ headless 会挂起 / 合并 rAF，导致无论怎么设虚拟时钟都只采到 
 预算场景）完全不触发，静态守卫扫描的动效段也不含此规则。同一风暴里洗面/箭头/
 分隔线的 opacity 过渡零布局代价（基线与带过渡两版的 RecalcStyle 差值即
 text-indent 的逐帧样式重算）。`prefers-reduced-motion` 下整组过渡关闭。
+
+### 测试桩挂在全局上，会喂饱被测代码里不该走通的查找分支
+
+2026-10 空白回归（九类）漏网的另一半原因：进程内测试把 React 桩挂在**沙箱全局**，而组件解析 React 的写法是 `typeof React !== 'undefined' ? React : require('react')`——桩恰好命中第一个分支，真实页面走的 require 分支**从未被任何测试执行**。测试不是没覆盖这个组件，是覆盖了**另一个环境形状**。
+
+规则：被测代码里有「按环境有无而降级」的查找链时，桩必须挂在**真实页面供给它的那一级**（这里是 factory 参数 / 注入），而不是最省事的全局；至少要有一个测试用**真实形状**（该缺的缺着）跑通主路径。`test/artifact-scope.test.js` 固定了这两个形状：无全局 React + 种子注入（主路径）、两者皆无（降级路径要出声）。
