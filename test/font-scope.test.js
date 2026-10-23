@@ -45,7 +45,9 @@ const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 
 const ROOT = path.resolve(__dirname, '..')
-const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The panel moved to src/client/ui/settings/ with the module split; the class
+   name is still a JS string in the client source tree, so read the whole tree. */
+const src = sources.concatClientJs()
 const cssSrc = sources.concatCss()
 
 let failures = 0

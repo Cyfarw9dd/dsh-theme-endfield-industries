@@ -1,0 +1,919 @@
+      /* ================= 设置面板统一下拉（.endfield-select） =================
+         「终末地主题设置」里所有有值行的唯一控件。形制**照抄官网 /operator 页的
+         筛选下拉**（官方 Dropdown 组件，CSS bundle 3a129342b9ac5e73.css，
+         2026-10 一手取数；仓库所有者指定的参考）——深色铭牌触发器 + 卡片，
+         选中行是斜纹灰底 + 左缘紫/绿信号条。官方铭牌右侧的分隔线 + 值图块、
+         与菜单行里的职业图标按所有者要求**不做**：本面板的值是文字，图块只是
+         把文字再画一遍。
+
+         官方以 rem 计（站点 1rem = 16px 量级）；设置页行高 28–40px，整体按
+         **1rem → 8px** 缩放，比例不变：
+
+          | 部位 | 官方原文 | 本组件 |
+          | --- | --- | --- |
+          | 根 | .Dropdown_root：width 18.9375rem；disabled → opacity .45 | min-width 152px（= 18.9375 × 8）；更长的值（「完整（官网默认）」）向左长，右缘仍对齐 |
+          | 触发器 | .Dropdown_trigger：height 4rem、padding 0 1.25rem、gap .5rem、radius .25rem、#3a3a3a 底、#fff 字、1.625rem | 32px、0 10px、4px、2px、同色、13px |
+          | 圆形箭头 | .Dropdown_arrow：arrow.png、1.6875rem、margin-left 1rem、opacity .85、transform .2s、展开 rotate(180deg) | 原图字节内嵌（--edge-dd-arrow）、14px、同；官方箭头紧跟文字是因为右边还有图块，去掉图块后靠右收尾 |
+          | 卡片 | .Dropdown_panel：top 100%、left/right 0（与触发器等宽）、padding .25rem 0、radius .25rem、box-shadow 0 0 1.25rem rgba(0,0,0,.25)；入场 opacity + translateY(-.25rem) .15s | 右对齐、至少与触发器等宽（「轻（网格 + 斜纹）」这类长值放不进铭牌宽度时向左长，不截断）、2px 0、2px、0 0 10px；入场同款（-2px） |
+          | 选项行 | .Dropdown_option：height 4.5rem、padding-left 2.5rem、文字居中、hover rgba(0,0,0,.06) | 36px、20px、居中、同色（暗色取白 .06）；不画图标 |
+          | 选中底 | .Dropdown_bg：#8f8f8f + -45° 斜纹 #8b8b8b（11.74/38.26/61.74/88.26%）、.75rem 周期；opacity 0→1（.2s）；::before 左缘 .25rem 紫 #ff00f0 / 绿 #00ffa2 各半 | 斜纹几何与周期比例照抄（6px），底色压到 #6a6a6a / 纹 #666666（白字 #8f8f8f 只有 3.2:1，过不了 AA；#6a6a6a 是本主题的暗色划词灰，白字 5.4:1），左缘 2px 同色 |
+
+         选中底是**预建几何、只切 opacity**（官方也是这么做的）——每行都有那层
+         span，选中与否只差 opacity，悬停/切换不创造几何。悬停 = 官方 Button
+         暗色悬停 #484848（官方触发器只换了一条不存在的边框色，等于无反馈）。
+         这里的色值不随调色板也不随亮暗：官网就是一块固定的深色铭牌，强调色
+         只留给焦点环（全局规则）。
+
+         radius 写明 2px：直角模式下全局 [class]{border-radius:0!important} 把它
+         归零，圆角模式下才是官方的 .25rem。菜单在行内绝对定位，不 portal——
+         设置页无 overflow 裁剪，absolute 还让菜单随页面滚动跟随触发器。 */
+      .endfield-select {
+        position: relative;
+        display: inline-flex;
+        flex: 0 0 auto;
+        min-width: 152px;
+      }
+      .endfield-select-trigger {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+        height: 32px;
+        box-sizing: border-box;
+        padding: 0 10px;
+        border: none;
+        border-radius: 2px;
+        cursor: pointer;
+        background-color: #3a3a3a;
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        text-align: left;
+        transition: background-color .15s ease;
+      }
+      .endfield-select-trigger:hover:not(:disabled) {
+        background-color: #484848;
+      }
+      .endfield-select-trigger:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+      }
+      .endfield-select-value {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .endfield-select-arrow {
+        flex: none;
+        width: 14px;
+        height: 14px;
+        margin-left: 8px;
+        background: var(--edge-dd-arrow) 50% / cover no-repeat;
+        opacity: .85;
+        transition: transform .2s ease;
+      }
+      .endfield-select.is-open .endfield-select-arrow {
+        transform: rotate(180deg);
+      }
+      .endfield-select-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 1100;
+        box-sizing: border-box;
+        width: max-content;
+        min-width: 100%;
+        max-width: 360px;
+        max-height: min(360px, 100vh - 96px);
+        overflow-y: auto;
+        padding: 2px 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: 2px;
+        background: var(--dsw-menu-surface-fill);
+        box-shadow: 0 0 10px rgba(0, 0, 0, .25);
+        animation: endfield-select-in .15s ease 1 both;
+      }
+      body[data-ds-dark-theme] .endfield-select-menu {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5), 0 0 0 1px var(--dsw-alias-border-l1);
+      }
+      @keyframes endfield-select-in {
+        from { opacity: 0; transform: translateY(-2px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .endfield-select-option {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 36px;
+        flex: none;
+        box-sizing: border-box;
+        padding: 0 12px 0 20px;
+        border: none;
+        border-radius: 0;
+        background-color: transparent;
+        cursor: pointer;
+        color: var(--dsw-alias-label-primary);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.3;
+        text-align: center;
+        white-space: nowrap;
+        transition: background-color .2s ease;
+      }
+      .endfield-select-option:hover,
+      .endfield-select-option:focus-visible {
+        background-color: rgba(0, 0, 0, .06);
+      }
+      body[data-ds-dark-theme] .endfield-select-option:hover,
+      body[data-ds-dark-theme] .endfield-select-option:focus-visible {
+        background-color: rgba(255, 255, 255, .06);
+      }
+      .endfield-select-option-bg {
+        position: absolute;
+        inset: 0;
+        background-color: #6a6a6a;
+        background-image: linear-gradient(-45deg, transparent, transparent 11.7415035135%, #666666 0, #666666 38.2584964865%, transparent 0, transparent 61.7415035135%, #666666 0, #666666 88.2584964865%, transparent 0, transparent);
+        background-size: 6px 6px;
+        opacity: 0;
+        transition: opacity .2s ease;
+        pointer-events: none;
+      }
+      .endfield-select-option-bg::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 2px;
+        height: 100%;
+        background-image: linear-gradient(180deg, #ff00f0 0, #ff00f0 50%, #00ffa2 0, #00ffa2);
+      }
+      .endfield-select-option[aria-checked='true'] {
+        color: #ffffff;
+      }
+      .endfield-select-option[aria-checked='true'] .endfield-select-option-bg {
+        opacity: 1;
+      }
+      .endfield-select-option-label {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .endfield-select-menu { animation: none; }
+        .endfield-select-trigger,
+        .endfield-select-arrow,
+        .endfield-select-option,
+        .endfield-select-option-bg { transition: none; }
+      }
+
+      /* Square corners (default): zero EVERY classed element, then restore circles/pills below.
+         body.theme-endfield-round disables all of this and restores app-native rounding. */
+      body:not(.theme-endfield-round) button,
+      body:not(.theme-endfield-round) input,
+      body:not(.theme-endfield-round) textarea,
+      body:not(.theme-endfield-round) select,
+      body:not(.theme-endfield-round) [role='button'],
+      body:not(.theme-endfield-round) [role='dialog'],
+      body:not(.theme-endfield-round) [role='menu'],
+      body:not(.theme-endfield-round) [role='tooltip'],
+      body:not(.theme-endfield-round) [role='tab'] {
+        border-radius: 0 !important;
+      }
+      body:not(.theme-endfield-round) [class] {
+        border-radius: 0 !important;
+      }
+      body:not(.theme-endfield-round) [class*='avatar'],
+      body:not(.theme-endfield-round) [class*='Avatar'],
+      body:not(.theme-endfield-round) [class*='spinner'],
+      body:not(.theme-endfield-round) [class*='Spinner'],
+      body:not(.theme-endfield-round) [class*='dot'],
+      body:not(.theme-endfield-round) [class*='Dot'],
+      body:not(.theme-endfield-round) [class*='actionButton' i],
+      body:not(.theme-endfield-round) [class$='_iconButton'] {
+        border-radius: 50% !important;
+      }
+      /* Hover feedback should track the pointer immediately; the app's broad
+         transition rule otherwise makes colour changes feel delayed. */
+      button,
+      [role='button'] {
+        transition: none !important;
+      }
+      body:not(.theme-endfield-round) [class*='scrollbar'],
+      body:not(.theme-endfield-round) [class*='Scrollbar'] {
+        border-radius: 0 !important;
+      }
+      /* ---------- 浮动提示气泡（Tooltip 原语）的墨字、描边与阴影 ----------
+         底色/键帽底在令牌层（overrideTokens：应用把 alias 令牌写成 body 的
+         行内样式，样式表规则压不过，必须注册层）。这里补令牌管不到的三件：
+         · 文字色：bubble 的 color 是类规则里的 --dsw-static-neutral-bluish-00
+           （白）——底从近黑换成纸面后白字不可见，必须跟着换成墨/纸；
+         · 描边用 ring shadow 不用 border：bubble 的 padding 3px 7px 按无框
+           设计，加 border 会挤内容（与暗色下拉面板的 0 0 0 1px 环同一手法）；
+         · 键帽 inset hairline 同理，零布局代价。
+         官网没有 tooltip 语法（动效调研 §四：78 条 hover 全在控件本体上，
+         无浮层提示），所以这不是复刻，是把主题浮层家族套上去；阴影取官方
+         Dropdown_panel 的 0 0 1.25rem rgba(0,0,0,.25) 按 1rem=8px 缩放
+         （与「设置面板统一下拉」同款）。特异性 body 前缀 (0,1,1) 高于
+         bubble 的哈希类 (0,1,0)，不受注入顺序影响。 */
+      body [role='tooltip'] {
+        color: var(--dsw-alias-label-primary);
+        box-shadow: 0 0 10px rgba(0, 0, 0, .25), 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
+      body[data-ds-dark-theme] [role='tooltip'] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5), 0 0 0 0.5px var(--dsw-alias-border-l1);
+      }
+      body [role='tooltip'] kbd {
+        box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--edge-line) transparent;
+      }
+      /* ---------- Light mode: deepen tertiary/secondary labels for icon visibility ---------- */
+      body:not([data-ds-dark-theme]) {
+        --dsw-alias-label-tertiary: #6a6d68;
+        --dsw-alias-label-caption: #5a5d58;
+        --dsw-alias-label-dimmed: #9a9d98;
+        --edge-btn-muted: #dcddd6;
+      }
+      /* ---------- Neutralize remaining DeepSeek brand blues ---------- */
+      body {
+        --dsw-static-deepseek-50: #dcddd6;
+        --dsw-static-deepseek-100: #dcddd6;
+        --dsw-static-deepseek-200: #d8d9d5;
+        --dsw-static-deepseek-300: #c8cac5;
+        --dsw-static-deepseek-400: #757874;
+        --dsw-static-deepseek-450: var(--edge-accent-onpaper);
+        --dsw-static-deepseek-500: #101110;
+        --dsw-static-deepseek-600: #101110;
+        --dsw-static-deepseek-800: #3a3c38;
+        --dsw-static-deepseek-900: #2a2c2a;
+        --dsw-static-blue-900: #101110;
+        --dsw-alias-button-info-fill: #101110;
+        --dsw-alias-button-info-hover: #2a2b28;
+        --dsw-alias-state-business-primary: #101110;
+        --dsw-alias-state-business-tertiary: rgba(var(--edge-accent-rgb), 0.14);
+        --dsw-alias-brand-primary-new-colorprimary-new-color: #101110;
+        --dsw-alias-label-primary-bluish: #101110;
+        --dsw-specific-bubble: #f2f2ec;
+        --dsw-specific-bubble-highlight: #dcddd6;
+        --dsw-specific-sidebar-nav-item-active-accent: #101110;
+        --dsw-alias-interactive-bg-hover-accent: rgba(var(--edge-accent-rgb), 0.14);
+        --dsw-alias-border-l3: #b6b8b3;
+        --dsw-alias-border-l4: #9a9d98;
+      }
+      body[data-ds-dark-theme] {
+        --dsw-static-deepseek-50: #242624;
+        --dsw-static-deepseek-100: #242624;
+        --dsw-static-deepseek-200: #2f312e;
+        --dsw-static-deepseek-300: #3a3c38;
+        --dsw-static-deepseek-400: #898d89;
+        --dsw-static-deepseek-450: var(--edge-accent);
+        --dsw-static-deepseek-500: #f5f5f0;
+        --dsw-static-deepseek-600: #d8d9d5;
+        --dsw-static-deepseek-800: #343633;
+        --dsw-static-deepseek-900: #242624;
+        --dsw-static-blue-900: #f5f5f0;
+        --dsw-alias-button-info-fill: var(--edge-accent);
+        --dsw-alias-button-info-hover: var(--edge-accent);
+        --dsw-alias-state-business-primary: var(--edge-accent);
+        --dsw-alias-state-business-tertiary: rgba(var(--edge-accent-rgb), 0.22);
+        --dsw-alias-brand-primary-new-colorprimary-new-color: var(--edge-status-dark, var(--edge-accent));
+        --dsw-alias-label-primary-bluish: #f5f5f0;
+        --dsw-specific-bubble: #181a18;
+        --dsw-specific-bubble-highlight: #242624;
+        --dsw-specific-sidebar-nav-item-active-accent: var(--edge-accent);
+        --dsw-alias-interactive-bg-hover-accent: rgba(var(--edge-accent-rgb), 0.22);
+        --dsw-alias-border-l3: #4f534f;
+        --dsw-alias-border-l4: #5f6460;
+        --edge-btn-muted: #3a3c38;
+      }
+      /* ---------- Signal yellow everywhere (light: visible but soft) ---------- */
+      body {
+        --dsw-alias-interactive-bg-hover: rgba(var(--edge-accent-rgb), 0.16);
+        --dsw-alias-interactive-bg-active: rgba(var(--edge-accent-rgb), 0.26);
+        --dsw-alias-interactive-bg-hover-solid: var(--edge-accent);
+        --dsw-alias-bg-multi-select: rgba(var(--edge-accent-rgb), 0.16);
+        --dsw-alias-bg-skeleton: rgba(var(--edge-accent-rgb), 0.12);
+        --dsw-alias-markdown-citation: rgba(var(--edge-accent-rgb), 0.16);
+        --dsw-alias-markdown-code-block-banner: rgba(var(--edge-accent-rgb), 0.10);
+        --dsw-alias-markdown-code-segment-selected: rgba(var(--edge-accent-rgb), 0.22);
+        --dsw-alias-markdown-code-segment-unselected: rgba(var(--edge-accent-rgb), 0.06);
+        --dsw-alias-markdown-inline-code: rgba(var(--edge-accent-rgb), 0.14);
+        --dsw-alias-markdown-tag: rgba(var(--edge-accent-rgb), 0.18);
+        --dsw-alias-scrollbar-bg-l1: transparent;
+        --dsw-alias-scrollbar-bg-l2: transparent;
+        --dsw-alias-scrollbar-hover-l1: var(--edge-accent);
+        --dsw-alias-scrollbar-hover-l2: var(--edge-accent);
+        --dsw-specific-sidebar-nav-item-active: rgba(var(--edge-accent-rgb), 0.16);
+        --dsw-specific-sidebar-nav-item-hover: rgba(var(--edge-accent-rgb), 0.12);
+      }
+      body[data-ds-dark-theme] {
+        --dsw-alias-interactive-bg-hover: rgba(var(--edge-accent-rgb), 0.18);
+        --dsw-alias-interactive-bg-active: rgba(var(--edge-accent-rgb), 0.28);
+        --dsw-alias-interactive-bg-hover-solid: var(--edge-accent);
+        --dsw-alias-bg-multi-select: rgba(var(--edge-accent-rgb), 0.18);
+        --dsw-alias-bg-skeleton: rgba(var(--edge-accent-rgb), 0.14);
+        --dsw-alias-markdown-citation: rgba(var(--edge-accent-rgb), 0.20);
+        --dsw-alias-markdown-code-block-banner: rgba(var(--edge-accent-rgb), 0.12);
+        --dsw-alias-markdown-code-segment-selected: rgba(var(--edge-accent-rgb), 0.26);
+        --dsw-alias-markdown-code-segment-unselected: rgba(var(--edge-accent-rgb), 0.08);
+        --dsw-alias-markdown-inline-code: rgba(var(--edge-accent-rgb), 0.18);
+        --dsw-alias-markdown-tag: rgba(var(--edge-accent-rgb), 0.22);
+        --dsw-alias-scrollbar-bg-l1: transparent;
+        --dsw-alias-scrollbar-bg-l2: transparent;
+        --dsw-alias-scrollbar-hover-l1: var(--edge-accent);
+        --dsw-alias-scrollbar-hover-l2: var(--edge-accent);
+        --dsw-specific-sidebar-nav-item-active: rgba(var(--edge-accent-rgb), 0.20);
+        --dsw-specific-sidebar-nav-item-hover: rgba(var(--edge-accent-rgb), 0.16);
+      }
+      /* The caret follows the same scheme-gray rule as selection (see the
+         selection block above): light #666666 on paper, dark #d9d9d9 on ink —
+         always visible (4.67:1 / 13.41:1), never the accent (yellow on cream
+         was 1.07:1, i.e. invisible). */
+      input, textarea, [contenteditable='true'] {
+        caret-color: var(--edge-caret, #666666);
+      }
+      :focus-visible {
+        outline: 2px solid var(--edge-accent) !important;
+        outline-offset: 1px;
+      }
+      a {
+        text-decoration-thickness: 1px;
+      }
+      a:hover {
+        text-decoration-color: var(--edge-accent);
+      }
+      /* Reads the STATUS token, not the accent: 终末地灰's dark fill gray is
+         AA under white text but too dim as text itself (3.04:1); the bright
+         palettes define status-dark == accent, so only gray changes. */
+      body[data-ds-dark-theme] a:hover {
+        color: var(--edge-status-dark, var(--edge-accent));
+      }
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        border-radius: 0;
+        background: var(--edge-line);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--edge-accent) !important;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      /* ---------- Hover text contrast (reference page inversion) ---------- */
+      /* Note: plain buttons are excluded — their own fill/text color must survive hover
+         (e.g. yellow toggle button keeps black text; white-on-dark send button stays white). */
+      :is([role='tab'], [role='menuitem'], [role='option'], [role='link'], [role='treeitem'], [role='checkbox'], [role='switch'], [role='radio'], [role='combobox'], [class*='nav-item' i], [class*='menu-item' i], [class*='list-item' i], [class*='session-item' i], [class*='workspace-item' i], [class*='search-result' i], [class*='item' i], [class*='tab' i], [class*='card' i], [class*='row' i], [class*='tool' i], [class*='composer' i]):hover {
+        color: var(--dsw-alias-label-primary) !important;
+      }
+      /* 对话/轨迹 标签（_tabs/_tab，在 header 里）。注意复合类名：选中标签的
+         class 是 'wSkVaW_tab wSkVaW_tabActive'——[class$='_tab'] 要求整个 class
+         串以 _tab 结尾，选中标签不满足（评审 element.matches 实测三条规则全部
+         落空，原生墨条逐像素存活）。必须 :is([class$='_tab'],[class$='_tabActive'])
+         两种后缀都列，与类序无关。
+         历经五版：纯墨条（截断分划线）、三色线（24px 读不出三段）、短划上移、
+         官方 /news **图片卡**的黑色遮罩（rgba(0,0,0,.25)，纸面合成 1.81:1，
+         用户实测就是一块黑灰方片——那是图片的语言，不是页签的）。
+         2026-10-15 重取数：/news 的页签组件是 SubpageTab（bundle
+         c1b6a925ef3d04ee.css，一手原文见动效调研附录 E），配方是**浅灰水面**：
+
+         · .SubpageTab_tab：border-radius 4px + transition:background-color .2s ease
+           （transition 在基础规则，状态只写值——官网语法）；
+         · @media(any-hover:hover){ :hover{background-color:#f3f3f3} }——悬停 =
+           一档浅灰面，对官方白底实测 1.11:1；
+         · .active{background-color:#e5e5e5}——激活 = 再深一档，1.26:1；悬停
+           激活标签时保持激活档不变浅（active 规则同特异性置后）；
+         · 激活编排：文字左移 −1.75rem + 圆形箭头（⌀2.3rem、#fafafa 底、
+           #999 图标）淡入 + 页签间 #d9d9d9 竖分隔线（0.1875×2.5rem，
+           首尾隐藏）。**全取**（2026-10-15 用户指定，前两版曾以「紧凑页签
+           放不下」为由省略——正确解法不是省略，而是把官方的**结构**
+           （恒定水平 padding + 激活滑移）一并搬过来，见下方映射注释）；
+           4px 圆角按 0.46 缩放为 2px（伪元素不受全局直角化约束）。
+
+         落地映射——档位按**合成对比度**对齐官方，不照抄 hex（官方底是白，
+         主题底是纸 #e8e8e2）：
+         · 悬停 rgba(0,0,0,.04)：纸面合成 1.09:1 ≈ 官方 1.11（WCAG 实测）；
+         · 激活 rgba(0,0,0,.09)：合成 1.22:1 ≈ 官方 1.26，**常态常亮**——
+           悬停档必须弱于激活档，层级才不倒挂；
+         · 墨字在两档洗面上 13.5 / 12.3:1（AA 无虞，实测见 palette 10d 段）；
+         · 实现沿用预建 ::before + 只切 opacity（悬停不创造几何，layout 0.00；
+           opacity 过渡挂在伪元素自身——应用的 button{transition:none} 管不到
+           它），bottom:5px 的失真保留（洗面盒止于分划线上方）；
+         · 悬停规则只写 opacity、激活规则只写底色+opacity——两条不同属性，
+           无特异性之争，悬停激活标签时保持激活底色（同官方行为）；
+         · 官网 any-hover 守卫仍不设（已登记分歧：无头环境仿真不了 any-hover，
+           触屏粘滞悬停作为已知代价）；
+         · **暗色不洗面**：近黑底上等档需要 ~10% 白洗，落在噪声地板（前轮
+           评审实测白 12% 仅 1.39:1 判不可见）；暗色悬停信号仍是既有
+           「文字提亮一档」（17.3:1），display:none 连盒子都不画。轨迹页自己
+           的 detailTab（大写 T 结尾）不受影响。 */
+      /* 官方结构映射：SubpageTab 每个页签自带 0 3rem 水平 padding（盘子恒宽、
+         文字居中），激活时文字左移 −1.75rem 腾出箭头位。按官方/主题体量比
+         ≈ 0.46（文字 28px/13px）折算：padding 22px、滑移 −13px、箭头 ⌀16px、
+         分隔线 1.5×18px、倒角 2px（官方 4px/60px 盒）。布局验算（gap 36）：
+         相邻盘子边缘隔 12px，分隔线居中两侧各 ≈6px，箭头与文字净距 27px。
+         padding 全页签恒定，无跳版。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
+        padding: 0 22px 9px;
+        /* 点击切换动效（2026-10-15 用户指定，官方三路并行渐变里可迁移的两路）：
+           文字色 + 滑移各 .2s ease（官方时长/缓动对）。洗面与箭头已经由
+           ::before 的 opacity 过渡承担，分隔线交叉淡入由 ::after 承担。
+           text-indent 是布局属性——原则上只动合成器属性，这里是**所有者
+           指定的已登记例外**（测量记录见 engineering-notes「页签切换动画的
+           布局代价」）：重排范围是页签一行两个小按钮，切换风暴（8.3 次/秒
+           持续 4 秒）下 Layout 7.9 ms/s ≈ 每帧 0.13ms、每次切换总布局 ≈0.95ms
+           摊在 200ms 的 12 帧上；基线（无过渡）1.2 ms/s。动画只在类翻转时
+           发生、指针扫过不触发，自然切换频率（秒级一次）摊薄后 <0.1 ms/s。
+           !important 压过全局 button{transition:none}。 */
+        transition: color .2s ease, text-indent .2s ease !important;
+      }
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] {
+        text-indent: -13px;
+      }
+      /* 分隔线底座：每个页签的 ::after 都预建线盒（1.5×18、border-l1），
+         常态 opacity 0——app 原生选中底线（.tabActive::after 的 accent 底
+         与 left:0/right:0/bottom:-1px/height:2px 几何）被这里的几何+底色
+         整体改写取代（旧「background:0 0 清底线」规则已并入本条）。预建
+         盒子后，切换只是同一条沟两侧宿主的交叉淡入淡出，零「创造几何」
+         代价（与角标/指示线同一门派）。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        width: 1.5px;
+        height: 18px;
+        background: var(--dsw-alias-border-l1);
+        opacity: 0;
+        transition: opacity .2s ease;
+      }
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
+        content: '';
+        position: absolute;
+        /* 几何外扩：应用页签原生零水平内边距，上一版 inset:0 的洗面「刚刚把
+           文字罩下来」（用户实测）；现在 padding 22px 已给盘内呼吸位，负偏移
+           −12px 再把盘子边缘衬出字外（官方盘沿永远在字外），上 −4px，bottom
+           5px 止于分划线上方。倒角 2px：官方 4px/60px 盒按 0.46 缩放——伪元素
+           不在全局直角化清单（[class] 只命中元素），可安全使用。 */
+        left: -12px;
+        right: -12px;
+        top: -4px;
+        bottom: 5px;
+        border-radius: 2px;
+        background-color: rgba(0, 0, 0, 0.04);
+        opacity: 0;
+        transition: opacity .2s ease;
+        pointer-events: none;
+      }
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):hover::before {
+        opacity: 1;
+      }
+      /* 激活 = 深一档洗面常亮 + 官方圆形箭头（⌀16px，纸白圆 + 灰山形箭头，
+         官方 arrow ⌀2.3rem/#fafafa/#999 按 0.46 折算）。箭头作为 ::before 的
+         背景图层挂在 right 3px：随盘子一起由 opacity 渐显（class 翻转触发
+         ::before 的过渡），无需第三个伪元素。悬停规则只写 opacity、激活
+         规则只写底色与图层——不同属性，无特异性之争。 */
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive']::before {
+        background-color: rgba(0, 0, 0, 0.09);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23f5f5f0'/%3E%3Cpath d='M6.2 4.4l3.6 3.6-3.6 3.6' fill='none' stroke='%239a9d98' stroke-width='1.6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 3px center;
+        background-size: 16px 16px;
+        opacity: 1;
+      }
+      /* 官方竖分隔线（#d9d9d9 × 0.1875/2.5rem → 1.5×18px，缩放后），沟中心
+         居于相邻盘子之间。绘制归属（官方是独立 DOM 元素，这里借 ::after）：
+         · 非首个、非激活的页签：点亮自己的左沟线；
+         · 首个页签闲置且紧邻的下一个是激活页签（:has(+…)）：它的左沟线
+           无人画（激活侧 ::after 保持熄灭），由它自己点亮右沟线。
+         恰好覆盖两页签的全部组合；若上游未来放第三个页签，最坏情形是
+         激活页签左邻缺一条线（登记为已知边界）。分支只写定位与
+         opacity——线盒在底座已预建，切换零几何创建、只做交叉淡入。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after {
+        left: -18.75px;
+        right: auto;
+        opacity: 1;
+      }
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
+        left: auto;
+        right: -18.75px;
+        opacity: 1;
+      }
+      /* 减效降级：切换动画全部关闭（含 text-indent 滑移与两条伪元素的淡入），
+         只保留瞬时状态翻转——本主题自加（官网无此降级，已登记分歧）。 */
+      @media (prefers-reduced-motion: reduce) {
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
+          transition: none !important;
+        }
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before,
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
+          transition: none;
+        }
+      }
+      /* 暗色无洗面/箭头：近黑底的等档白洗落在噪声地板（评审实测），文字提亮
+         承担悬停；分隔线保留（结构元素，border-l1 暗档 #343633 对墨底 1.55:1，
+         装饰区间内）。text-indent 暗色保留——无箭头时它是激活态的轻量位移信号。 */
+      body[data-ds-dark-theme] [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
+        display: none;
+      }
+      body[data-ds-dark-theme] [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] {
+        color: var(--dsw-alias-label-primary, #f5f5f0);
+      }
+
+      /* ---------- Workspace browser rows (ui-sidebar) ---------- */
+      /* Hash-free rebuild of the old .YDXeBa_* rules: those class names are
+         '<hash>_suffix' CSS-module exports and 0.1.2-rc.1 rehashed every module,
+         killing all 33 pinned hashes. Matching survives on the SEMANTIC suffix
+         ('_sessionRow' etc.), scoped to the sidebar column — '_slot'/'_row' style
+         suffixes are too generic to match bare, but the sidebar column suffix is
+         unique to the layout frame (same hook findAppFrame()
+         already rely on). Compound states match on substrings, NOT [class$=]: a
+         suffix match needs the WHOLE class attribute to end with the string, so
+         'x_sessionRow x_selected' would silently miss the second condition.
+         '_unselected' is safe against '_selected' here — the leading underscore
+         breaks the substring. */
+      [class$='_sidebarCol'] [class*='_slot'] {
+        color: var(--dsw-alias-brand-primary) !important;
+      }
+      [class$='_sidebarCol'] [class*='_projectRow']:hover,
+      [class$='_sidebarCol'] [class*='_sessionRow']:hover,
+      [class$='_sidebarCol'] [class*='_sessionRow'][class*='_selected'],
+      [class$='_sidebarCol'] [class*='_searchResultRow']:hover,
+      [class$='_sidebarCol'] [class*='_searchResultRow'][class*='_selected'] {
+        background: rgba(var(--edge-accent-rgb), 0.22) !important;
+      }
+      [class$='_sidebarCol'] [class*='_projectRow']:hover *,
+      [class$='_sidebarCol'] [class*='_sessionRow']:hover *,
+      [class$='_sidebarCol'] [class*='_sessionRow'][class*='_selected'] *,
+      [class$='_sidebarCol'] [class*='_searchResultRow']:hover *,
+      [class$='_sidebarCol'] [class*='_searchResultRow'][class*='_selected'] * {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      /* ---------- Light mode: workspace folder / icon buttons ink ---------- */
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_folder'],
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_chevron'],
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_arrow'],
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_iconButton'],
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_searchButton'],
+      body:not([data-ds-dark-theme]) [class$='_sidebarCol'] [class*='_clearButton'] {
+        color: var(--edge-accent-ink, #101110) !important;
+      }
+      /* ---------- Dark mode: solid signal-yellow inversions ---------- */
+      body[data-ds-dark-theme] [class$='_sidebarCol'] [class*='_projectRow']:hover,
+      body[data-ds-dark-theme] [class$='_sidebarCol'] [class*='_sessionRow']:hover,
+      body[data-ds-dark-theme] [class$='_sidebarCol'] [class*='_sessionRow'][class*='_selected'],
+      body[data-ds-dark-theme] [class$='_sidebarCol'] [class*='_searchResultRow']:hover,
+      body[data-ds-dark-theme] [class$='_sidebarCol'] [class*='_searchResultRow'][class*='_selected'] {
+        background: var(--edge-accent) !important;
+      }
+      body[data-ds-dark-theme] [class*='badge' i]:hover,
+      body[data-ds-dark-theme] [class*='badge' i][data-active] {
+        background: var(--edge-accent) !important;
+      }
+      /* ---------- Dark mode: icon buttons (plus / ellipsis / stop / actions) ---------- */
+      /* The cordis approval trio is EXCLUDED here. Those three buttons carry their own
+         solid fill (signal yellow for approve, error red for decline) from the approval
+         block below, so a signal-yellow glyph renders yellow-on-yellow — an invisible
+         check. A 'body[data-ds-dark-theme] [attr]' selector (0,2,1) also outranks the
+         plain '[data-cordis-approve]' (0,1,0) rules below, so source order cannot undo it:
+         the exclusion has to happen in this selector. Their ink is set below. */
+      body[data-ds-dark-theme] [class$='_iconButton'],
+      body[data-ds-dark-theme] [data-cordis-switch],
+      body[data-ds-dark-theme] [class*='actionButton' i]:not([data-cordis-approve]):not([data-cordis-approve-plugin]):not([data-cordis-decline]) {
+        color: var(--edge-status-dark, var(--edge-accent)) !important;
+      }
+      body[data-ds-dark-theme] [class$='_iconButton']:hover:not(:disabled),
+      body[data-ds-dark-theme] [data-cordis-switch]:hover:not(:disabled),
+      body[data-ds-dark-theme] [class*='actionButton' i]:not([data-cordis-approve]):not([data-cordis-approve-plugin]):not([data-cordis-decline]):hover:not(:disabled) {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+      }
+      /* ---------- Cordis approval buttons (allow once / allow plugin / decline) ---------- */
+      /* Each button is a solid chip, so its glyph must contrast with its OWN fill:
+         black check on signal yellow, white X on error red. The icons are
+         fill="currentColor" svg paths, so 'color' alone drives the glyph — but the
+         svg/path are also targeted explicitly, because any inherited-color rule that
+         wins on a descendant would otherwise repaint the glyph and hide it again. */
+      [data-cordis-approve],
+      [data-cordis-approve-plugin],
+      [data-cordis-approve] svg,
+      [data-cordis-approve-plugin] svg,
+      [data-cordis-approve] svg path,
+      [data-cordis-approve-plugin] svg path {
+        color: var(--edge-accent-ink, #101110) !important;
+        fill: currentColor !important;
+      }
+      [data-cordis-approve],
+      [data-cordis-approve-plugin] {
+        background: var(--edge-accent) !important;
+      }
+      [data-cordis-decline],
+      [data-cordis-decline] svg,
+      [data-cordis-decline] svg path {
+        color: #fff !important;
+        fill: currentColor !important;
+      }
+      [data-cordis-decline] {
+        background: var(--dsw-alias-state-error-primary) !important;
+      }
+      /* The second check of the double-check icon is dimmed to .7 opacity by the panel's
+         own stylesheet; on the solid chip keep both strokes at full ink. */
+      [data-cordis-approve-plugin] [class$='_doubleCheck'] svg {
+        opacity: 1 !important;
+      }
+      [data-cordis-approve]:hover:not(:disabled),
+      [data-cordis-approve-plugin]:hover:not(:disabled) {
+        background: var(--edge-accent-deep) !important;
+      }
+      [data-cordis-decline]:hover:not(:disabled) {
+        background: #d6281d !important;
+      }
+      /* ---------- Tables: bright signal-yellow hover (reference .data-table) ---------- */
+      [class*='tableScroll' i] th,
+      [class*='table' i] th {
+        background: var(--edge-soft) !important;
+        border-bottom-color: var(--edge-line) !important;
+      }
+      [class*='tableScroll' i] td,
+      [class*='table' i] td {
+        border-bottom-color: var(--edge-line) !important;
+      }
+      tbody tr:hover,
+      tbody tr:hover *,
+      [class*='table' i] tbody tr:hover,
+      [class*='table' i] tbody tr:hover *,
+      [class*='tableScroll' i] tbody tr:hover,
+      [class*='tableScroll' i] tbody tr:hover * {
+        color: var(--dsw-alias-label-primary) !important;
+        background: color-mix(in srgb, var(--edge-accent) 15%, var(--dsw-alias-bg-base)) !important;
+        /* 染色只许落在 padding-box 里。上游 markdown 链接用「3px 透明左边框 +
+           margin-left:-3px」白嫖 3px 点击区（ui-chat 的 ._markdown a，几何见
+           test/motion-check.js 夹具里的 .x_mdScroll）：盒子比单元格内容盒左探
+           3px，而 background 默认按 border-box 绘制、又是隔着透明边框透出来
+           的——于是悬停染上的行底色正好盖住行左缘那条 3px 信号条，在链接
+           （首列就是项目名 + 图标链接）那一行的高度上把竖线啃掉一段，看起来
+           就是「图标和黄色高亮竖线之间有缺口」。裁到 padding-box 后，链接
+           的透明边框区不再参与绘制，信号条完整；行自身的染色同理（bar 是
+           不透明边框，画在背景之上，裁掉边下的底色不可见）。
+           不能只给链接清底（background: transparent）：上游只要再给别的内联
+           元素加同样的负 margin 盒子就复发，这条是结构约束。 */
+        background-clip: padding-box !important;
+      }
+      /* Row hover keeps the accent tint; ::selection is scheme-gray in every
+         palette (see the selection block), so the two stay distinct by texture. */
+      /* ---------- New session button (sidebar) ---------- */
+      [class$='_newSession'] {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+        /* TRANSPARENT, not accent-matched: the border paints ABOVE the
+           background, and the upstream button carries .5px of it. An
+           accent-matched border is invisible against the fill but still
+           COVERS the material band with a flat hairline (at DPR>=2 that is
+           a whole device pixel) between the ink and the true edge —
+           measured at DPR 2: the outermost 1-2 device rows/columns of the
+           band rendered flat 217 with zero ink. Transparent keeps the
+           identical look (same fill shows through) and lets the ink reach
+           the edge. */
+        border-color: transparent !important;
+      }
+      body:not(.theme-endfield-round) [class$='_newSession'] {
+        border-radius: 0 !important;
+      }
+      [class$='_newSession']:hover,
+      [class$='_newSession']:focus-visible {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent-deep) !important;
+        /* Same reason as the resting state: keep the border from covering
+           the material band at the edges. */
+        border-color: transparent !important;
+      }
+      [class$='_newSession'] svg {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      [class$='_newSessionLabel'] {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      /* ---------- 侧栏面板行（插件 / 自动化任务）：淡黄 wash → 划词灰 ----------
+         Owner trial (2026-10-16): these panel entries showed a pale-yellow
+         wash (their active/hover state reads --dsw-alias-interactive-bg-hover,
+         which this theme maps to a 16% accent wash) right below a solid-
+         yellow 设置 trigger — an inconsistent half-signal. Official grammar
+         says hover/selected is grayscale (research §三), so use the 划词灰
+         pair (light #d9d9d9 ink-on-gray / dark #6a6a6a white-on-gray), the
+         same pair the menu current-items use. Scoped to the sidebar column;
+         the label keeps label-primary, which is the designed ink for both
+         fills (16.8:1 / 5.4:1). */
+      [class$='_sidebarCol'] [class*='_panelRow']:hover,
+      [class$='_sidebarCol'] [class*='_panelRow'][class*='_panelActive'] {
+        background: var(--edge-select-fill) !important;
+      }
+      /* ---------- Badge hover: signal-yellow inversion (reference .kpi:hover) ---------- */
+      [class*='badge' i]:hover,
+      [class*='badge' i]:hover *,
+      [class*='badge' i][data-active],
+      [class*='badge' i][data-active] * {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      /* ---------- Cordis action buttons (run/stop) ---------- */
+      /* Approval chips excluded again: they already own a solid fill, and this blanket
+         hover would repaint the decline chip yellow and re-tint the approve glyphs. */
+      [data-cordis-switch]:hover:not(:disabled),
+      [class*='actionButton' i]:not([data-cordis-approve]):not([data-cordis-approve-plugin]):not([data-cordis-decline]):hover:not(:disabled) {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+      }
+      body:not(.theme-endfield-round) [data-cordis-switch],
+      body:not(.theme-endfield-round) [class*='actionButton' i] {
+        border-radius: 999px !important;
+      }
+      /* ---------- Session header actions (agent preset / subagent / jobs) ---------- */
+      [class$='_trigger']:hover:not(:disabled),
+      [class$='_trigger'][aria-expanded='true'],
+      [class$='_trigger']:focus-visible {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+      }
+      /* ---------- Agent-preset header chip: accent fill, stock geometry ---------- */
+      /* Hash-free scope for the old .SVAs4q_label: the chip is the preset label the
+         agent-preset plugin registers into the "conversation.session.header.actions"
+         slot. A bare [class*='_label'] is PROHIBITED here: it was tried first and it
+         yellowed plain list labels (产物 / settings / jobs names), which is why this
+         was hash-pinned in the first place.
+
+         DOM measured off the running 0.1.5-rc.2 GUI (not inferred):
+
+           div.pI_x6G_centerCol
+             > header.wSkVaW_header
+                 > div.wSkVaW_titleRow
+                   > div.wSkVaW_titleCluster
+                     > div.wSkVaW_headerActions
+                       > div                  <- the slot's own entry wrapper.
+                         > span.SVAs4q_label     It has NO class at all, so it
+                           > svg.SVAs4q_icon     cannot be named either.
+
+         Two silent-failure lessons are baked in here — a selector that matches
+         nothing reports nothing, so both cost a shipped bug:
+           1. The chip is NOT a child of _header; it is four levels down. Every '>'
+              between the header and the chip encodes how many wrappers upstream
+              happens to render, and upstream has now added wrappers twice.
+           2. The chip's own parent is a class-less wrapper, so the depth cannot be
+              collapsed onto a named container either.
+         The scope therefore STOPS at the actions container and the chip is picked
+         out by a property of the chip itself: it is the only _label in that slot
+         carrying an icon. The jobs rows render text-only _label spans and the
+         schedule module declares no _label local at all, so the scope still does
+         exactly what it exists for. */
+      [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+        padding: 0 12px !important;
+      }
+      body:not(.theme-endfield-round) [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) {
+        border-radius: 0 !important;
+      }
+      [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) svg,
+      [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) [class*='_icon'] {
+        opacity: 1 !important;
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      /* DELIBERATELY NOT STRETCHED. This rule used to carry flex:1 1 auto and
+         max-width:none, and an earlier attempt of this fix also flattened the slot
+         wrapper (display:contents) and grew _headerActions, to reproduce the old
+         "chip fills the action row" look. On the real 0.1.5-rc.2 header that turns
+         the chip into a full-width yellow BAR across the top of the conversation
+         (measured: 923px of a 976px row) — nothing like the stock chip it is
+         replacing, and reported straight back as "现在变成一个长条了".
+         The theme's job here is the ACCENT, not the geometry: the chip keeps its
+         stock size/hit area (height, 180px cap and ellipsis included) and only its
+         colours change. Everything that made it grow is gone — do not reintroduce
+         flex/max-width/display overrides without looking at it on the real page. */
+      /* ---------- 智能体团队展开看板（agent-team board） ----------
+          上游 dsh-experimental-client-ui-agent-team 的 CSS 模块类带哈希
+          （VoX2oq_*），按本仓库规则一律不碰：锚点只用该包自带的稳定
+          data 属性——根/触发器 data-team-action、portal 到 body 的面板
+          data-team-panel；面板内部的成员卡/任务卡/计数用语义后缀
+          （[class$='_member'] 等）匹配，重哈希不影响。
+          面板底面（--dsw-specific-menu）已被令牌层换成不透明纸面
+          （--dsw-menu-surface-fill 覆写），直角由全局 [class] 规则自动
+          处理，触发器悬停已被全局 [class$='_trigger'] 实心强调规则覆盖
+          ——这里只补令牌管不到的四件。 */
+
+      /* 1. 浮层家族对齐：上游 elevation-stroke 是 1px alpha 细线，在纸面
+             上几乎不可见。换成主题浮层统一配方（与设置下拉、tooltip 同款）：
+             0.5px 重线 ring + 官方 Dropdown_panel 软阴影（1.25rem→10px）。
+             特异性 body 前缀 (0,1,1) 高于面板哈希类 (0,1,0)，不依赖注入
+             顺序。 */
+      body [data-team-panel] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .25), 0 0 0 0.5px var(--dsw-alias-border-l2);
+      }
+      body[data-ds-dark-theme] [data-team-panel] {
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5), 0 0 0 0.5px var(--dsw-alias-border-l1);
+      }
+
+      /* 2. 分组标题（成员 / 任务）挂官方三色信号线 decoLine：与设置页
+             分组标题、交付物卡底边同一条 linear-gradient（紫:黄:绿 =
+             1:1:4 的官方比例停靠，见 design-language「背景纹理」一节）。
+             h3 本身 display:flex，与设置页分组标题同理不能当 flex 子项，
+             绝对定位到标题底部整宽；h3 自带 8px 下 margin，再加 7px
+             padding 让线离开字形。静态、无动画、pointer-events 关闭，
+             不属于会话列底纹（prefers-reduced-transparency 不需要让位：
+             线本身不透明，不是纹理层）。 */
+      body [data-team-panel] h3 {
+        position: relative;
+        padding-bottom: 7px;
+      }
+      body [data-team-panel] h3::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        pointer-events: none;
+        background-image: linear-gradient(90deg,#ff00f0 16.6667%,#fffa00 0,#fffa00 33.4259%,#00ffa2 0);
+      }
+
+      /* 3. 数字等宽（设计语言第 3 条）：成员数/任务数计数、任务卡 meta
+             （任务 id、阻塞关系）与状态行都是会跳动的数字文本。 */
+      body [data-team-panel] [class$='_count'],
+      body [data-team-panel] [class$='_meta'],
+      body [data-team-panel] [class$='_taskState'] {
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* 4. 成员卡悬停 = 官网灰阶洗面（SubpageTab 家族，非黑遮罩）：
+             亮色 rgba(0,0,0,.04) 在沉底块 #dcddd6 上合成 1.09:1，正好
+             官方 #f3f3f3 悬停步；暗色近黑底上白洗落在噪声地板（文档化
+             结论），改走「沉底块抬一档」——layer-3 (#2c2e2a) 对 layer-2
+             (#1e201d) 1.20:1，与官方激活步同档。底色渐变挂在基础规则上
+             （官网语法：transition 不写在状态规则里）；上游 stock 悬停
+             只换 box-shadow 描边色，本规则特异性 (0,4,1) 压过哈希类的
+             (0,3,0)，只接管 background 一件，描边照旧。当前会话卡
+             （_memberCurrent）是 disabled，:not(:disabled) 天然排除。 */
+      body [data-team-panel] [class$='_member'] {
+        transition: background-color .2s ease;
+      }
+      body [data-team-panel] [class$='_member']:not(:disabled):hover,
+      body [data-team-panel] [class$='_member']:not(:disabled):focus-visible {
+        background: rgba(0, 0, 0, 0.04);
+      }
+      body[data-ds-dark-theme] [data-team-panel] [class$='_member']:not(:disabled):hover,
+      body[data-ds-dark-theme] [data-team-panel] [class$='_member']:not(:disabled):focus-visible {
+        background: var(--dsw-alias-bg-layer-3, #2c2e2a);
+      }
+
+      /* 5. 底部斜纹带：官方 shallowBg 的同款复刻，按看板体量缩一条。
+             会话列那条带是 32.8125rem 高；看板最宽 500px、最高 680px，
+             取 min(9rem, 40%)——高板 144px、矮板（compact 单人态）按
+             40% 封顶。纹路周期（.75rem）与停靠值（13.95…/36.05…%）照
+             官方原文，颜色复用纹理令牌 --edge-tex-hatch-color（亮 5% 墨 /
+             暗 6% 纸白），0° 单遮罩「底边最实、往上渐隐」同官方。
+             画面上它只在卡片之间的空隙与面板底部露出——成员卡/任务卡
+             是不透明沉底块，天然盖住自己身后的纹。
+             叠放：面板自带 z-index:100 已建层叠上下文，::after 取
+             z-index:-1 与上游 ::before（纸面层）同层、按树序画在其上、
+             在全部内容之下；伪元素无占用（bundle 全量查过：面板只有
+             :before）。开关跟随纹理总开关：按值匹配 subtle/standard 两档
+             （off 不画），prefers-reduced-transparency / more contrast 下
+             display:none——与列底纹同一条降级路径。静态、无动画。合成
+             对比度：亮 1.10:1 / 暗 1.16:1（palette-contrast 10f 段实算），
+             与会话列底纹（1.10–1.19:1）同档装饰区间。 */
+      body[data-endfield-texture='subtle'] [data-team-panel]::after,
+      body[data-endfield-texture='standard'] [data-team-panel]::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: calc(100% - min(9rem, 40%));
+        z-index: -1;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(-45deg,
+          transparent 0 13.9512529279%,
+          var(--edge-tex-hatch-color) 13.9512529279% 36.0487470721%,
+          transparent 36.0487470721% 50%,
+          transparent 50% 63.9512529279%,
+          var(--edge-tex-hatch-color) 63.9512529279% 86.0487470721%,
+          transparent 86.0487470721%);
+        background-size: .75rem .75rem;
+        -webkit-mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+        mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+      }
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        body[data-endfield-texture] [data-team-panel]::after {
+          display: none;
+        }
+      }

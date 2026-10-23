@@ -1,0 +1,358 @@
+/* tokens.css — layer 1 of the hand-written stylesheet (see the layer map in
+   scripts/lib/sources.js; the sheet used to be one theme.css before the split).
+   Loaded by src/client/index.js via the raw-css plugin and concatenated — in
+   manifest order, raw bytes — with the other layers inside the built client.js
+   artifact. Editing any layer requires `npm run build` (or `npm run watch`) to
+   refresh the artifact; `npm run check` fails on a stale artifact. */
+
+      /* ================= typography: SCOPED to the theme's own elements =====
+         The theme used to redeclare the app's two font TOKENS at :root:
+             --dsw-font-family: Arial, ...      -> dropped, see below
+             --ds-font-family-code: <mono list> -> dropped (see the note under it)
+         and that is what broke third-party widgets.
+
+         WHY IT BROKE THEM. The app declares --dsw-font-family at :root and then
+         renders the UI root font from it — dsh-web-frontend ships exactly
+         'body{font-family:var(--dsw-font-family, <system stack>)}'. A :root
+         declaration WINS over the app's own :root one, so the entire UI root
+         font became Arial; a widget injected into the app root (DeepSeek-
+         Balance-Whale-Widget and friends) carries 'font-family:inherit' and
+         therefore inherited Arial, losing its own face for its balance digits.
+         The root font token is a SHARED PUBLIC INTERFACE of the app, not a
+         theme-private knob: overriding it silently restyles every third-party
+         component on the page, so this theme no longer touches either token.
+
+         WHAT KEEPS THE LOOK. The theme's industrial editorial face lives in
+         --edge-font, declared on body and applied ONLY to elements this theme
+         owns: the boot plate, the watermark wordmark, and the settings panel.
+         --dsw-font-family is still READ on those elements, as the trailing
+         fallback of that stack, so nothing outside the theme is ever affected
+         while the app's own font configuration stays part of the protocol. The
+         ORDER of that stack matters and is documented where it is declared —
+         flipping it re-types the boot plate.
+
+         The code token went for the same reason. It is nearly identical to the
+         app's own list (only the final fallbacks differ: Liberation Mono, Menlo,
+         Courier, PingFang SC, Microsoft YaHei here vs Helvetica, Arial,
+         sans-serif in the app), so dropping the override is visually inert on
+         every code surface the theme does not own.
+
+         NO GLOBAL TEXT PROPERTIES EITHER. There is deliberately no 'body { ... }'
+         rule setting font-family / font-feature-settings / font-variant-*: all
+         three inherit, so all three leak into injected third-party nodes exactly
+         the way the token did. openType features belong on the specific elements
+         that measure with them instead (see the loader's own tabular figures). */
+      /* ================= accent palette =================================
+         Every accent value in this stylesheet reads from the variables below
+         instead of a literal, so the whole theme repaints from ONE declaration
+         block. Two palettes ship:
+
+           谷地黄 (default)  signal yellow  #fff500 — the Endfield site accent
+           武陵青            teal-cyan      #14d0d0
+
+         WHY THIS BLOCK IS ON body AND NOT :root. The app applies its theme
+         tokens as INLINE STYLES ON <body> (dsh-client-ui-layout does
+         body.style.setProperty(name, value) for every token in the snapshot).
+         A custom property declared at :root that substitutes one of those
+         tokens is resolved AT THE html ELEMENT, where the token does not
+         exist, so it becomes guaranteed-invalid and computes to nothing.
+         That was not theory: the shipped --edge-line / --edge-paper /
+         --edge-soft were declared at :root and measured EMPTY in a real
+         browser, which silently disabled the themed scrollbar
+         (scrollbar-color computed to 'auto') and left the table/hairline
+         rules falling back. Moving them onto body is what makes them resolve
+         (see test/probe-edge-line.js).
+
+         The same fact is what makes the palette switch free: the theme's
+         token overrides are values like var(--edge-accent), body carries the
+         palette class, so flipping the class re-resolves every token and
+         every rule below with NO JavaScript repaint at all — verified in a
+         real browser (test/probe-css.js), not assumed.
+
+         --edge-accent-rgb is the same colour as a bare comma list, because
+         rgba() needs channels rather than a hex; substituting a comma-list
+         custom property inside rgba() is legal and was verified in the same
+         probe. Keeping both in one place is why the ~30 translucent washes
+         did not have to become 60 declarations.
+
+         Values are MEASURED, not chosen — see test/palette-contrast.test.js,
+         which fails the build if any of them stops clearing its bar:
+           ink #101110 on 谷地黄 16.50:1 · on 武陵青 6.62:1   (AA, solid chips)
+           accent as dark-mode icon ink   15.26:1  ·  6.12:1  (>=3 icon floor) */
+      body {
+        --edge-accent: #fff500;
+        --edge-accent-rgb: 255, 245, 0;
+        /* Text paired with the accent as a SOLID FILL. The bright palettes carry
+           ink-coloured text on their accents; 终末地灰's dark-scheme fill (#626262)
+           needs white instead, so the pairing travels as its own token. */
+        --edge-accent-ink: #101110;
+        /* Hover/pressed step of the accent, still carrying ink-coloured text:
+           谷地黄 13.60:1 · 武陵青 5.31:1. */
+        --edge-accent-deep: #e8e000;
+        /* The one place the accent must survive on CREAM as a fill (the light
+           deepseek-450 slot): pure signal yellow is nearly paper-white there,
+           so light mode uses a darkened step of the same hue. */
+        --edge-accent-onpaper: #d9c700;
+        /* Turn-status gradient text stops — see the long note on that rule.
+           Gradient text paints glyphs with EVERY stop, and reduced-motion pins
+           the mid band permanently inside the letters, so all four clear AA
+           against both surfaces of their mode:
+             谷地黄 light #6b5d00 5.35 / mid #3f3600 9.82
+                    dark  #fff500 15.26 / mid #a08a00 5.11
+             武陵青 light #006a6a 5.22 / mid #003f3f 9.58
+                    dark  #14d0d0 9.14 / mid #7ee7e7 12.06 */
+        --edge-status-light: #6b5d00;
+        --edge-status-light-mid: #3f3600;
+        --edge-status-dark: #fff500;
+        --edge-status-dark-mid: #a08a00;
+        /* Hero backdrop glow alpha, per scheme. These are the measured values
+           from the note on that rule: the replacement must not change how deep
+           the hero reads compared with the app's own #6187D8 at 8%. */
+        --edge-glow-light: 0.08;
+        --edge-glow-dark: 0.05;
+      }
+      /* ---------- 武陵青 (teal-cyan, #14d0d0) ----------
+         Only the palette changes here; paper, ink, borders and the semantic
+         state colours (error red, success green, warn amber) are shared, so
+         this block is exactly the set of values that carry the accent hue.
+
+         BRIGHTNESS. The first version shipped #0daaaa (the literal
+         rgb(13, 170, 170) that was asked for) and read as too dark next to the
+         signal yellow it alternates with — measured, that is not a matter of
+         taste: relative luminance was 31.7% against the yellow's 86.6%, so on a
+         near-black page the cyan chip carried barely a third of the presence.
+         #14d0d0 keeps the same hue axis (R low, G == B, so it is still the same
+         teal rather than drifting toward grey-cyan) and lifts luminance to
+         49.8% — 57% brighter — while every measured invariant still holds:
+           ink #101110 on the chip   6.62 -> 9.88:1   (AA, and now better)
+           chip as dark-mode ink     6.62 -> 9.88:1   (icon floor is 3)
+         It is deliberately NOT taken to the yellow's luminance: past ~#16dcdc
+         the light-mode chip stops separating from cream (1.39:1 at #16dcdc
+         versus 1.56:1 here), and a cyan that pale reads white-ish rather than
+         teal. This is the brightest step that still looks like 武陵青 in both
+         schemes. */
+      body.theme-endfield-wuling {
+        --edge-accent-ink: #101110;
+        --edge-accent: #14d0d0;
+        /* Same colour, channel-list form, for the ~30 rgba() washes. Derived from
+           the hex above and kept beside it so the two cannot drift. */
+        --edge-accent-rgb: 20, 208, 208;
+        /* Hover step. Chosen to match the PERCEPTUAL drop the yellow palette uses
+           (#fff500 -> #e8e000 is ΔY 19.9) rather than a copied percentage, so
+           hover feels equally strong in both palettes: ΔY 19.7 here, 7.72:1 under
+           ink text. */
+        --edge-accent-deep: #10b8b8;
+        /* Cyan is still far darker than yellow under ink (9.88 vs 16.50), so it
+           needs no separate on-cream step — the accent itself reads on paper. */
+        --edge-accent-onpaper: #14d0d0;
+        /* Light mode dips deep, exactly as the yellow palette does: on cream no
+           tint above #007070 clears AA on both surfaces, and that is a property of
+           the paper, not of how bright the accent is — so these two are unchanged
+           by the brightening. */
+        --edge-status-light: #006a6a;
+        --edge-status-light-mid: #003f3f;
+        --edge-status-dark: #14d0d0;
+        /* Dark mode LIFTS for its mid band instead of dipping like yellow's
+           #a08a00: a darker cyan mid stop measured 3.54:1 and failed, because cyan
+           at this lightness has less headroom below it than yellow does. Raised
+           with the accent so the shimmer keeps a visible band: #7ee7e7 is 12.06:1
+           and ΔY 40.6 from the accent (the old #4fd6d6 would now sit only ΔY 27.8
+           away and read flatter). */
+        --edge-status-dark-mid: #7ee7e7;
+        /* Cyan carries real luminance where yellow is nearly neutral on cream, so
+           the glow alphas are measured rather than inherited. Both stay inside the
+           depth of the #6187D8 glow they replace (budget: light 9.90, dark 11.28).
+           Dark comes down from 0.05 to 0.04 because the brighter accent lifts a
+           near-black page faster: 0.05 now measures |ΔY| 7.6 where the old cyan
+           measured 6.0. */
+        --edge-glow-light: 0.08;
+        --edge-glow-dark: 0.04;
+      }
+      /* ---------- 终末地灰 (Endfield industrial gray) ----------
+         The official site's own interaction language, measured from its shipped
+         CSS (endfield.hypergryph.com bundles on web.hycdn.cn): hover and selection
+         surfaces are a GRAY SCALE — dark button hover #484848, list hover #626262,
+         light hover #f0f0f0 / #d9d9d9 — while yellow stays a rare signal. This
+         palette makes the theme follow that grammar by default.
+
+         WHY ACCENT AND STATUS SPLIT HERE. No mid-gray is AA in BOTH directions
+         on near-black: white text on the fill needs luminance <= 0.183 while
+         gray-as-text-on-ink needs >= 0.200 — the intervals do not overlap. The
+         palette therefore uses the roles the architecture already provides:
+           --edge-accent / -deep   FILLS, paired with --edge-accent-ink text
+           --edge-status-dark/-mid 'accent as text' roles in dark mode
+         The bright palettes keep status-dark == accent, so for them the split
+         changes nothing visually.
+
+         Values are MEASURED (WCAG, test/palette-contrast.test.js):
+           light fill #d9d9d9 + ink   13.41:1 · hover #cccccc + ink 11.78:1
+           dark  fill #6a6a6a + white  5.41:1 · hover #424242 + white 10.04:1
+           dark  status #d9d9d9        13.41 / 12.40:1 (base / layer-1)
+           dark  status-mid #b3b3b3     9.03 /  8.35:1
+           light status #666666         4.67 /  5.11:1
+           light status-mid #4a4a4a     7.20 /  7.89:1
+           dark  accent as icon ink     3.49 / 3.28:1 (>= 3 floor, both surfaces) */
+      body.theme-endfield-gray {
+        --edge-accent-ink: #101110;
+        --edge-accent: #d9d9d9;
+        /* Neutral wash base shared by both schemes: on cream a gray wash reads as
+           soft shading, on ink as a soft lift — the same 'composited contrast'
+           doctrine the translucent surfaces follow. */
+        --edge-accent-rgb: 126, 126, 126;
+        --edge-accent-deep: #cccccc;
+        /* The one slot the accent must carry as a FILL on cream: a light gray
+           would dissolve into the paper, so it dips to the official #666666. */
+        --edge-accent-onpaper: #666666;
+        --edge-status-light: #666666;
+        --edge-status-light-mid: #4a4a4a;
+        --edge-status-dark: #d9d9d9;
+        --edge-status-dark-mid: #b3b3b3;
+        --edge-glow-light: 0.08;
+        --edge-glow-dark: 0.04;
+      }
+      /* Dark scheme flips the FILL role only: an official-family mid gray
+         (#6a6a6a, between the site's #666 and #7e7e7e) under WHITE ink, hover
+         deepens to official #424242. #6a6a6a is the darkest gray that still
+         clears the 3:1 NON-TEXT floor on BOTH dark surfaces (3.49:1 on bg-base,
+         3.28:1 on layer-1) — the caret, focus ring and scrollbar hover read the
+         accent directly. Text roles stay on the light grays in both schemes. */
+      body.theme-endfield-gray[data-ds-dark-theme] {
+        --edge-accent-ink: #ffffff;
+        --edge-accent: #6a6a6a;
+        --edge-accent-deep: #424242;
+        --edge-accent-onpaper: #6a6a6a;
+      }
+      /* Token-derived aliases. These MUST be on body, not :root — see above. */
+      body {
+        --edge-signal: var(--edge-accent);
+        --edge-signal-dim: rgba(var(--edge-accent-rgb), 0.7);
+        --edge-paper: var(--dsw-alias-bg-base);
+        --edge-panel: var(--dsw-alias-bg-layer-1);
+        --edge-line: var(--dsw-alias-border-l1);
+        --edge-soft: var(--dsw-alias-bg-layer-2);
+        /* The theme's own face. THREE things are deliberate here.
+
+           (1) THE THEME STACK LEADS, with --dsw-font-family as a trailing
+               fallback — and this ORDER was measured, not guessed. On this host
+               the app's token renders in Segoe UI while the theme's stack renders
+               Arial (same string, 81.688px vs 84.516px — measured by
+               test/font-scope.test.js), so reading the token FIRST would silently
+               repaint the boot plate, the watermark and the settings panel in a
+               different face and invalidate every Arial-based proportion the
+               loader was measured with (see the pixel-scan notes on the brand
+               block). Leading with the theme stack keeps those surfaces exactly
+               as they render today, which is what this fix has to promise: the
+               request is to stop RESTYLING THE WHOLE APP, not to re-type the
+               theme.
+           (2) THE TOKEN IS STILL HONOURED, which is the protocol half of the
+               requirement: it is read, not ignored, and it is what applies on a
+               host with no Arial/Narrow/PingFang/YaHei at all — so a system
+               carrying neither the theme stack nor a configured root font still
+               lands on the app's stack instead of an arbitrary generic. A user
+               who deliberately configures a root font family therefore still
+               reaches the theme's own elements. If a future author wants the
+               world's configuration to win OUTRIGHT over the theme face, swapping
+               the two halves of this declaration is the whole change — say so in
+               the commit, because it re-types the boot plate.
+           (3) IT IS DECLARED ON body, NOT :root, for the same reason the aliases
+               above are — see the app-token note higher up. The var() fallback is
+               not decoration either: a custom property that substitutes a token
+               missing at the element it is READ from computes to nothing, the
+               trap that already shipped once with --edge-line
+               (test/probe-edge-line.js). Resolving where the value is used cannot
+               hit it. */
+        --edge-font: Arial, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif, var(--dsw-font-family);
+      }
+      /* ---------- where the theme's face is applied, and where it is NOT ----------
+         Only elements this theme created or owns. Every one of the three is a
+         node the theme injected itself, so a third-party widget can never be an
+         ancestor or a descendant of one of them — unless it attaches INSIDE the
+         boot plate or the watermark, which it does not: those layers are
+         pointer-events:none, aria-hidden chrome.
+           [data-endfield-loader]  the boot plate      (also carries the feature
+                                                       settings the layout measures:
+                                                       tabular figures + the
+                                                       altered single-storey
+                                                       glyph)
+           [data-endfield-watermark] the ENDFIELD wordmark
+           .endfield-settings      the 「终末地主题设置」 panel root
+         Deliberately NOT on body: the app renders its UI root font from
+         var(--dsw-font-family) on body, and a body font-family here would
+         re-break every installed widget exactly as the old :root override did. */
+      [data-endfield-loader],
+      [data-endfield-watermark],
+      .endfield-settings {
+        font-family: var(--edge-font);
+        font-feature-settings: "tnum" 1, "ss01" 1;
+        font-variant-ligatures: no-common-ligatures;
+      }
+      /* The persist-mode watermark is a z-index:-1 child of the conversation column.
+         Two properties are needed on that column, and only while the mark is mounted
+         there (the :has() guard makes this a no-op whenever the feature is off):
+           isolation: isolate — without a stacking context, z-index:-1 escapes to the
+             nearest ancestor context and paints behind the column's own opaque
+             background, i.e. invisible.
+           position: relative — the column ships as position:static, so an absolutely
+             positioned child would resolve against the app frame instead and spill
+             across the sidebar. This makes the column the containing block so
+             inset:0 means "exactly this column".
+         Every absolute descendant the app itself renders (header:after, tab:after,
+         heroGlow, the overlay composer seat) already has a positioned ancestor
+         nearer than this column, so their containing blocks are unchanged. */
+      /* Suffix-only match: the :has(>) guard pins this to exactly the element the
+         JS mounted the watermark into (only the conversation column or the app
+         frame ever hosts it), so the broad '_root' suffix cannot over-match. */
+      [class$='_root']:has(> [data-endfield-watermark]) {
+        isolation: isolate;
+        position: relative;
+      }
+      /* The persist FALLBACK mounts inside the app FRAME on pages with no
+         conversation column (a full-page settings view). Same reason as the rule
+         above: without isolation, the mark's z-index:-1 escapes to the root
+         stacking context and paints below the frame's own opaque background —
+         i.e. it never shows, which is exactly what the old body-level fallback
+         did. The frame is already position:relative, so
+         isolation alone is enough here. The :has() guard keeps the frame's
+         stacking behaviour stock whenever the mark is not mounted in it. */
+      [class*='_frame']:has(> [data-endfield-watermark]) {
+        isolation: isolate;
+      }
+      /* The mark sits behind text, so it must never intercept selection or clicks. */
+      [data-endfield-watermark] {
+        pointer-events: none !important;
+      }
+      /* ---------- watermark strength, per colour scheme ----------
+         One variable per scheme instead of one number in JS, because the two
+         schemes genuinely need different alphas and a scheme flip must re-resolve
+         with no JS involved.
+
+         Computed, not eyeballed — contrast of the composited ink against its own
+         background (the mark is always BEHIND text, so this measures how loudly
+         the decoration competes for attention, never foreground readability):
+
+              alpha | dark #101110  | light #e8e8e2
+              0.07  | 1.171 : 1     | 1.152 : 1
+              0.085 | 1.215 : 1     | 1.186 : 1
+              0.10  | 1.278 : 1     | 1.225 : 1
+              0.13  | 1.406 : 1     | 1.310 : 1   <- previous dark value
+              0.16  | 1.541 : 1     | 1.398 : 1   <- previous persist value
+
+         Dark mode is the reported problem: adding luminance to a near-black page
+         makes the wordmark read far louder than the same alpha subtracted from
+         cream, and at 0.13/0.16 it visibly cluttered the UI. Dark therefore drops
+         to 0.085 (1.215:1) — still clearly present, no longer competing. Light
+         keeps more strength (0.13) because cream needs it to register at all;
+         1.310:1 there looks quieter than 1.215:1 on black.
+         Floor is ~1.06:1, below which the mark reads as absent. */
+      body {
+        --edge-wm-alpha: 0.13;
+        /* The emblem mask is NORMALISED to full strength by the build (the official
+           PNG's own alpha peaks at ~40%, which under this opacity read as nothing),
+           so the emblem needs only a small lift over the letters to sit in the same
+           presence band. */
+        --edge-wm-emblem-alpha: 0.16;
+      }
+      body[data-ds-dark-theme] {
+        --edge-wm-alpha: 0.085;
+        --edge-wm-emblem-alpha: 0.105;
+      }

@@ -6,7 +6,7 @@ node selftest.js   # 反向验证 check.js 真能抓到那些问题
 npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / 性能全部验证
 ```
 
-本仓库的测试有一条贯穿原则：**从真实文件里读值，不复述数值。** 读哪个文件取决于读什么：行为与产物读 `client.js`（浏览器里加载的就是它）；样式规则读 `src/styles/*.css`（tsdown 把 css 以转义字符串嵌进产物，规则版式只存在于源文件里），产物是否新鲜由 `scripts/build-client.js --check` 单独把关。样式源**只有一处清单**（`scripts/lib/sources.js` 的 `STYLE_FILES` / `concatCss()`）：所有读样式的脚本与测试都 `require` 它，不在测试里各自拼 `theme.css + '\n' + generated.css`——否则加一层就要改 N 个地方。复述只能测到副本——一次样式表编辑后，测试仍会对着旧数字通过。
+本仓库的测试有一条贯穿原则：**从真实文件里读值，不复述数值。** 读哪个文件取决于读什么：行为与产物读 `client.js`（浏览器里加载的就是它）；样式规则读 `src/styles/*.css`（tsdown 把 css 以转义字符串嵌进产物，规则版式只存在于源文件里），产物是否新鲜由 `scripts/build-client.js --check` 单独把关。样式源**只有一处清单**（`scripts/lib/sources.js` 的 `STYLE_FILES` / `concatCss()`）：所有读样式的脚本与测试都 `require` 它，不在测试里各自拼层文件路径——否则加一层就要改 N 个地方。复述只能测到副本——一次样式表编辑后，测试仍会对着旧数字通过。
 
 第二条原则：**每条断言都做过反向对照（变异验证）。** 故意把被测行为改坏，确认该断言真的会失败。一个从未被观察到失败过的校验，不能算证据。
 
@@ -19,7 +19,7 @@ npm test           # 上面两项 + 配色 / 设置页 / 渲染 / 覆盖率 / �
 
 ## check.js — 样式表静态不变量
 
-主题样式表是**真 CSS 源文件**（`src/styles/theme.css` + `generated.css`，经 tsdown 内嵌进 `client.js` 产物——产物新鲜度由 `scripts/build-client.js --check` 单独把关）。源文件层面有几类改动会在「文件仍能解析」的情况下悄悄破坏效果。检查项：
+主题样式表是**真 CSS 源文件**（`src/styles/` 六个手写层 + `generated.css`，经 tsdown 内嵌进 `client.js` 产物——产物新鲜度由 `scripts/build-client.js --check` 单独把关）。源文件层面有几类改动会在「文件仍能解析」的情况下悄悄破坏效果。检查项：
 
 | 检查 | 守的是什么 |
 | --- | --- |
@@ -79,7 +79,7 @@ node test/hover-check.js             # 用 CDP 真的移动鼠标，验证真实
 node test/verify-shots.js            # 解码四张截图统计强调色像素
 ```
 
-**`palette-contrast.test.js`** 从 `src/styles/*.css` 的实际样式表里把变量读出来再验算（JS 侧的令牌字面量读 `src/client/index.js`）。覆盖约 20 项：实心底 + 墨色字达 AA、悬停底同样达标、渐变文字四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、hero 光晕不比原品牌蓝更响、两配色确实不同、强调色写成 6 位十六进制，以及**武陵青的亮度必须落在 45%–56% 区间且留在青碧色轴上**。
+**`palette-contrast.test.js`** 从 `src/styles/*.css` 的实际样式表里把变量读出来再验算（JS 侧的令牌字面量读 `concatClientJs()`，令牌层在 `src/client/ui/tokens.js`）。覆盖约 20 项：实心底 + 墨色字达 AA、悬停底同样达标、渐变文字四个色标对**两种**可能底色都达 AA、暗色强调色作图标墨色 ≥3、hero 光晕不比原品牌蓝更响、两配色确实不同、强调色写成 6 位十六进制，以及**武陵青的亮度必须落在 45%–56% 区间且留在青碧色轴上**。
 
 **`palette-switch.test.js`** 在真实浏览器里跑真实 `client.js`，并**按应用的真实方式把令牌写成 `<body>` 行内样式**——用样式表 `:root` 假装会让测试通过而线上坏掉，这种不对称正是它存在的理由。断言：默认是谷地黄且不带 class；11 个变量全部**非空**；`--dsw-alias-brand-primary` 在切换后**自动**变成青色（令牌层没有重新注册）；`rgba(var(--rgb), α)` 型半透明色块随之切换；渐变文字换色；**画布被重绘且新描边偏青**（B 通道高于 R）；关闭主题后不残留 class。
 
@@ -119,7 +119,7 @@ node test/motion-check.js            # 真实浏览器 + 真实指针，验证 D
 node test/perf-motion.test.js        # 量「流畅」：静态守卫 + layout/帧间隔/主线程 + 停留不做事
 ```
 
-**`motion-check.js`** 把样式源（theme.css + generated.css）注入一张夹具页，再用 DevTools 协议的 `Input.dispatchMouseEvent` **真的把鼠标移到按钮上并按下**，然后读计算样式、必要时**解码截图数像素**。它守的是「选择器写了但没生效」这一类静默失败：
+**`motion-check.js`** 把样式源（`concatCss()` 的全部层）注入一张夹具页，再用 DevTools 协议的 `Input.dispatchMouseEvent` **真的把鼠标移到按钮上并按下**，然后读计算样式、必要时**解码截图数像素**。它守的是「选择器写了但没生效」这一类静默失败：
 
 - 属性钩子：`data-endfield-motion` 是 `<body>` 上的一个值，写错值等于整套规则不存在；
 - 层叠：应用自己有 `button { transition: none !important }`，主题的过渡必须赢过它；

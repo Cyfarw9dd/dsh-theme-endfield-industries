@@ -689,7 +689,7 @@ async function main() {
     // be confused by anything in the render helper.
     const hooks = client.hooks()
     /* 0-indexed: the 5th useState is `palette` (enabled, wmOn, wmPersist, loader, palette).
-       Keep this list in step with the panel's useState order in src/client/index.js. */
+       Keep this list in step with the panel's useState order in src/client/ui/settings/section.js. */
     const paletteSlot = hooks[4]
     if (paletteSlot === 'wuling') {
       pass('panel hook state adopted the served palette (slot moved off its default)')

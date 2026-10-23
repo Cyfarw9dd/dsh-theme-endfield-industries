@@ -1,0 +1,425 @@
+      /* ================= boot loading screen ================= */
+      /* Fixed plate above everything, including the shell overlay layer. It exists
+         only while the boot animation plays and is removed afterwards, so none of
+         these rules match during normal use. Measurements come from the reference
+         frame (1340x731) expressed as ratios so they scale with the viewport. */
+      [data-endfield-loader] {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        background: #101110;
+        /* Not inherited from the app: the plate can paint before tokens resolve,
+           and since the theme stopped overriding the root font token it must not
+           depend on inheritance for its face either. Both the family and the
+           openType features are declared here rather than globally. */
+        color: #f5f5f0;
+        font-family: var(--edge-font);
+        font-feature-settings: "tnum" 1, "ss01" 1;
+        overflow: hidden;
+        /* Never trap the user: even mid-animation the app underneath stays usable. */
+        pointer-events: none;
+        opacity: 1;
+        /* No opacity transition: the fade is driven from JS (see finish()) because a
+           CSS transition proved not to run in every renderer this plate targets.
+           finish() also sets inline transition:none so nothing can fight it. */
+      }
+      /* Kept as a state hook (and a fallback for a renderer that never runs the JS
+         fade) — the inline opacity written by finish() is what actually animates. */
+      [data-endfield-loader][data-endfield-loader-exit] {
+        opacity: 0;
+      }
+      /* Faint industrial grid, matching the reference backdrop texture. */
+      [data-endfield-loader-tex] {
+        position: absolute;
+        inset: 0;
+        opacity: 0.55;
+        background-image:
+          repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 4px),
+          repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.010) 0 1px, transparent 1px 120px);
+      }
+      /* 8px rail: dim track full height, signal-yellow fill from the top down. */
+      /* 10px rail, measured from the reference (10/1184 of the width). */
+      [data-endfield-loader-track] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        background: rgba(var(--edge-accent-rgb), 0.10);
+      }
+      [data-endfield-loader-fill] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 10px;
+        height: 0%;
+        background: var(--edge-accent);
+      }
+      /* Meter RIDES THE FILL END: its top offset is set per frame from the same eased
+         progress value that drives the fill height (see step()), so the readout
+         descends with the bar. The exact offset and the clamping are done in JS,
+         where the group's real height is known — a pure CSS percentage would let the
+         readout hang off the bottom of the screen as the fill approaches 100%.
+         Deliberately no CSS transition on the top offset: it is already updated every
+         frame, and a transition would make the readout visibly lag the bar. */
+      [data-endfield-loader-meter] {
+        position: absolute;
+        left: 26px;
+        top: 0;
+        will-change: top;
+      }
+      [data-endfield-loader][data-endfield-loader-complete] [data-endfield-loader-meter] {
+        position: fixed !important;
+        left: 26px !important;
+        top: auto !important;
+        bottom: 64px !important;
+      }
+      /* ---- completion flourish: yellow sweep to the right, then fade ----
+         Starts as the rail itself (same 10px width, same colour, same left edge) and
+         widens to cover the viewport, so the sweep reads as the finished bar flooding
+         the screen rather than a new element appearing.
+         Width and opacity are animated from JS (see finish()), deliberately NOT by a
+         CSS transition: measured in the verification renderer, a transition declared
+         here never started — no transitionrun/start/end events fired and the computed
+         width stayed at 10px well past its duration — which would leave a thin stub
+         instead of a sweep. These rules therefore only describe the resting state and
+         must not declare a width/opacity transition that would fight the JS. */
+      [data-endfield-loader-wipe] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        background: var(--edge-accent);
+        opacity: 0;
+      }
+      [data-endfield-loader-tick] {
+        display: block;
+        width: 4px;
+        height: 15px;
+        background: var(--edge-accent);
+      }
+      [data-endfield-loader-pct] {
+        display: block;
+        margin-top: 7px;
+        color: var(--edge-status-dark, var(--edge-accent));
+        font-size: 39px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        font-variant-numeric: tabular-nums;
+      }
+      [data-endfield-loader-status] {
+        display: block;
+        margin-top: 12px;
+        color: #666;
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+      }
+      /* ---- Poster brand block --------------------------------------------------
+         Measured from the supplied key-art (1184x685) by scanning its pixels, not
+         estimated — the ink bands on the right half of the reference are:
+           block left ink edge  x=868  -> 868/1184 = 73.3% of the width
+           right-most ink       x=1098 -> right gap 86px = 7.3% of the width
+           kicker band          y 258..260   h=3    (ratio to cap 0.10)
+           END band             y 265..293   h=29   -> cap 4.23% of plate height
+           FIELD band           y 297..325   h=29   -> line pitch 32px, 32/29 = 1.10
+           chevron band         y 498..506   x=841  -> outdent 868-841 = 27px
+           tagline band         y 543..551   h=9, run width 231px
+         The block is LEFT-aligned internally (all rows share x=868) but placed on
+         the right — that combination is what gives the reference its look; a
+         right-aligned (ragged-left) block reads completely differently.
+
+         GEOMETRY MODEL — the block is anchored by its RIGHT margin, not by a left
+         percentage. That is deliberate and is what fixes two measured faults:
+           1. A left percentage (the old --edge-rail: 73%) sets where the block
+              STARTS and lets its width run toward the right edge, so the margin
+              that a viewer actually reads as "too far right" was never controlled.
+              Anchoring 'right' makes that margin the declared quantity, and the
+              rhythm line falls out of the widest row instead of being guessed.
+           2. Sizing purely in vh made the wordmark shrink on a wide-but-short
+              window and, at the old 4.2vh, rendered the cap at 3.01% of plate
+              height against the reference's 4.23% — measurably ~70% of reference,
+              which is why it read as too small.
+         --edge-word is therefore clamp(26px, min(5.2vh, 4.8vw), 64px):
+           min(5.2vh, 4.8vw)  scales with the SMALLER axis, so neither a short nor
+                              a narrow window can push the block into the rail;
+           26px floor         keeps the sub-rows legible on a tiny plate;
+           64px ceiling       measured: without it, cap-height fell to 2.69% of H
+                              at 2560x1440 (the block visibly shrank on a large
+                              display); 64px holds it at ~3.2% and up.
+         Verified across 13 viewports from 520x900 to 2560x1440: cap-height stays
+         within 3.1-3.9% of plate height (reference 4.23%, intentionally a touch
+         under — see below) with no overflow past any edge and >=150px clearance
+         from the progress rail and its meter.
+         The block still renders slightly under reference scale on purpose: the
+         key-art is a full-bleed poster, whereas this plate flashes over an app.
+         Every row is a ratio of --edge-word, so this one value rescales the whole
+         block without disturbing the measured proportions above. The small rows
+         additionally carry a px floor — see the max() calls below. */
+      [data-endfield-loader] {
+        --edge-word: clamp(26px, min(5.2vh, 4.8vw), 64px);
+        /* Distance from the plate's right edge to the block's right edge. The %
+           term keeps it proportional on a wide display; the px term stops it
+           collapsing on a narrow one. */
+        --edge-gap: max(64px, 12%);
+      }
+      [data-endfield-loader-brand] {
+        position: absolute;
+        right: var(--edge-gap);
+        top: 50%;
+        transform: translateY(-50%);
+        /* No max-width: every row sets white-space: nowrap, so a width cap cannot
+           wrap them — it only clips. The block moves instead (see the --edge-gap
+           media queries) so the longest row always fits. */
+      }
+      /* Anchor to --edge-word like every other row. Without this the em below
+         resolves against the inherited root font-size (16px), which rendered the
+         kicker at 2.25x its reference size and bloated the whole block. */
+      [data-endfield-loader-kicker] {
+        display: block;
+        font-size: var(--edge-word);
+      }
+      [data-endfield-loader-kicker]::before {
+        content: 'DEEPSEEK HARNESS';
+        display: block;
+        margin-bottom: 0.5em;
+        color: #f5f5f0;
+        /* max() floor: the reference ratio alone (0.135em of the wordmark) computes
+           to ~4px on a short plate, which renders as an illegible grey smudge
+           rather than text. 9px is the smallest size this still reads at. */
+        font-size: max(9px, 0.155em);
+        font-weight: 600;
+        letter-spacing: 0.26em;
+        white-space: nowrap;
+        opacity: 0.95;
+      }
+      /* Both rows: the negative margin cancels Arial's left side bearing so the
+         INK edge lands on the rhythm line, not the glyph box edge. */
+      [data-endfield-loader-word] {
+        display: block;
+        margin-left: -0.055em;
+        color: #f5f5f0;
+        font-size: var(--edge-word);
+        font-weight: 900;
+        /* 0.80, not 1.10: the reference pitch/cap of 1.10 is measured between
+           INK tops, while line-height spans the full em box (ascender+descender),
+           which for Arial-900 is ~1.38x the cap height. 1.10 as a line-height
+           renders a visibly loose 1.52 ink pitch. */
+        line-height: 0.80;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+      }
+      [data-endfield-loader-word1]::before { content: 'END'; }
+      [data-endfield-loader-word2]::before { content: 'FIELD'; }
+      /* ---- detail cluster: chevron outdented into the left margin ---- */
+      [data-endfield-loader-detail] {
+        display: block;
+        position: relative;
+        margin-top: 1.9em;
+        font-size: var(--edge-word);
+      }
+      [data-endfield-loader-chev] {
+        position: absolute;
+        left: -0.26em;
+        top: 0.02em;
+        width: 0.12em;
+        height: 0.24em;
+      }
+      /* Two stacked chevrons drawn from borders — no glyph, no font dependency. */
+      [data-endfield-loader-chev]::before,
+      [data-endfield-loader-chev]::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 0.10em;
+        height: 0.10em;
+        border-left: 0.028em solid var(--edge-accent);
+        border-bottom: 0.028em solid var(--edge-accent);
+        transform: rotate(-45deg);
+      }
+      [data-endfield-loader-chev]::before { top: 0; }
+      [data-endfield-loader-chev]::after { top: 0.09em; }
+      [data-endfield-loader-sub]::before {
+        content: 'EDGE INTELLIGENCE THEME';
+        display: block;
+        color: #8a8d88;
+        /* Same legibility floor as the kicker: measured, the bare ratio rendered
+           this row 3px tall — visible as a blur, not readable as words. */
+        font-size: max(9px, 0.135em);
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        white-space: nowrap;
+      }
+      [data-endfield-loader-seq]::before {
+        content: 'TERRA RESEARCH COMMISSION / BOOT SEQUENCE';
+        display: block;
+        margin-top: 0.4em;
+        color: #6a6d64;
+        font-size: max(8px, 0.125em);
+        font-weight: 500;
+        letter-spacing: 0.10em;
+        white-space: nowrap;
+      }
+      [data-endfield-loader-squares] {
+        display: grid;
+        grid-template-columns: repeat(6, 0.115em);
+        gap: 0.04em;
+        margin-top: 0.30em;
+      }
+      [data-endfield-loader-squares] i {
+        display: block;
+        height: 0.05em;
+        background: #2e302d;
+      }
+      [data-endfield-loader-squares] i[data-on] {
+        background: var(--edge-accent);
+      }
+      /* Tagline closes the block on the same rhythm line.
+         Reference: cap 11px across 232px, i.e. cap/width 0.38 — unreachable in
+         Arial, where an 11px-cap run of this string measures 299px (340px at the
+         reference's tracking). The source art uses a condensed face, and probing
+         the renderer showed Arial Narrow genuinely resolves here (245px vs Arial's
+         299px on the same probe), so it is used with Arial as the fallback: on a
+         host without it the run simply sets wider in Arial and still fits, because
+         the size below is a ratio of the wordmark rather than a fixed px. */
+      [data-endfield-loader-tag]::before {
+        content: 'OVER THE FRONTIER / INTO THE FRONT';
+        display: block;
+        margin-top: 1.05em;
+        color: #f5f5f0;
+        font-family: "Arial Narrow", Arial, sans-serif;
+        font-size: max(10px, 0.34em);
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+      }
+      [data-endfield-loader-tag] {
+        display: block;
+        font-size: var(--edge-word);
+      }
+      /* Narrow windows: pull the block toward the right edge so the measured ratios
+         survive instead of the text clipping. Only the margin changes — --edge-word
+         already scales itself off the smaller viewport axis, so the wordmark needs
+         no per-breakpoint override. */
+      @media (max-width: 1100px) {
+        [data-endfield-loader] { --edge-gap: max(48px, 9%); }
+      }
+      @media (max-width: 760px) {
+        [data-endfield-loader] { --edge-gap: max(28px, 5%); }
+      }
+      /* Reduced motion is handled in finish(), which skips the sweep/fade entirely
+         and removes the plate outright; nothing here needs to disable a transition,
+         since the plate no longer declares one. */
+      /* Settings page root (the settings.section slot's own wrapper div, the one
+         element of that panel this theme gets to name). Declaring the theme face
+         here means every row, hint and button inside it inherits it BY
+         CONSTRUCTION, without touching the app's root font token. The class is
+         stable and additive, so it is safe to target. It also carries no colours:
+         the panel keeps taking its ink and surfaces from app tokens, which is
+         what keeps it readable on both schemes and with the theme switched off
+         (see test/settings-off.test.js). */
+      .endfield-settings {
+        font-family: var(--edge-font);
+      }
+      /* Settings page group headers (rendered by the settings.section slot).
+         The label is accent ink that stays AA on both surfaces: light mode uses
+         the darkened accent stops (--edge-status-light: #6b5d00 / #006a6a),
+         dark mode the bright ones (--edge-status-dark: #fff500 / #14d0d0) — the
+         same measured pairs the turn-status shimmer uses. The palette class
+         flips both variables, so the header follows the palette for free. */
+      .endfield-settings-group-title {
+        color: var(--edge-status-light);
+      }
+      body[data-ds-dark-theme] .endfield-settings-group-title {
+        color: var(--edge-status-dark);
+      }
+      /* ================= 终末地工业风通知 =================
+         The toast stack: bottom-right column of square industrial cards.
+         Design language: paper fill, 2px ink border, ZERO radius, a signal-colour
+         left rail (the accent as a 6px stripe — the same rail grammar as the boot
+         plate), barcode-style head row. Attention kinds carry their own dismiss
+         button; the done receipt does not (it auto-dismisses). */
+      [data-endfield-notify-stack] {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 2147481000;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        /* Above the app's own chrome but below the boot plate; the stack is
+           interactive (dismiss buttons), so it must not be pointer-events:none. */
+        pointer-events: none;
+        max-width: min(340px, calc(100vw - 32px));
+      }
+      [data-endfield-notify] {
+        pointer-events: auto;
+        position: relative;
+        display: flex;
+        align-items: stretch;
+        background: var(--dsw-alias-bg-layer-1);
+        border: 2px solid var(--dsw-alias-label-primary);
+        border-radius: 0;
+        box-shadow: 4px 4px 0 rgba(16, 17, 16, 0.35);
+        overflow: hidden;
+        animation: endfield-notify-in 220ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
+      }
+      [data-endfield-notify-rail] {
+        flex: 0 0 6px;
+        background: var(--edge-accent);
+      }
+      /* Attention kinds keep the ink border; the receipt swaps the rail for a
+         thinner one so urgency is readable at a glance. */
+      [data-endfield-notify='done'] [data-endfield-notify-rail] {
+        flex-basis: 4px;
+        background: var(--edge-accent-onpaper, var(--edge-accent));
+      }
+      [data-endfield-notify-main] {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px 12px;
+        min-width: 0;
+      }
+      [data-endfield-notify-head] {
+        font-family: "Arial Black", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-weight: 900;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        color: var(--dsw-alias-label-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      [data-endfield-notify-body] {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--dsw-alias-label-secondary);
+      }
+      [data-endfield-notify-close] {
+        flex: 0 0 auto;
+        align-self: flex-start;
+        margin: 6px 6px auto 0;
+        width: 22px;
+        height: 22px;
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 0;
+        background: transparent;
+        color: var(--dsw-alias-label-secondary);
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      [data-endfield-notify-close]:hover {
+        background: var(--dsw-alias-label-primary);
+        color: var(--dsw-alias-bg-layer-1);
+      }
+      @keyframes endfield-notify-in {
+        from { opacity: 0; transform: translateX(24px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        [data-endfield-notify] { animation: none; }
+      }

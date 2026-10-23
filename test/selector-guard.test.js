@@ -35,15 +35,16 @@
  *
  * Usage: node test/selector-guard.test.js
  */
-const fs = require('fs')
 const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 
-/* Hooks live in the client JS and the stylesheet sources; the built artifact
-   re-quotes double-quoted selectors as \" (JSON escaping), so includes()
-   only works against the pre-bundle sources. */
-const src = fs.readFileSync(sources.CLIENT_ENTRY, 'utf8') + '\n' + sources.concatCss()
+/* Hooks live in the client JS modules and the stylesheet sources; the built
+   artifact re-quotes double-quoted selectors as \" (JSON escaping), so
+   includes() only works against the pre-bundle sources. The JS detectors moved
+   out of the entry with the module split (decor/watermark.js owns the hero /
+   column / headline hooks), so the JS stream is the WHOLE src/client tree. */
+const src = sources.concatClientJs() + '\n' + sources.concatCss()
 
 let failures = 0
 const pass = (m) => console.log('ok    ' + m)

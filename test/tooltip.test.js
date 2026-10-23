@@ -33,7 +33,8 @@ const ROOT = path.resolve(__dirname, '..')
 /* Expected values are read from the real source, never restated. JS token
    literals live in the PRE-BUNDLE source: the bundler re-quotes strings
    (single → double), so the artifact cannot be matched with this regex. */
-const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The token literals moved to ui/tokens.js with the module split; read the whole client tree. */
+const src = require('../scripts/lib/sources.js').concatClientJs()
 const jsToken = (name) => {
   const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
   if (!m) { console.error('FAIL  overrideTokens 里读不到 ' + name); process.exit(1) }

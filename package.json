@@ -25,7 +25,7 @@
     "test:font": "node test/font-scope.test.js",
     "test:palette": "node test/palette-contrast.test.js && node test/palette-switch.test.js",
     "test:selector": "node test/selector-guard.test.js && node test/preset-chip.test.js",
-    "test:buttons": "node test/settings-buttons.test.js && node test/tooltip.test.js && node test/tooltip.test.js && node test/hover-check.js",
+    "test:buttons": "node test/settings-buttons.test.js && node test/tooltip.test.js && node test/hover-check.js",
     "test:motion": "node test/motion-check.js && node test/perf-motion.test.js",
     "test:live": "node test/live-check.js",
     "test:watermark": "node test/watermark-stacking.test.js",
