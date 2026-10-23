@@ -163,7 +163,7 @@ const field = PREFS_KEY_TO_FIELD[rawKey] || rawKey.slice(PREFS_NS.length + 1)
 
 **物理相邻 ≠ 同一个模块。** 第一次拆完，`prefsRetryTimer` 的声明跟着它两侧的 `prefsBindTimer` / `prefsSettleTimer` 一起进了 transport，而用它的是 store 的重试循环：构建与静态检查全绿，`settings-config-forms` 一跑就 `ReferenceError: prefsRetryTimer is not defined`。同一次还漏了 settle watch 重新选绑后那句 `prefsEmit()`（应为 `store.notify()`）。这正是「搬代码」最危险的地方——它看起来是纯移动。教训是：**这类拆分不能只看 diff 像不像移动，必须让真实运输层的用例跑一遍**（`settings-config-forms` 用假 `configForms` 驱动真实 client，一步就抓到）。
 
-实测：入口 `src/client/index.js` 3536 → 2789 行（-747，约 -21%），`prefs/store.js` 451 行、`prefs/transport.js` 438 行；产物 `client.js` 417,790 → 424,576 字节（+6,786，两段模块头注释与 store/transport 协议接口的开销；整个重构起点 417,207）。`selftest.js` 的 `stageTree()` 现在整目录复制 `src/client/prefs/`——新增 src 文件若不在临时树里，重定向后的 check 会看到一棵不完整的树。
+实测：入口 `src/client/index.js` 3536 → 2789 行（-747，约 -21%），`prefs/store.js` 451 行、`prefs/transport.js` 438 行；产物 `client.js` 417,790 → 424,576 字节（+6,786，两段模块头注释与 store/transport 协议接口的开销；整个重构起点 417,207）。`selftest.js` 的 `stageTree()` 后来改为整目录复制 `src/client/` 下**每个**模块目录（decor/ 拆分起）——新增 src 文件若不在临时树里，重定向后的 check 会看到一棵不完整的树。
 
 ## 变量必须声明在 body 而不是 :root
 
@@ -219,7 +219,7 @@ body{font-family:var( --dsw-font-family, -apple-system, … )}
 ## 样式表是一整个模板字符串
 
 > **（已演进）** 本节描述的形态已成为历史：样式表现在是真 CSS 源文件
-> （`src/styles/theme.css` + `generated.css`），由 tsdown 构建内嵌进
+> （`src/styles/` 分层 + `generated.css`），由 tsdown 构建内嵌进
 > `client.js` 单文件产物——反引号/插值两类失败模式就此**结构性消失**，
 > check.js 的守卫对象也随之改为源文件结构不变量与产物新鲜度
 > （`scripts/build-client.js --check`）。下文保留为决策档案。

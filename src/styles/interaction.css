@@ -1,0 +1,316 @@
+      /* ---------- selection + caret: the official interaction GRAYS ----------
+         Measured from the official site's own CSS: hover and selection surfaces
+         are a gray scale there (#d9d9d9/#f0f0f0 light, #484848/#626262 dark)
+         while the accent stays a rare SIGNAL. Text selection is the most
+         repeated interaction in this UI, so it follows the official grammar in
+         EVERY palette — a yellow selection reads as a highlighter and was
+         reported as exactly that. These tokens are scheme-only: no palette
+         class ever overrides them. Pairs stay AA:
+           light #d9d9d9 + ink 13.41:1 · dark #6a6a6a + white 5.41:1 */
+      body {
+        --edge-select-fill: #d9d9d9;
+        --edge-select-ink: #101110;
+        --edge-caret: #666666;
+      }
+      body[data-ds-dark-theme] {
+        --edge-select-fill: #6a6a6a;
+        --edge-select-ink: #ffffff;
+        --edge-caret: #d9d9d9;
+      }
+      ::selection {
+        color: var(--edge-select-ink, #000);
+        background: var(--edge-select-fill, #d9d9d9);
+      }
+      /* ================= 按钮交互动效（合并设计，data-endfield-motion 开关） =======
+         这里曾是六套互斥方案（A 信号 / B 静默 / C 冲压 / D 角标 / E 读数 /
+         F 盖章），由设置页下拉切换。2026-10 合并为**一套固定设计**：B 静默、
+         C 冲压、F 盖章整体移除（它们的硬阴影位移 / 落印旋转 / 按下抖动与官网
+         「时长 ≤.3s、无弹跳、变形优先于位移」的实测语法相抵触，且互为噪音），
+         E 读数随 CTA 归属信号而失去独立母题；两套幸存母题按角色分工——
+
+           · 信号（官网签名，原方案A）：
+             - 新会话按钮 / 审批按钮：箭头自左侧滑入（transform + opacity，
+               合成器级，零重排）；
+             - 表格行（tbody tr）：悬停左缘 3px 信号色细条。
+
+           · 角标（工程标注，原方案D 的母题、收到行角色）：
+             - 侧边栏会话行 + 搜索结果行：悬停时四角 12px L 形角标淡入
+               （.18s）——工程图纸的「框选/定位」语法。
+
+         共通底座不变：全局 .2s 颜色过渡（hover 不瞬变）+ :active 暗一档。
+         开关只剩开/关：data-endfield-motion 属性在场即整套生效，属性值固定
+         'signal'（历史存储字面量；读侧把一切旧方案名都并轨为「开」，见
+         readMotion）。
+
+         官网实测数据支撑（动效部分见 docs/notes/endfield-motion-research.md）：
+         · 时长全部 ≤.3s；无弹跳/无回弹（keyframes 的 cubic-bezier y ≤ 1）
+         · 变形优先于位移；颜色就是状态（hover亮/active暗）
+         · 零 JS 动画库，纯 CSS transition
+
+         色彩取值分两类，**不要混**：
+         · 画在纸/面板上的（角标、表格行左边条亮色档）走 --edge-accent-onpaper；
+         · 画在**强调色实心底**上的只有信号箭头，它走 --edge-accent-ink——新会话
+           按钮自己的底就是 --edge-accent（悬停/按下 --edge-accent-deep），同色叠
+           同色会 1.00:1，而 onpaper 在亮黄/亮青里**等于** accent（1.00–1.51:1）。
+           这个反例真的上线过，最后被像素断言抓住。
+         配对由 test/palette-contrast.test.js 第 12 节断言（ink × accent/deep，
+         各配色 5.41–16.50:1）。
+
+         prefers-reduced-motion：位移动画全部关掉，保留颜色过渡，见本节末尾。 */
+      /* ================= 菜单当前项：划词灰填充（模型栏 / 权限更改） =================
+         本主题的语法是「选中 = 固定灰」（::selection 那对 fill/ink，亮
+         #d9d9d9 / 暗 #6a6a6a，配对对比度见上方注释），强调黄只做信号。但两处
+         下拉的「当前项」只有一枚对勾浮在透明底上——一眼读不出哪项是当前值。
+         按用户要求改成与划词完全一致的灰底 + 墨字（含子孙元素，对勾/徽标
+         一并单色化），其余行的悬停/键盘高亮仍走黄色淡染：选中是状态，
+         悬停是信号。
+
+         两个钩子都对过整个已装应用包（0.1.7-era），各只命中目标组件：
+           · [role='menuitemradio'][aria-checked='true'] —— 模型选择包独有
+             （composer 模型位与 /model 弹窗共用同一组件，模型行与推理等级行
+             都是 menuitemradio + aria-checked）；
+           · [role='menuitem'][class*='_selected']:has([class$='_optionLabel'])
+             —— 权限预设弹层（primitives Menu 的 check 选中行，标签内嵌
+             optionLabel span）。用户提问编排器（user-questions）也有
+             _optionLabel，但那些是普通 chip（无 menuitem 角色），不会被
+             :has 这条够到；其余 Menu 弹层不带 optionLabel，同样不命中。
+           · 本主题自己的设置下拉（.endfield-select-option）也是 menuitemradio，
+             但它照官网筛选下拉画自己的斜纹选中底（见 .endfield-select 段），
+             所以开洞——否则这里的 !important 会把斜纹层与图块一起刷成平灰。 */
+      [role='menuitemradio'][aria-checked='true']:not(.endfield-select-option),
+      [role='menuitemradio'][aria-checked='true']:not(.endfield-select-option) *,
+      [role='menuitem'][class*='_selected']:has([class$='_optionLabel']),
+      [role='menuitem'][class*='_selected']:has([class$='_optionLabel']) * {
+        background-color: var(--edge-select-fill, #d9d9d9) !important;
+        color: var(--edge-select-ink, #101110) !important;
+      }
+      /* 背景只落在行盒本身：子元素若是行内排版的 span，background 会随
+         color 一起继承成灰条，把「整行填充」碎成文字块。显式清零，只让
+         行盒持底色。 */
+      [role='menuitemradio'][aria-checked='true']:not(.endfield-select-option) *,
+      [role='menuitem'][class*='_selected']:has([class$='_optionLabel']) * {
+        background-color: transparent !important;
+      }
+
+
+      /* ---------- 共通（合并设计）：全局颜色过渡 ----------
+         只过渡「颜色类」属性。两个实测/证词都指向同一条：过渡属性越少越省。
+         · box-shadow / filter / width 在悬停按下时是**一次性**变化，本来不需要
+           过渡，写进 transition 只会让每次悬停多跑一遍栅格化或重排；
+         · border-radius 尤其贵——浏览器把它当「可触发重排」的属性处理，在长列表
+           上悬停会造成整屏布局失效（实测：把 border-radius 留在通用过渡里，
+           300 行扫描的 LayoutDuration 从 0 涨到 20ms/s）。合并设计里没有任何
+           规则动圆角（见 1 号注），它也就始终不进通用过渡。 */
+      body[data-endfield-motion] button,
+      body[data-endfield-motion] [role='button'],
+      body[data-endfield-motion] [role='tab'],
+      body[data-endfield-motion] [role='menuitem'],
+      body[data-endfield-motion] [role='option'],
+      body[data-endfield-motion] a {
+        transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+      }
+
+      /* ---------- 共通（合并设计）：:active 按下暗一档 ---------- */
+      body[data-endfield-motion] button:active:not(:disabled),
+      body[data-endfield-motion] [role='button']:active:not(:disabled) {
+        filter: brightness(.85);
+      }
+
+      /* ================= 信号母题（原方案A）：箭头 + 行左缘 ================= */
+
+      /* 1 号注.（已删除）悬停圆角软化。
+         官网确实在 hover 里动圆角（2px→6px，调研 §4.2 原文），这里曾照做过一条
+         「直角模式下按钮悬停 border-radius:6px」。撤掉的原因是用户实测反馈定的
+         准则：**圆角全局恒定，不随状态变化**——悬停瞬间方角变圆角，再叠加排除
+         清单（图标/走纸/发送按钮不参与），呈现为「部分按钮、悬停时才变的不一致
+         倒角」。直角模式一律 0；圆角模式（theme-endfield-round）保持上游原样；
+         两种模式各自恒定。附带收益：border-radius 被浏览器按「可能触发重排」
+         处理，悬停改圆角在长列表上有实测成本（见性能段）。 */
+      /* 2. 新会话按钮箭头动效。
+         不做 clip-path 变形——两个 polygon 之间的点位插值在过渡期间产生
+         自交形状（蝶形），视觉上闪烁扭曲。改为：形状固定为右指三角，
+         仅动画 transform + opacity（合成器级，零 paint，零重排）。
+         悬停时箭头从左侧滑入并放大到位。 */
+      body[data-endfield-motion] [class$='_newSession'] {
+        position: relative;
+      }
+      body[data-endfield-motion] [class$='_newSession']::after {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 50%;
+        width: 12px;
+        height: 60%;
+        background-color: var(--edge-accent-ink, #101110);
+        clip-path: polygon(0 15%, 100% 50%, 0 85%);
+        opacity: 0;
+        transform: translateY(-50%) translateX(-14px) scale(.4);
+        transition: opacity .2s ease, transform .2s cubic-bezier(.16, 1, .3, 1);
+        pointer-events: none;
+        z-index: 1;
+      }
+      body[data-endfield-motion] [class$='_newSession']:hover::after {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0) scale(1);
+      }
+
+      /* 3. 审批按钮：同款箭头滑入 */
+      body[data-endfield-motion] [data-cordis-approve] {
+        position: relative;
+      }
+      body[data-endfield-motion] [data-cordis-approve]::after {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 50%;
+        width: 10px;
+        height: 55%;
+        background-color: currentColor;
+        clip-path: polygon(0 15%, 100% 50%, 0 85%);
+        opacity: 0;
+        transform: translateY(-50%) translateX(-12px) scale(.4);
+        transition: opacity .2s ease, transform .2s cubic-bezier(.16, 1, .3, 1);
+        pointer-events: none;
+      }
+      body[data-endfield-motion] [data-cordis-approve]:hover::after {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0) scale(1);
+      }
+
+      /* 4. 发送/停止按钮（输入区 _primary）**不做动效**。
+         这里曾经是一个「信号色箭头自左侧滑入」的伪元素。取消它的理由有两条：
+         · 官方 /operator 右侧那列圆形按钮（切换干员）只有 .3s 的 transform 与
+           background-color .2s 两种过渡，**没有任何形变式动效**——它的状态靠
+           颜色与 2px 黄边表达（选中 '#fffa00'、悬停 '#626262'、按下 '#282828'）。
+           发送按钮上挂一个滑入箭头，比参考对象本身更吵；也不符合设计语言
+           「强调色只做信号、不做装饰」。
+         · 发送是高频动作，箭头在每一次悬停都重放，属于噪音。
+         现在发送按钮只保留全局的颜色过渡（背景/文字/边框），与其它按钮一致。
+         （旧的「全方案强制取消」守护规则随冲压/读数一起删除——合并设计里
+         本就没有任何规则给输入区按钮挂动画或 transform。） */
+
+      /* 5. 表格行：悬停左缘信号色细条。用 --edge-accent-onpaper（深色档，
+          在纸面与面板上都可读），因为默认灰配色的 --edge-accent 就是
+          #d9d9d9——在奶油色悬停底上不可见。
+          边框在**常态**预声明为 3px 透明，悬停只改颜色：悬停才加边框会让
+          每一行悬停都重排一次（300 行扫描实测：悬停建边框 11.6ms/s
+          LayoutDuration，常态预声明 0.00ms/s）。
+          侧边栏会话行/搜索行原属同一条处理，合并时按用户指定改用角标母题
+          （见下一节）——左缘细条只保留给表格行。
+          菜单/列表框条目（[role='menuitem'] / [role='option']）不进这条处理：
+          它们原生 border:none，紧凑弹层里悬停才显色的左边框读起来是
+          「没闭合的边框」（用户实测反馈），弹层内的选中反馈交给底色高亮；
+          设置页按钮同理（整圈 1px 边框会被 3px 透明条「打开」）。 */
+      body[data-endfield-motion] tbody tr {
+        border-left: 3px solid transparent !important;
+      }
+      body[data-endfield-motion] tbody tr:hover {
+        border-left: 3px solid var(--edge-accent-onpaper, var(--edge-accent)) !important;
+      }
+
+      /* ================= 角标母题（原方案D，收到侧边栏行角色） ================= */
+
+      /* 四角 L 形角标：两个 12px 方块伪元素，各用两条渐变边画一个 L，分放
+          ::before（左上）/ ::after（右下），不互相覆盖——半透明叠加会加深那一
+          角，L 的两条臂就不再等宽。
+          原方案D 把角标画在**所有**方角按钮/菜单项上；合并时按用户指定收窄到
+          「侧边栏各个会话」——会话行（div[role='treeitem']）与搜索结果行
+          （button）。上游这两类行都不使用伪元素（审计过 workspace 包的
+          CSS module），不存在抢占。
+          两条渐变的边 = 一个 L。**不用 mask / 不用 SVG**：隔离页实测同一个
+          12px 方块上的 SVG 遮罩在 DPR 1 下整条不落笔、DPR 2/3 正常——选择器
+          与计算样式全都对，只有跨 DPR 截图才能发现。渐变边没有遮罩/位图依赖，
+          DPR 1/2/3 都正常。
+          '.theme-endfield-round' 守卫沿用原方案D 的理由：圆角模式下上游圆角
+          全部保留，方角标贴不上任何一条边。 */
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow'],
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow'] {
+        position: relative;
+      }
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']::before,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']::after,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']::before,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']::after {
+        /* 盒子常态就存在（content/几何/颜色都在常态规则里），显隐只切 opacity。
+           三版实现里只有这一版同时做到「可见」与「0 重排」，实测：
+             · content 只写在 hover 规则里（悬停才生成盒子）→ 布局失效 29.2ms/s；
+             · content 在悬停、几何在常态 → 同样 29.2ms/s：代价来自「伪元素在常态
+               是否已存在」，不是 content 写在哪；
+             · 常态生成 + 只切 opacity → 0.00ms/s（见 test/perf-motion.test.js）。
+           入场用 @keyframes 而不是 transition：本仓库已实测 transition 在部分渲染
+           路径上根本不触发（见启动屏注释），而关键帧 + fill-mode:both 的终点是
+           确定的；opacity 单属性动画让浏览器只栅格化一次、之后每帧只合成。 */
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        pointer-events: none;
+        z-index: 2;
+        background-image:
+          linear-gradient(var(--edge-accent-onpaper, var(--edge-accent)), var(--edge-accent-onpaper, var(--edge-accent))),
+          linear-gradient(var(--edge-accent-onpaper, var(--edge-accent)), var(--edge-accent-onpaper, var(--edge-accent)));
+        background-size: 12px 2px, 2px 12px;
+        background-repeat: no-repeat;
+        opacity: 0;
+      }
+      @keyframes endfield-clamp-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']::before,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']::before {
+        left: 1px;
+        top: 1px;
+        background-position: left top, left top;
+      }
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']::after,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']::after {
+        right: 1px;
+        bottom: 1px;
+        background-position: right bottom, right bottom;
+      }
+      /* 显隐切换必须排在基础规则之后：两条规则特异性相同，靠源码顺序决胜。
+          （这一条一度被排到基础 opacity:0 之前，于是角标永远不亮——而且只有
+          像素断言会发现，计算样式与选择器看起来都对。） */
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']:hover::before,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_sessionRow']:hover::after,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']:hover::before,
+      body[data-endfield-motion]:not(.theme-endfield-round) [class$='_sidebarCol'] [class$='_searchResultRow']:hover::after {
+        animation: endfield-clamp-in .18s ease 1 both;
+      }
+
+      /* ---------- 尊重「减少动态效果」：位移/动画/揭示全部关掉，只留颜色 ---------- */
+      @media (prefers-reduced-motion: reduce) {
+        body[data-endfield-motion] button,
+        body[data-endfield-motion] [role='button'],
+        body[data-endfield-motion] [role='tab'],
+        body[data-endfield-motion] [role='menuitem'],
+        body[data-endfield-motion] [role='option'] {
+          animation: none !important;
+          transform: none !important;
+          box-shadow: none !important;
+          /* Colour IS the state, so the colour feedback stays. outline-color
+             rather than the shorthand, so the app's focus ring keeps its width
+             and style. */
+          outline-color: transparent !important;
+        }
+        /* The dim-on-press half of the shared feedback is a colour change, not
+           motion: keep it. */
+        body[data-endfield-motion] button:active:not(:disabled),
+        body[data-endfield-motion] [role='button']:active:not(:disabled) {
+          filter: brightness(.85) !important;
+        }
+        /* No sliding arrow, no appearing brackets: the reveal IS the motion.
+           EVERY decorative pseudo-element the merged design paints, on both
+           corners of the bracket rows — a rule that only kills ::after leaves
+           the ::before corner painted (measured: the clamp top-left bracket
+           survived 'reduce' until this list included it). */
+        body[data-endfield-motion] [class$='_newSession']::after,
+        body[data-endfield-motion] [data-cordis-approve]::after,
+        body[data-endfield-motion] [class$='_sidebarCol'] [class$='_sessionRow']::before,
+        body[data-endfield-motion] [class$='_sidebarCol'] [class$='_sessionRow']::after,
+        body[data-endfield-motion] [class$='_sidebarCol'] [class$='_searchResultRow']::before,
+        body[data-endfield-motion] [class$='_sidebarCol'] [class$='_searchResultRow']::after {
+          content: none !important;
+        }
+      }

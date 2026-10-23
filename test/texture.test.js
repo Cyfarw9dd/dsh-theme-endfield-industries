@@ -20,7 +20,10 @@ const path = require('path')
 const sources = require('../scripts/lib/sources.js')
 
 const ROOT = path.resolve(__dirname, '..')
-const src = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The sync layer moved to src/client/motion/sync.js with the module split, so
+   the JS-side assertions read the WHOLE client source tree (entry + modules)
+   instead of the entry alone. */
+const src = sources.concatClientJs()
 /* The key vocabulary moved to its own module (prefs/keys.js); the prefs entry
    for the texture row is asserted against that module now. */
 const keysSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'prefs', 'keys.js'), 'utf8')

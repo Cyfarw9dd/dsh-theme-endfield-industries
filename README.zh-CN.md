@@ -79,7 +79,7 @@ npm test             # 上述 + 配色/设置页/渲染/动效性能等全套
 ```text
 client.js          Client 侧单文件产物（tsdown 从 src/ 打包；不手改）
 src/client/         Client 侧源码（IIFE 外壳 + 偏好引擎 + 功能面 + 设置面板）
-src/styles/         样式源：theme.css（手写真 CSS）+ generated.css（脚本生成的围栏区）
+src/styles/         样式分层：六个手写层 + generated.css（脚本生成的围栏区）
 index.js           Host 侧：导出 volatile Config，声明设置命名空间与音频运行时
 lib/               音频通知：slots.js（槽位定义）、tone.js（WAV 合成）、audio.js（播放运行时）
 sounds/            生成的通知音（npm run sound:build 重新生成，--check 防漂移）

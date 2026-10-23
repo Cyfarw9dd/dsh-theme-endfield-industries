@@ -1,7 +1,7 @@
 /**
  * check.js — guard rails for the theme's stylesheet and client artifact.
  *
- * The stylesheet lives as REAL css files (src/styles/theme.css + generated.css)
+ * The stylesheet lives as REAL css files (src/styles/*.css layers per the manifest)
  * and is embedded into the built ./client.js by tsdown (see scripts/build-client.js).
  * With real .css files the old template-literal failure modes (a stray backtick
  * terminating the literal, ${...} interpolation) are structurally gone; what
@@ -33,7 +33,7 @@ const src = fs.readFileSync(file, 'utf8')
 /* Resolved from THIS file's directory (not process.cwd), so selftest.js can
    redirect the whole tree into a temp copy and check.js loads the copy's own
    manifest + sources. The manifest is the single definition of how the sheet
-   composes; nothing below re-derives "theme.css then generated.css". */
+   composes; nothing below re-derives the file list or its order. */
 const sources = require(path.join(__dirname, 'scripts', 'lib', 'sources.js'))
 const cssText = sources.concatCss()
 const cssLines = cssText.split('\n')
@@ -45,8 +45,8 @@ const fail = (msg) => { console.error('FAIL  ' + msg); failures++ }
 const pass = (msg) => console.log('ok    ' + msg)
 
 /* --- 1. stylesheet sources + generated fences ---
-   The sheet is the concatenation the client entry embeds (theme.css then
-   generated.css). The old template-literal guards (stray backtick, ${...})
+   The sheet is the raw concatenation the client entry embeds (the
+   STYLE_FILES manifest, in order). The old template-literal guards (stray backtick, ${...})
    are obsolete with real .css files; what stays mechanical is that the
    generated fences exist, in order, in generated.css. */
 const body = cssText
@@ -54,8 +54,11 @@ const body = cssText
   /* --- 1a. the client entry composes the manifest, in manifest order ---
      sources.js decides WHICH files and in WHAT order; src/client/index.js must
      import exactly those with ?raw, in that order, and hand them to the single
-     insertCss() call in the same order. Without this guard the manifest could
-     drift from the entry and silently change the cascade (order is the contract). */
+     insertCss() call as a RAW concatenation (ids joined by '+', nothing
+     inserted: each layer file carries its own trailing newline, so anything
+     added here would change the sheet's bytes — see sources.js concatCss).
+     Without this guard the manifest could drift from the entry and silently
+     change the cascade (order is the contract). */
   const imports = [...clientSrc.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+'\.\.\/styles\/([\w.-]+)\?raw'/g)]
   const importedNames = imports.map((m) => m[2])
   const importedIds = imports.map((m) => m[1])
@@ -65,14 +68,13 @@ const body = cssText
     .map((m) => m[1])
     .filter((arg) => importedIds.some((id) => new RegExp('\\b' + id + '\\b').test(arg)))
   const callArg = calls.length === 1 ? calls[0] : ''
-  const idsInOrder = calls.length === 1 && importedIds.every((id, i) => callArg.indexOf(id) >= 0
-    && (i === 0 || callArg.indexOf(id) > callArg.indexOf(importedIds[i - 1])))
-  const separatorOk = importedIds.length < 2 || /'\\n'/.test(callArg)
-  if (JSON.stringify(importedNames) === JSON.stringify(sources.STYLE_FILES) && idsInOrder && separatorOk) {
+  const expectedCall = importedIds.join(' + ')
+  const callOk = calls.length === 1 && callArg.replace(/\s+/g, ' ').trim() === expectedCall
+  if (JSON.stringify(importedNames) === JSON.stringify(sources.STYLE_FILES) && callOk) {
     pass('client entry imports the stylesheet manifest, in order (' + sources.STYLE_FILES.join(' + ') + ')')
   } else {
     fail('src/client/index.js no longer composes src/styles in manifest order — expected ['
-      + sources.STYLE_FILES.join(', ') + '] imported ?raw and joined with \'\\n\' into insertCss(); got ['
+      + sources.STYLE_FILES.join(', ') + '] imported ?raw and concatenated with + into ONE insertCss() call; got ['
       + importedNames.join(', ') + '] → insertCss(' + callArg.trim() + ')')
   }
 }
@@ -390,6 +392,11 @@ if (cssText.includes("turnStatus")) {
   }
   const trig = ruleOf('.endfield-select-trigger')
   const optBg = ruleOf('.endfield-select-option-bg')
+  /* The panel (and its unified dropdown) moved to src/client/ui/settings/ with
+     the module split, so the shape assertion reads the WHOLE client source tree
+     and is whitespace-collapsed first: pinning the exact indentation of a moved
+     block would make every future move a check.js edit for no added safety. */
+  const clientJsFlat = sources.concatClientJs().replace(/\s+/g, ' ')
   const shapeChecks = [
     [/background-color:\s*#3a3a3a/.test(trig) && /color:\s*#ffffff/.test(trig), '铭牌 = 官方 #3a3a3a 底 + 白字'],
     [/background:\s*var\(--edge-dd-arrow\)/.test(ruleOf('.endfield-select-arrow')), '圆形箭头 = 内嵌的官方 arrow.png（--edge-dd-arrow）'],
@@ -399,7 +406,7 @@ if (cssText.includes("turnStatus")) {
       '选中底 = 预建斜纹层，只切 opacity（不创造几何）'],
     [/#ff00f0 0, #ff00f0 50%, #00ffa2 0/.test(ruleOf('.endfield-select-option-bg::before')), '选中行左缘 = 官方紫 #ff00f0 / 绿 #00ffa2 各半'],
     [/\[role='menuitemradio'\]\[aria-checked='true'\]:not\(\.endfield-select-option\)\s*,/.test(flat), '全局「菜单当前项」划词灰规则对本控件开洞（否则 !important 盖掉斜纹）'],
-    [clientSrc.includes("R.createElement('button', {\n              key: o.value, type: 'button', role: 'menuitemradio'"), '选项是 button[role=menuitemradio]（可聚焦，同应用菜单元素）'],
+    [clientJsFlat.includes("R.createElement('button', { key: o.value, type: 'button', role: 'menuitemradio'"), '选项是 button[role=menuitemradio]（可聚焦，同应用菜单元素）'],
   ]
   for (const [ok, what] of shapeChecks) {
     if (ok) pass('统一下拉形制 · ' + what)

@@ -26,7 +26,8 @@ const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 const css = sources.concatCss()
 /* JS token-override literals keep their single-quoted spelling only in the
    pre-bundle client source (the bundler re-quotes artifact strings). */
-const clientSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'index.js'), 'utf8')
+/* The token literals moved to ui/tokens.js with the module split; read the whole client tree. */
+const clientSrc = sources.concatClientJs()
 
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }

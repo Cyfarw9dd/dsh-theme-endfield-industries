@@ -25,8 +25,14 @@ const root = __dirname
 const checkSrc = fs.readFileSync(path.join(root, 'check.js'), 'utf8')
 const realClient = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 const realClientSrc = fs.readFileSync(path.join(root, 'src', 'client', 'index.js'), 'utf8')
-const realTheme = fs.readFileSync(path.join(root, 'src', 'styles', 'theme.css'), 'utf8')
-const realGenerated = fs.readFileSync(path.join(root, 'src', 'styles', 'generated.css'), 'utf8')
+/* The sheet is layered (STYLE_FILES); keep one pristine copy of every layer so
+   each case can mutate one file and resetTree() can restore all of them. The
+   layer list is read from the manifest, never re-typed here. */
+const manifest = require(path.join(root, 'scripts', 'lib', 'sources.js'))
+const realStyles = {}
+for (const name of manifest.STYLE_FILES) {
+  realStyles[name] = fs.readFileSync(path.join(root, 'src', 'styles', name), 'utf8')
+}
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-selftest-'))
 const tmpClient = path.join(tmpRoot, 'client.js')
@@ -35,16 +41,19 @@ function stageTree() {
   fs.mkdirSync(path.join(tmpRoot, 'src', 'styles'), { recursive: true })
   fs.mkdirSync(path.join(tmpRoot, 'src', 'client'), { recursive: true })
   fs.mkdirSync(path.join(tmpRoot, 'scripts'), { recursive: true })
-  /* The entry is split into modules now (src/client/prefs/*.js), and check.js
-     reads the entry as text. Copy the whole prefs directory so the redirected
-     tree stays shaped like the real one and a future guard that resolves the
-     entry's imports does not fail on a missing sibling. */
-  const prefsSrc = path.join(root, 'src', 'client', 'prefs')
-  const prefsTmp = path.join(tmpRoot, 'src', 'client', 'prefs')
-  fs.mkdirSync(prefsTmp, { recursive: true })
-  for (const name of fs.readdirSync(prefsSrc)) {
-    fs.copyFileSync(path.join(prefsSrc, name), path.join(prefsTmp, name))
+  /* The entry is split into modules now (src/client/<dir>/*.js — prefs/,
+     decor/, notify/, motion/, ui/settings/, … nested to any depth), and
+     check.js reads the entry as text. Copy the WHOLE client module tree so the
+     redirected tree stays shaped like the real one and a future guard that
+     resolves the entry's imports does not fail on a missing sibling. */
+  const copyTree = (from, to) => {
+    fs.mkdirSync(to, { recursive: true })
+    for (const ent of fs.readdirSync(from, { withFileTypes: true })) {
+      if (ent.isDirectory()) copyTree(path.join(from, ent.name), path.join(to, ent.name))
+      else fs.copyFileSync(path.join(from, ent.name), path.join(to, ent.name))
+    }
   }
+  copyTree(path.join(root, 'src', 'client'), path.join(tmpRoot, 'src', 'client'))
   fs.copyFileSync(path.join(root, 'check.js'), path.join(tmpRoot, 'check.js'))
   /* check.js loads scripts/lib/sources.js from ITS directory: the temp tree must
      carry the manifest too, or every case would fail on a missing module. */
@@ -58,8 +67,9 @@ function stageTree() {
 function resetTree() {
   fs.writeFileSync(tmpClient, realClient)
   fs.writeFileSync(path.join(tmpRoot, 'src', 'client', 'index.js'), realClientSrc)
-  fs.writeFileSync(path.join(tmpRoot, 'src', 'styles', 'theme.css'), realTheme)
-  fs.writeFileSync(path.join(tmpRoot, 'src', 'styles', 'generated.css'), realGenerated)
+  for (const name of manifest.STYLE_FILES) {
+    fs.writeFileSync(path.join(tmpRoot, 'src', 'styles', name), realStyles[name])
+  }
 }
 
 /** Run check.js against the temp tree, capturing its pass/fail lines. */
@@ -95,12 +105,15 @@ function runCheck() {
   return { failed: failed || /(^|\n)FAIL/.test(text), text }
 }
 
-/* Each case names the file it mutates ('client' artifact, 'client-src', 'theme')
-   and a mutation over that file's pristine text. */
+/* Each case names the file it mutates ('client' artifact, 'client-src', or a
+   stylesheet layer name from the manifest) and a mutation over that file's
+   pristine text. Layer targets follow the content: the loader wordmark and the
+   brace-balance case live in overlays.css, the turn-status readout in
+   surfaces.css, the palette variables in tokens.css. */
 const CASES = [
   {
     name: 'comment closed early (prose leaks into live CSS)',
-    file: 'theme',
+    file: 'overlays.css',
     mutate: (s) => s.replace(
       'additionally carry a px floor — see the max() calls below. */',
       'additionally carry a px floor */ see the max() calls below.'),
@@ -108,7 +121,7 @@ const CASES = [
   },
   {
     name: 'turn-status recoloured with an ineffective color: instead of a gradient',
-    file: 'theme',
+    file: 'surfaces.css',
     /* The gradient stops are palette VARIABLES, not literals; \s* spans CRLF. */
     mutate: (s) => s
       .replace(/background-image:\s*linear-gradient\(90deg,\s*var\(--edge-status-light\)[^;]*;/,
@@ -119,7 +132,7 @@ const CASES = [
   },
   {
     name: '--edge-word used but never defined',
-    file: 'theme',
+    file: 'overlays.css',
     mutate: (s) => s.replace(
       /^\s*--edge-word:\s*clamp\([^;]*;/m,
       '        /* deliberately removed */'),
@@ -127,7 +140,7 @@ const CASES = [
   },
   {
     name: 'unbalanced CSS brace',
-    file: 'theme',
+    file: 'overlays.css',
     mutate: (s) => s.replace(
       /(\[data-endfield-loader-brand\]\s*\{)/,
       '$1\n      {'),
@@ -135,13 +148,13 @@ const CASES = [
   },
   {
     name: 'a palette variable is deleted (every rule reading it silently dies)',
-    file: 'theme',
+    file: 'tokens.css',
     mutate: (s) => s.replace(/^\s*--edge-accent-deep:\s*#[0-9a-f]{6};/gim, '        /* removed */'),
     expect: /palette variable\(s\) never DEFINED/,
   },
   {
     name: 'the 武陵青 palette block is removed (switch becomes inert)',
-    file: 'theme',
+    file: 'tokens.css',
     mutate: (s) => s.replace('body.theme-endfield-wuling {', 'body.theme-endfield-wuling-DISABLED {'),
     expect: /no body\.theme-endfield-wuling block/,
   },
@@ -149,20 +162,20 @@ const CASES = [
     name: 'a token-reading --edge-* variable is moved back to :root (computes EMPTY)',
     /* Reproduces the real shipped bug: --edge-line at :root substituting a
        --dsw-* token that the app sets inline on body. Injected as a :root
-       block of its own, prepended to the stylesheet source. */
-    file: 'theme',
+       block of its own, prepended to the first hand-written layer. */
+    file: 'tokens.css',
     mutate: (s) => ':root { --edge-line: var(--dsw-alias-border-l1); }\n' + s,
     expect: /declared at :root while substituting a body-level token/,
   },
   {
     name: 'the theme redeclares the app font token (restyles every third-party widget)',
-    file: 'theme',
+    file: 'tokens.css',
     mutate: (s) => ':root { --dsw-font-family: Arial, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif; }\n' + s,
     expect: /--dsw-font-family.*DECLARED by the theme/,
   },
   {
     name: 'a generated fence is deleted (drift between scripts and stylesheet)',
-    file: 'generated',
+    file: 'generated.css',
     mutate: (s) => s.replace('/* EDGE_TEX_BEGIN (generated by scripts/build-texture.js — do not edit by hand) */',
       '/* fence removed */'),
     expect: /fences missing or out of order/,
@@ -173,9 +186,9 @@ const CASES = [
        caught, otherwise a future reorder silently repaints the whole theme. */
     file: 'client-src',
     mutate: (s) => s
-      .replace("import THEME_CSS from '../styles/theme.css?raw'", '@@A@@')
-      .replace("import GENERATED_CSS from '../styles/generated.css?raw'", "import THEME_CSS from '../styles/theme.css?raw'")
-      .replace('@@A@@', "import GENERATED_CSS from '../styles/generated.css?raw'"),
+      .replace("import DECOR_CSS from '../styles/decor.css?raw'", '@@A@@')
+      .replace("import INTERACTION_CSS from '../styles/interaction.css?raw'", "import DECOR_CSS from '../styles/decor.css?raw'")
+      .replace('@@A@@', "import INTERACTION_CSS from '../styles/interaction.css?raw'"),
     expect: /no longer composes src\/styles in manifest order/,
   },
   {
@@ -186,7 +199,7 @@ const CASES = [
   },
 ]
 
-const pristine = { client: realClient, 'client-src': realClientSrc, theme: realTheme, generated: realGenerated }
+const pristine = Object.assign({ client: realClient, 'client-src': realClientSrc }, realStyles)
 let bad = 0
 
 try {
@@ -212,9 +225,11 @@ try {
       continue
     }
     resetTree()
+    /* The style mutation targets are manifest layer names now (tokens.css,
+       surfaces.css, …); 'theme' no longer exists as a file. */
     const target = c.file === 'client' ? tmpClient
       : c.file === 'client-src' ? path.join(tmpRoot, 'src', 'client', 'index.js')
-        : path.join(tmpRoot, 'src', 'styles', c.file === 'theme' ? 'theme.css' : 'generated.css')
+        : path.join(tmpRoot, 'src', 'styles', c.file)
     fs.writeFileSync(target, mutated)
     const r = runCheck()
     if (!r.failed) {

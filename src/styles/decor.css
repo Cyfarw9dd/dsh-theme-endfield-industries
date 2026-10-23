@@ -1,0 +1,384 @@
+      /* ================= 背景纹理：官网 /operator 那一套底纹 =================
+
+         全部素材与参数来自官网自己的 CSS（5f3bf8547312569e.css，/operator 路由），
+         逐条对应见 docs/notes/endfield-motion-research.md 附录 D：
+
+           block-bg.svg     → 工程网格 217×217 矢量，官方 12.8125rem 一格、opacity:.05
+           wave-bg.png      → 右上角阶梯波纹，官方 39.1875×26.3125rem / contain / 100% 0
+           tape-wave-bg.png → 中下部波纹带，官方 59.125rem×13.5rem / cover
+           45° 斜纹          → 官方 shallowBg：13.9512529279% / 36.0487470721% 停靠、
+                              .75rem 周期（后写的 background-size 覆盖前面的 .5rem）
+           三色信号线        → 官方 decoLine 原文（见下方 .endfield-settings-group-title）
+
+         三个素材是官方站点自己的发布产物，由仓库所有者指示「沿用官方」，以**原始
+         字节**内嵌为 data URI（scripts/build-texture.js；URL 与 sha256 见其头注与
+         docs/credits.md（素材归属））。PNG 不做任何再压缩或量化。
+
+         **纹理不铺满窗口**——官网每一层都锚定在内容区的一个部位，而不是整窗平铺：
+           · 网格（decoFlag）用 clip-path 水平裁到中央内容列，mask 从上往下、
+             50% 之后淡出 → 只在内容区上半段；
+           · 斜纹（shallowBg）是**底部 32.8125rem 高的一条带**，mask 从下往上淡出；
+           · 波纹钉死右上角；波纹带在中下部（top: 50% + 3.8125rem）。
+         本主题照此映射到**主内容列 _centerCol**（它就是 DSH 的「内容列」）：
+         侧栏与外框**不上纹理**，四个层各自锚定在列内的一个区域。
+
+         官网这些底纹是**静态的**（无 animation/transition），本段一条过渡都不加。 */
+
+      /* 纹理令牌。alpha 与官网同为 0.05 量级；test/texture.test.js 实算「纹理压在
+         实际底面上」的合成对比度，断言落在装饰区间（与水印、hero 光晕同一规则）。 */
+      body {
+        --edge-tex-ink: #181818;
+        /* The official block-bg.svg is a TRANSPARENT tile whose only content is a 2px
+           black stroke. That makes it usable in exactly one way: as an ALPHA MASK
+           (same trick the watermark uses with --edge-emblem). Used as a background
+           image it paints nothing visible; used opaque it blackens the surface.
+           So the ALPHA travels in the mask (--edge-tex-grid-mask) and the COLOUR
+           travels separately in --edge-tex-grid-color / --edge-tex-hatch-color —
+           the two MUST NOT be the same custom property: putting the url() inside a
+           linear-gradient() is invalid CSS and silently resolves the whole
+           background to none (measured: an entire layer stack vanished). */
+        --edge-tex-grid-a: 5%;
+        --edge-tex-hatch-a: 5%;
+        /* Declared after the alphas above so var() substitution picks up this block's
+           values rather than the previous rule's. */
+        --edge-tex-grid-color: color-mix(in srgb, var(--edge-tex-ink) var(--edge-tex-grid-a), transparent);
+        --edge-tex-hatch-color: color-mix(in srgb, var(--edge-tex-ink) var(--edge-tex-hatch-a), transparent);
+      }
+      body[data-ds-dark-theme] {
+        --edge-tex-ink: #e9e9e3;
+        --edge-tex-grid-a: 7%;
+        --edge-tex-hatch-a: 6%;
+      }
+
+
+      /* 锚点：**内容列里的那个不透明根**（_centerCol 的直接子元素 _root，即会话
+         根，应用自己声明 position:relative）。第一版挂 _centerCol 本身——但它里面
+         还有一层不透明的 wSkVaW_root（background:var(--dsw-alias-bg-base); height:100%），
+         z-index:-1 的叠加层画在那层不透明底**之下**，整段纹理无声消失（像素实测零
+         变化）。挂到根上，叠加层才在「根底色之上、正文之下」。isolation 建层叠
+         上下文，保证 -1 伪元素不落到根自己背景的后面。侧栏与外框不挂纹理。
+
+         **选择器不要求直接子级**：会话 UI 经插槽挂载，centerCol 与 root 之间
+         可能有包装层（应用的 ui-slots 会包无类名 div），用 '>' 会整段静默失配
+         ——用户实测「看不到底纹」的根因之一。改用**后代 + [data-phase]**：
+         data-phase 只出现在 ConversationRoot 上（水印查找器 findConversationRoot
+         用的正是这个钩子），比标签后缀更精确。
+
+         **水印共存例外（:not(:has(> [data-endfield-watermark]))）**：水印挂 body
+         时（hero 页），隔离根会让整个根子树（含 z:20 的下拉框）变成一个
+         z:auto 单元，被 body 级水印按 DOM 顺序压过——水印自己修过的那类 bug
+         （见 test/watermark-stacking.test.js 头注）。所以**只在 body 直接挂着
+         水印时**不隔离；此时网格/斜纹两个叠加层随之不可见（落在根底色后面），
+         波纹/光晕是背景图层、不受影响。水印关闭或在会话内（挂根上）时，
+         hero 页也有完整底纹。这是水印 :has 条件隔离同一门派的用法。 */
+      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase],
+      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase] {
+        position: relative;
+        isolation: isolate;
+      }
+
+      /* 网格：官方 decoFlag 的复刻。**颜色渐变自己带着那条 180° 淡出**（上半实、
+         往下渐透明），SVG 遮罩只负责形状——两层职责分开，就不用碰多遮罩的合成
+         语义（mask 列表默认 add=并集，并出来的结果是整面色块，实测过）。 */
+      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::before,
+      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: linear-gradient(180deg,
+          var(--edge-tex-grid-color) 0, var(--edge-tex-grid-color) 50%,
+          transparent 100%);
+        -webkit-mask-image: var(--edge-tex-grid-mask);
+        mask-image: var(--edge-tex-grid-mask);
+        -webkit-mask-size: 12.8125rem 12.8125rem;
+        mask-size: 12.8125rem 12.8125rem;
+        -webkit-mask-repeat: repeat;
+        mask-repeat: repeat;
+      }
+
+      /* 斜纹：官方 shallowBg 的复刻——**底部一条带**（32.8125rem 高，窄视口收到
+         45%），单一遮罩做 0° 淡出（底边最实、往上渐透明），纹路周期与停靠值照官方。 */
+      body[data-endfield-texture='subtle']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::after,
+      body[data-endfield-texture='standard']:not(:has(> [data-endfield-watermark])) [class$='_centerCol'] [class$='_root'][data-phase]::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: calc(100% - min(32.8125rem, 45%));
+        z-index: -1;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(-45deg,
+          transparent 0 13.9512529279%,
+          var(--edge-tex-hatch-color) 13.9512529279% 36.0487470721%,
+          transparent 36.0487470721% 50%,
+          transparent 50% 63.9512529279%,
+          var(--edge-tex-hatch-color) 63.9512529279% 86.0487470721%,
+          transparent 86.0487470721%);
+        background-size: .75rem .75rem;
+        -webkit-mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+        mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+      }
+
+      /* subtle 档到此为止：网格 + 斜纹两个叠加层，列本身不加任何背景图层。 */
+
+      /* standard 档：再叠官方两级波纹与顶部光晕——作为列的背景图层，天然画在
+         全部内容之下。波纹钉右上角；波纹带照官方放在中下部，no-repeat、超宽部分
+         由列右缘裁掉（官方那条左缘渐隐的 mask 在这里由裁边代替）。 */
+      body[data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
+        background-image:
+          var(--edge-tex-wave),
+          /* 波纹带的顶边渐隐：官方给 decoTape 挂的是左缘 90 度 mask（宽列里从右侧
+             延伸进来）；DSH 的窄列里图几乎塞满整列，左缘 mask 失效，顶边变成一条
+             横贯全列的硬切线（实测行间跳变 11 个灰阶）。遮罩没法只作用于背景图的
+             某一层，所以这里用一条「与波纹带同盒、顶部不透明底色、往下 3.5rem
+             渐透明」的覆盖层把顶边揉掉——官方 mask 的意图，转了 90 度。 */
+          linear-gradient(180deg, var(--dsw-alias-bg-base, #101110) 0, transparent 3.5rem),
+          var(--edge-tex-tape),
+          radial-gradient(120% 55% at 50% 0%,
+            rgba(var(--edge-accent-rgb, 126, 126, 126), var(--edge-glow-light, 0.08)), transparent 70%);
+        background-size:
+          39.1875rem 26.3125rem,
+          59.125rem 13.5rem,
+          59.125rem 13.5rem,
+          100% 100%;
+        background-position:
+          100% 0,
+          30% 62%,
+          30% 62%,
+          50% 0;
+        background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+      }
+      body[data-ds-dark-theme][data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
+        background-image:
+          var(--edge-tex-wave),
+          linear-gradient(180deg, var(--dsw-alias-bg-base, #101110) 0, transparent 3.5rem),
+          var(--edge-tex-tape),
+          radial-gradient(120% 55% at 50% 0%,
+            rgba(var(--edge-accent-rgb, 126, 126, 126), var(--edge-glow-dark, 0.04)), transparent 70%);
+      }
+
+      /* 三色信号线：官方 decoLine。原文是绝对停靠（90deg,#ff00f0 11.25rem,
+         #fffa00 0,#fffa00 22.5625rem,#00ffa2 0），挂在 67.5rem 宽的容器上——
+         也就是 紫 11.25 : 黄 11.3125 : 绿 44.9375rem，**绿占三分之二**。绝对
+         停靠只在那一个宽度下成立：本主题的两条线宽度都随容器伸缩，照抄 rem
+         会让三条色带在窄容器上几乎均分（用户实测反馈与官方不符）。所以这里
+         换算成官方自己的比例停靠：11.25/67.5 = 16.6667%，22.5625/67.5 =
+         33.4259%，绿吃剩余 ——任何宽度下都是官方的紫:黄:绿观感。
+
+         分组标题本身是 'display:flex'（标记块 + 中英文两行），所以这条线不能靠
+         ::after 当 flex 子项（会被当成第三段文字挤在一行），必须绝对定位到标题底部
+         整宽。类名是 '.endfield-settings-group-title'，不是 '.endfield-group-title'
+         ——写错类名会静默不生效，只有截图能看出来。 */
+      .endfield-settings .endfield-settings-group-title:has(> span) {
+        position: relative;
+      }
+      .endfield-settings .endfield-settings-group-title:has(> span)::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background-image: linear-gradient(90deg,#ff00f0 16.6667%,#fffa00 0,#fffa00 33.4259%,#00ffa2 0);
+      }
+
+      /* 「已编辑 N 个文件」卡片（deliverables 的 ChangedFiles）：底部装饰线。
+         官方 decoLine 的分划用法放在这个卡片的底边（用户指定）。选择器无哈希：
+         「直接子元素是 _header 的 _card」——该组件的卡片形态（header 是 60px
+         的展开按钮）；卡片自带 overflow:hidden，线条被裁进边角（直角模式下
+         无圆角可裁）。伪元素无占用（bundle 全量查过）。静态、无动画。 */
+      [class$='_card']:has(> [class$='_header']) {
+        position: relative;
+      }
+      [class$='_card']:has(> [class$='_header'])::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        pointer-events: none;
+        background-image: linear-gradient(90deg,#ff00f0 16.6667%,#fffa00 0,#fffa00 33.4259%,#00ffa2 0);
+      }
+
+      /* 降级：要求减少透明/更高对比时整段让位（装饰不与无障碍偏好争）。
+         注意伪元素：列上的 background-image:none 只清背景图层，两个叠加层
+         （::before 网格 / ::after 斜纹）必须各自 display:none。 */
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        body[data-endfield-texture] [class$='_centerCol'] [class$='_root'][data-phase] {
+          background-image: none !important;
+        }
+        body[data-endfield-texture] [class$='_centerCol'] [class$='_root'][data-phase]::before,
+        body[data-endfield-texture] [class$='_centerCol'] [class$='_root'][data-phase]::after {
+          display: none !important;
+        }
+        .endfield-settings .endfield-settings-group-title:has(> span)::after,
+        [class$='_card']:has(> [class$='_header'])::after {
+          background-image: none !important;
+        }
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
+          display: none !important;
+        }
+      }
+
+      /* The watermark is the Endfield Industries LOGO ALONE as a VECTOR mask
+         (Yue-plus/endfield_icons' vectorization of the official Hypergryph
+         mark; see scripts/build-emblem.js for provenance and the minimize
+         pass). No DOM text, no CSS glyphs — translators have nothing to
+         rewrite, and being vector it is crisp at every zoom and pixel ratio
+         (the previous pipeline was a raster mask capped at its 755px source).
+         DEFAULT mask mode (alpha) is deliberate: the paths' own alpha channel
+         IS the shape, so the default black fill paints the mark with
+         currentColor and both colour schemes stay automatic. The viewBox is
+         square (512x512), hence the 1/1 aspect. */
+      [data-endfield-watermark]::after {
+        content: '';
+        display: block;
+        width: 13vw;
+        max-width: 240px;
+        aspect-ratio: 1 / 1;
+        background: currentColor;
+        opacity: var(--edge-wm-emblem-alpha, var(--edge-wm-alpha));
+        -webkit-mask-image: var(--edge-emblem);
+        mask-image: var(--edge-emblem);
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+      }
+      /* Without mask support the logo cannot paint at all; the watermark
+         degrades to nothing rather than to a wrong-looking mark. */
+      @supports not ((mask-image: none) or (-webkit-mask-image: none)) {
+        [data-endfield-watermark]::after { content: none; }
+      }
+      /* ---------- new-session hero brand mark ------------------------------
+         The summer-series 「终末地标识 3」 sticker, painted over the hero headline
+         ('探索未至之境'). Two ALPHA MASKS carry the shapes and the stylesheet owns
+         every colour — see scripts/build-logo.js for provenance and the trace
+         recipe, and the two body blocks below for the measured values.
+
+         Why masks rather than the three-colour vector itself: it is 30x smaller
+         (5.7KB of minimized SVG against 197KB), its hatch becomes ONE gradient
+         instead of fifty traced bars, and its colours live in the stylesheet, where
+         a scheme can restate them without re-tracing anything.
+
+         The colours are the artwork's own on BOTH schemes — the owner's call, and a
+         deliberate trade: #ffe01d / #f4d73e / #d2d3d4 measure 14.36 / 13.19 /
+         12.62:1 against the dark page, but only 1.25 / 1.12 / 1.22:1 against the
+         light scheme's cream paper, so on light the mark reads as a pale print
+         instead of a headline. WCAG exempts logotypes from its contrast minimums,
+         and test/hero-logo.test.js therefore asserts that what is PAINTED is the
+         artwork's own triple (decoded from assets/hero-logo-3-summer.png) rather
+         than asserting AA on the light scheme.
+
+         The hatching is a gradient, not fifty traced bars, and its geometry is
+         MEASURED off the artwork rather than eyeballed: the stripe boundaries are
+         one rigid line family x + 1.73y = const, period 28.20px along x, 39.7% of
+         it hatched. At 150deg the gradient line is |W·sin150| + |H·cos150| =
+         0.8878W for this 1024:458 box, so one period is 14.12px =
+         14.12/(0.8878·1024) = 1.5526% of the gradient line and the hatched band is
+         39.7% of that = 0.6166% (the body colour fills 0..0.936%). Percentages,
+         not px, keep the hatch exact at every size. */
+      body {
+        /* The artwork's own colours, on both schemes (see the note above). Kept as
+           three variables rather than baked into the masks so a future fork can
+           restate them in one place, and so the test can compare what is painted
+           against the source file. No scheme override: brand art is not a
+           theme-relative ink. */
+        --edge-hero-logo-body: #ffe01d;
+        --edge-hero-logo-hatch: #f4d73e;
+        --edge-hero-logo-ink: #d2d3d4;
+      }
+      [data-endfield-hero-logo] {
+        display: block;
+        position: relative;
+        width: min(60%, 440px);
+        margin: 0 auto 2px;
+        aspect-ratio: 1024 / 458;
+        /* Decoration only: it must never eat a click meant for the composer. */
+        pointer-events: none;
+      }
+      /* Both layers share one box and one mask contract; only the paint differs —
+         a hatched gradient for the arrow, flat ink for the wordmark. */
+      [data-endfield-hero-logo]::before,
+      [data-endfield-hero-logo]::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+      }
+      [data-endfield-hero-logo]::before {
+        background-image: repeating-linear-gradient(150deg,
+          var(--edge-hero-logo-body) 0 0.936%,
+          var(--edge-hero-logo-hatch) 0.936% 1.5526%);
+        -webkit-mask-image: var(--edge-hero-logo-body-mask);
+        mask-image: var(--edge-hero-logo-body-mask);
+      }
+      [data-endfield-hero-logo]::after {
+        background-color: var(--edge-hero-logo-ink);
+        -webkit-mask-image: var(--edge-hero-logo-ink-mask);
+        mask-image: var(--edge-hero-logo-ink-mask);
+      }
+      /* Without mask support both layers would paint as solid rectangles; the mark
+         degrades to nothing instead (the same call the watermark makes). */
+      @supports not ((mask-image: none) or (-webkit-mask-image: none)) {
+        [data-endfield-hero-logo] { display: none; }
+      }
+      /* Optional bounded frost. No full-window blur, nested filters or animation. */
+      body[data-endfield-glass] {
+        --edge-glass-fill: 248 247 240;
+        --edge-glass-alpha: .8;
+        --edge-glass-blur: 14px;
+        --edge-glass-edge: rgb(255 255 255 / .65);
+        --edge-glass-sheen: rgb(255 255 255 / .35);
+      }
+      body[data-endfield-glass][data-ds-dark-theme] {
+        --edge-glass-fill: 31 36 34;
+        --edge-glass-alpha: .76;
+        --edge-glass-edge: rgb(255 255 255 / .18);
+        --edge-glass-sheen: rgb(255 255 255 / .07);
+      }
+      body[data-endfield-glass='subtle'] { --edge-glass-alpha: .68; --edge-glass-blur: 8px; }
+      body[data-endfield-glass='strong'] { --edge-glass-alpha: .9; --edge-glass-blur: 22px; }
+      body[data-endfield-glass='subtle'][data-ds-dark-theme] { --edge-glass-alpha: .64; }
+      body[data-endfield-glass='strong'][data-ds-dark-theme] { --edge-glass-alpha: .88; }
+      /* Glass is COMPOSER-ONLY. The docked right panel used to share the
+         material, and because it spans half the screen the translucent fill
+         read as 'half the page is frosted' even without blur — a big slab of
+         milky overlay with nothing local to show for it. The panel now keeps
+         its native opaque background entirely: no fill, no sheen, no edge.
+         The left sidebar keeps a STATIC sheen (no blur, no fill). */
+      body[data-endfield-glass] [data-composer-card] {
+        background-color: rgb(var(--edge-glass-fill) / var(--edge-glass-alpha)) !important;
+        background-image: linear-gradient(145deg, var(--edge-glass-sheen), transparent 58%),
+          radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--edge-accent) 10%, transparent), transparent 75%) !important;
+        -webkit-backdrop-filter: blur(var(--edge-glass-blur)) saturate(1.05);
+        backdrop-filter: blur(var(--edge-glass-blur)) saturate(1.05);
+        --dsw-elevation-stroke-color: var(--edge-glass-edge);
+      }
+      body[data-endfield-glass] [data-slot='sidebar'] > div {
+        background-image: linear-gradient(145deg, var(--edge-glass-sheen), transparent 58%),
+          radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--edge-accent) 8%, transparent), transparent 75%);
+        box-shadow: inset -1px 0 0 var(--edge-glass-edge);
+      }
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        body[data-endfield-glass] [data-composer-card] {
+          background-color: rgb(var(--edge-glass-fill) / .96) !important;
+        }
+      }
+      @media (prefers-reduced-transparency: reduce) {
+        body[data-endfield-glass] [data-composer-card] {
+          background-color: rgb(var(--edge-glass-fill)) !important;
+          -webkit-backdrop-filter: none; backdrop-filter: none;
+        }
+      }

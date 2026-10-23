@@ -36,7 +36,7 @@ CHROME_PATH=/usr/bin/chromium-browser npm test  # 全量（含真实渲染）
 **加/拆一层样式**：在 `src/styles/` 加文件 → 改 `scripts/lib/sources.js` 的 `STYLE_FILES`（顺序 = 级联顺序）→ 在 `src/client/index.js` 按同样顺序 `import … ?raw` 并拼进 `insertCss()`（`check.js` 会断言两边一致）→ 读样式的脚本/测试不用动（都走 `concatCss()`）→ `npm run build`。
 
 **加一档调色板**：
-1. `src/styles/theme.css` 调色板区加 class 块（含暗色翻转与 `--edge-accent-ink`）
+1. `src/styles/tokens.css` 调色板区加 class 块（含暗色翻转与 `--edge-accent-ink`）
 2. `PALETTE_CLASSES` / `readPalette` / 设置面板三态循环与中英文案
 3. `contourStroke()` 加描边档并调 α 至合成对比度对齐（脚本见 testing.md）
 4. `palette-contrast.test.js` 加断言列；`shoot.js`/`verify-shots.js` 扩矩阵

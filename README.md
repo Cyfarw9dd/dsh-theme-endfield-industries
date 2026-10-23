@@ -81,7 +81,7 @@ npm test             # all of the above + palette/settings/rendering/motion-perf
 ```text
 client.js          client-side single-file artifact (bundled from src/ by tsdown; do not edit)
 src/client/         client-side source (IIFE shell + prefs engine + feature surfaces + settings panel)
-src/styles/         stylesheet sources: theme.css (hand-written) + generated.css (script-generated fences)
+src/styles/         stylesheet layers (tokens/decor/interaction/chrome/surfaces/overlays.css + generated.css fences)
 index.js           host side: exports the volatile Config, declares the settings namespace and audio runtime
 lib/               audio notifications: slots.js (slot defs), tone.js (WAV synthesis), audio.js (playback runtime)
 sounds/            generated notification sounds (npm run sound:build regenerates; --check guards drift)

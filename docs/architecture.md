@@ -23,7 +23,8 @@
 ## 源码组织与构建
 
 - 浏览器半的源码在 `src/`：`src/client/index.js`（JS，含外壳与 `insertCss()`）
-  + `src/styles/theme.css`（手写样式，真 CSS 文件）+ `src/styles/generated.css`
+  + `src/styles/` 分层样式（`tokens/decor/interaction/chrome/surfaces/overlays.css`
+  手写六层 + `generated.css` 机器生成层；清单即级联顺序）
   （机器生成的掩码/纹理围栏区）。tsdown 把两者打包成**单文件产物
   `client.js`**（DSH 插件加载器的硬约束），与 @deepseek-ai 自家 client 包
   （`tsdown bundle → lib/client.js`）同一条管线；产物提交入库，
@@ -49,10 +50,45 @@
   由入口传入。入口因此退化成组合根：建两个对象 + 一个
   `services.effect(() => () => prefs.dispose())` 收尾。读键表的测试
   （settings-namespace / settings-config-forms / texture）直接对源文件断言
+- **装饰面已拆成 decor/ 模块**：`src/client/decor/watermark.js`（水印双开关、
+  hero/persist 两种挂载与堆叠、逐帧跟随循环）、`hero-logo.js`（新会话品牌标）、
+  `loader.js`（启动加载屏：双时钟 + 保险丝 + 一次 per 页面加载契约，含
+  `prefs.onSettled` 引导读）、`body-observer.js`（水印与 hero 共用的那**一个**
+  body MutationObserver——一个观察器、两层）。依赖显式注入：`prefs` + 主开关
+  读取器逐面注入，水印另收 `findAppFrame`，加载屏另收 `isAudioOn` /
+  `previewSlot` 两个宿主音频接缝；入口的组合根放在 `findAppFrame` 声明**之后**
+  （传函数本体而非 thunk，前向引用会 TDZ——见 TODO 高危清单第 1 条）。入口只
+  调用：sync() 在各 reconcile 点、detach() 于 unmount、dispose() 于 run 收尾
+- **通知面已拆成 notify/ 模块**：`src/client/notify/audio.js`（音频通知的浏览
+  器半：开关/音量/预览与上报的 round-trip，键名与 schema 字段同名）、`toast.js`
+  （工业风卡片 + 四个通知开关，任务完成 6s 自消、attention 类常驻）、
+  `attention.js`（需要你回应的语义锚点 + watcher：MutationObserver 快路径 +
+  慢轮询兜底，同时喂音频上报与 toast）、`turn-watch.js`（回合边沿 → 任务完成
+  回执：ConversationSnapshot.running 的唯一订阅，首读为基线）。模块间依赖走
+  实例方法（attention 持 audio 与 toasts 的引用），测试接缝（`__attention*`、
+  `__notify*`）由入口在组合时挂回 module.exports——与拆分前完全同名同形
+- **body 属性同步已拆成 motion/ 模块**：`src/client/motion/sync.js`
+  （`createMotionSync({ prefs, isEnabled })`）持有 radius class、
+  motion/glass/texture 属性、调色板 class 的全部读写与同步
+  （`syncAll()` 是 mount/reconciler 的统一入口，`detach()` 是 unmount 的对应
+  面——按原契约只清 class/glass，motion/texture 属性随样式表失效而留存），
+  以及 scheme / prefers-reduced-motion / findAppFrame 三个 DOM 判定。入口的
+  `setReconciler` 注册块只保留 mount/unmount 编排 + 各面 sync；设置面板的
+  写入路径经 `motionSync.*` 逐面调用
+- **设置面板已拆成 ui/settings/ 模块**：`src/client/ui/settings/dictionaries.js`
+  （zh/en 文案，zh 为键集真源）、`section.js`（locale 注册 + settings.section
+  slots 注入 + 整个 React 面板与统一下拉；`createSettingsSection({ services,
+  prefs, themeApi, … })` 返回 section 的 dispose）。面板的 useState 顺序被
+  settings-config-forms 按下标钉死（`hooks[4]` = palette），搬移保序；
+  `label` 保持 thunk、`locale:` 仍只在 locale 服务存在时声明。入口至此只剩
+  组合根：services → prefs → 各 feature 模块 → settings 注册 → run effect。
+  令牌覆盖层是同目录的 `ui/tokens.js`（纯数据，亮/暗成对），入口的 mount()
+  用 `theme.overrideTokens(...)` 整体注册并持有 dispose 句柄
 - **样式源怎么拼，只有一个定义**：`scripts/lib/sources.js` 的 `STYLE_FILES`
   是层清单（顺序 = 级联顺序），`concatCss()` 就是客户端入口嵌进
   `insertCss()` 的那串字节。构建检查、`check.js`、`selftest.js` 的临时树、
-  以及所有读样式的测试都从这里取，不各自拼 `theme.css + '\n' + generated.css`；
+  以及所有读样式的测试都从这里取，不各自拼路径；拼接是**纯字节串接**
+  （各层自带行尾换行，层与层之间不插入任何分隔）；
   `check.js` 另有一条守卫断言客户端入口的 `?raw` 导入与清单**同名同序**，
   `selftest.js` 有对应变异案例（把两个 import 调换顺序必须被抓到）
 - 强调色按**调色板 class**（`theme-endfield-gray` / `-wuling`）切换：一个 class

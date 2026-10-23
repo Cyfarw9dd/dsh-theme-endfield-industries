@@ -1,0 +1,533 @@
+      /* ================= dark compaction notice + residual blues ================= */
+      /* Dark mode: warm label grays (compaction notice title/summary/sep used bluish defaults) */
+      body[data-ds-dark-theme] {
+        --dsw-alias-label-tertiary: #9a9d98;
+        --dsw-alias-label-caption: #a4a6a1;
+        --dsw-alias-label-dimmed: #70736f;
+        --dsw-alias-label-primary-dimmed: #d8d9d5;
+        --dsw-alias-label-primary-inverted: #101110;
+      }
+      /* Preset menu descriptions readable without hover in dark */
+      body[data-ds-dark-theme] [class$='_itemDesc'] {
+        color: #c5c7c2 !important;
+      }
+      /* Light + dark: warm the remaining bluish-gray surfaces / buttons / code blocks */
+      body {
+        --dsw-alias-bg-layer-3: #dcddd6;
+        --dsw-alias-bg-module-platform: #f2f2ec;
+        --dsw-alias-markdown-code-block: #ecece6;
+        --dsw-alias-button-elevated-fill: #f2f2ec;
+        --dsw-alias-button-floating-fill: #f2f2ec;
+        --dsw-alias-button-floating-hover: #e8e8e2;
+        --dsw-alias-button-ghost-active-fill: #dcddd6;
+        --dsw-alias-button-ghost-active-hover: #d8d9d5;
+        --dsw-alias-button-ghost-active-border: #b6b8b3;
+        --dsw-alias-button-primary-hover: #2a2b28;
+        --dsw-alias-button-contrast-fill: #3a3c38;
+        /* 浮层提示气泡（正常路径在 overrideTokens，这里是无 presenter 环境的兜底） */
+        --dsw-alias-tooltip-bg: #f2f2ec;
+        --dsw-alias-tooltip-key-bg: #dcddd6;
+        --dsw-specific-input-major: #f2f2ec;
+        --dsw-specific-selector: #e8e8e2;
+        --dsw-specific-tip: #e8e8e2;
+        --dsw-static-blue-400: #757874;
+        --dsw-static-blue-450: var(--edge-accent);
+        --dsw-static-blue-500: #101110;
+        --dsw-alias-label-quaternary: #6a6d68;
+        --dsw-alias-label-error: #ff3b30;
+        --dsw-alias-label-inverse: #101110;
+        --dsw-alias-line-secondary: #d8d9d5;
+        --dsw-alias-separator-primary: #9a9d98;
+        --dsw-alias-border-secondary: #b6b8b3;
+        --dsw-alias-bg-primary: #f2f2ec;
+        --dsw-alias-interactive-bg-primary: var(--edge-accent);
+        --dsw-alias-fill-l2: #dcddd6;
+        --dsw-alias-fill-tsp-secondary: #dcddd6;
+      }
+      body[data-ds-dark-theme] {
+        --dsw-alias-bg-layer-3: #2c2e2a;
+        --dsw-alias-bg-module-platform: #2c2e2a;
+        --dsw-alias-bg-layer-2: #1e201d;
+        --dsw-alias-markdown-code-block: #181a18;
+        --dsw-alias-button-elevated-fill: #3a3c38;
+        --dsw-alias-button-floating-fill: #343633;
+        --dsw-alias-button-floating-hover: #3a3c38;
+        --dsw-alias-button-ghost-active-fill: #343633;
+        --dsw-alias-button-ghost-active-hover: #3f413d;
+        --dsw-alias-button-ghost-active-border: #5f6460;
+        --dsw-alias-button-primary-hover: var(--edge-accent-deep);
+        --dsw-alias-button-contrast-fill: #f5f5f0;
+        /* 浮层提示气泡（同上，兜底层） */
+        --dsw-alias-tooltip-bg: #1c1e1c;
+        --dsw-alias-tooltip-key-bg: #2c2e2a;
+        --dsw-specific-input-major: #202220;
+        --dsw-specific-selector: #2c2e2a;
+        --dsw-specific-tip: #2c2e2a;
+        --dsw-static-blue-400: #9a9d98;
+        --dsw-static-blue-450: var(--edge-accent);
+        --dsw-static-blue-500: #f5f5f0;
+        --dsw-alias-label-quaternary: #9a9d98;
+        --dsw-alias-label-error: #ff6b61;
+        --dsw-alias-label-inverse: #101110;
+        --dsw-alias-line-secondary: #343633;
+        --dsw-alias-separator-primary: #70736f;
+        --dsw-alias-border-secondary: #4a4d49;
+        --dsw-alias-bg-primary: #181a18;
+        --dsw-alias-interactive-bg-primary: var(--edge-accent);
+        --dsw-alias-fill-l2: #242624;
+        --dsw-alias-fill-tsp-secondary: #242624;
+      }
+      /* Token meter: messages segment signal yellow, system warm gray (tools keeps purple)
+         Both suffixes are unique to the ContextMeter component, so a bare substring
+         match is safe (hash-pinned .JObwrW_* died in the 0.1.2-rc.1 rehash). */
+      [class*='_colorMessages'] {
+        --meter-tint: var(--edge-accent) !important;
+      }
+      [class*='_colorSystem'] {
+        --meter-tint: #9a9d98 !important;
+      }
+      /* Appearance theme cube selected border: warm.
+         '_selected' as a bare substring is safe-ish BECAUSE the rule only sets
+         border-color: an element without a border is untouched, and any bordered
+         selected element gets the warm line colour — which is the theme's
+         de-blue-ing goal everywhere anyway. In dark mode the broad accent rule
+         further down (0,2,0 specificity) outranks this and keeps its own colour. */
+      [class*='_selected'] {
+        border-color: var(--dsw-alias-border-l2) !important;
+      }
+      /* Hero preview badge: solid signal-yellow + black (reference accent chip).
+         '_previewBadge' is unique to the hero shell (HeroShell on 0.1.2-rc.1). */
+      [class*='_previewBadge'] {
+        color: var(--edge-accent-ink, #101110) !important;
+        background: var(--edge-accent) !important;
+        border-color: var(--edge-accent) !important;
+      }
+      /* ---------- Hero backdrop glow: brand blue -> signal yellow ----------
+         The empty-conversation hero paints one large blurred ellipse behind the
+         composer card (ConversationRoot's <HeroGlow>, class *_heroGlow, figma
+         313:14109; feGaussianBlur stdDeviation 50, ellipse 135% of the column
+         width centred 92px above its bottom edge).
+         Its colour is an SVG PRESENTATION ATTRIBUTE — fill="#6187D8"
+         fill-opacity="0.08" — not a token, so the whole "neutralize remaining
+         DeepSeek brand blues" variable block above could never reach it: a soft
+         periwinkle haze survived the theme on that one page. A presentation
+         attribute loses to ANY author CSS declaration, so restyling the ellipse
+         here is sufficient and no app source is touched.
+
+         Opacity is per scheme, and the two values are MEASURED, not picked: the
+         app's exact glow svg was rendered headless over each --dsw-alias-bg-base
+         and the ellipse core sampled, so the replacement can be matched to the
+         presence of the glow it replaces (Y = 0.2126R+0.7152G+0.0722B):
+           light #e8e8e2 (Y 231.5): 8% #6187D8 -> #DDE0E1 (Y 223.3, -8.2)
+                                    8% #fff500 -> #E9E8D0 (Y 230.4, -1.1)
+           dark  #101110 (Y  16.8): 8% #6187D8 -> #161A1F (Y  25.0, +8.2)
+                                    5% #fff500 -> #1C1C0F (Y  27.1, +10.3)
+         Light keeps 8%: yellow there is almost luminance-NEUTRAL and shifts only
+         chroma (blue channel -18), i.e. a warm breath on the paper rather than
+         the blue's grey-blue darkening — gentler than what it replaces, not
+         louder. Dark had to come down from 8%/7%: over near-black, added
+         luminance reads far more readily than subtracted blue does over cream
+         (7% measured #20200E, Y +13.4 — about 1.6x the blue's lift), and 5%
+         lands within ~2 Y of the original glow. So the hero keeps exactly the
+         depth it had, in the theme's own accent.
+         Matched on the '_heroGlow' CSS-module suffix, never on a build hash.
+         NOTE: 0.1.2-rc.1 removed the glow SVG entirely (the hero was merged into
+         ConversationRoot with no <HeroGlow>), so these rules match nothing there;
+         they are kept as a self-healing hook in case upstream restores it. */
+      [class*='_heroGlow'] ellipse {
+        fill: var(--edge-signal, var(--edge-accent)) !important;
+        fill-opacity: var(--edge-glow-light) !important;
+      }
+      body[data-ds-dark-theme] [class*='_heroGlow'] ellipse {
+        fill-opacity: var(--edge-glow-dark) !important;
+      }
+      /* Brand wordmark HARNESS chip: signal-yellow box + black letters (both modes) */
+      body {
+        --dsw-alias-label-primary-inverted: var(--edge-accent-ink, #101110);
+      }
+      [class*='brand'] svg rect,
+      [class$='_newSession'] svg rect {
+        fill: var(--edge-accent) !important;
+      }
+      /* Compaction notice row: soft yellow wash + accent in dark, hover = solid inversion */
+      body[data-ds-dark-theme] [class$='_compactionRow'] {
+        background: rgba(var(--edge-accent-rgb), 0.08) !important;
+        border-left: 2px solid rgba(var(--edge-accent-rgb), 0.55) !important;
+      }
+      body[data-ds-dark-theme] [class$='_compactionButton']:hover:not(:disabled),
+      body[data-ds-dark-theme] [class$='_compactionButton']:focus-visible {
+        background: var(--edge-accent) !important;
+      }
+      body[data-ds-dark-theme] [class$='_compactionButton']:hover *,
+      body[data-ds-dark-theme] [class$='_compactionButton']:focus-visible * {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      body[data-ds-dark-theme] [class$='_compactionButton']:hover [class$='_compactionSep'],
+      body[data-ds-dark-theme] [class$='_compactionButton']:focus-visible [class$='_compactionSep'] {
+        background: var(--edge-accent-ink, #000) !important;
+      }
+      /* ================= composer add (+) button ================= */
+      /* Dark: + icon stays signal yellow at REST (a quiet accent, see below);
+         hover is the scheme-gray selected-text fill. Light mode only needs the
+         hover half (the app's own hover already pairs with label-primary).
+         reason: the hook is a bare SUBSTRING ('_add'), so every upstream class that
+         merely CONTAINS it was painted too. Audited against the installed bundles
+         (0.1.7-era), the collision set is:
+           RlGAzG_add             composer + button                    <- the target
+           _3nPmjq_addActions     settings > 模型 add-block WRAPPER   <- the report
+           _3nPmjq_addBlock / _addCard / _addModes / _addPanel / _addModelButton
+           _0SbxAa_add            deliverables file-diff ADDED line
+           LFNH1G_added / kuvljq_added / pFy1Ka_diffAdded /
+           haSm5q_promptDiffLineadded
+           qWvkEq_address*        sidebar-browser address bar
+           fO69Vq_addButton / _3nPmjq_addButton   (what the old ':not()' excluded)
+
+         The reported screenshot is the WRAPPER. '_addActions' is a plain <div>
+         around 添加模型提供商, so ':disabled' never applies and pointing at the
+         BUTTON hovers the wrapper as well. The theme filled the wrapper with the
+         SOLID accent while the button kept upstream's translucent wash
+         (rgba(255,245,0,.18)) plus color: label-primary — #f5f5f0 on #fff500 =
+         1.05:1, an invisible label. The button's dashed border kept drawing over
+         the fill, which is exactly what the report shows. Measured on the running
+         build (not inferred): rest -> wrapper transparent, hover -> wrapper
+         rgb(255,245,0) under a button at rgb(245,245,240).
+
+         ':not([class*='_addButton'])' could not have caught it — the wrapper is not
+         the button — and every '*_add*' container upstream adds would have had to be
+         appended to that exclusion list one bug report at a time. Scoping fixes the
+         whole family at once, the same way '_arrow' was fixed.
+
+         The scope is the pair the composer '_primary' / '_arrow' rules already use,
+         so the + keeps its inversion. '[data-composer-seat]' is included because the
+         seat declares it upstream ('data-composer-seat', an e2e anchor): a
+         '[class$=]' hook dies silently the moment upstream appends a second class to
+         that element, which is the failure mode this file has already paid for.
+
+         Note the + is the ONLY composer element whose class contains '_add'; the
+         scope cannot reach the settings wrappers, the diff lines or the address bar.
+         Verified by test/hover-check.js against real hovered pixels in both
+         palettes and both schemes. */
+      /* Dark REST: the + icon stays signal yellow (a quiet accent at rest —
+         --edge-status-dark reads on every dark palette). */
+      body[data-ds-dark-theme] :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) [class*='_add'] {
+        color: var(--edge-status-dark, var(--edge-accent)) !important;
+      }
+      /* Hover: 划词灰（用户指定：+ 的悬停与模型栏选中一致，用 ::selection 的
+         fill/ink 对，不用实心强调黄——黄只留给发送/停止主按钮）。亮暗两案
+         都写：亮色下上游自己的 hover 底是 --dsw-alias-interactive-bg-hover-solid
+         （本主题映射为实心强调色），同样需要这把灰盖掉。配对与 ::selection
+         同源：亮 #d9d9d9+墨字 13.41:1，暗 #6a6a6a+白字 5.41:1。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) [class*='_add']:hover:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) [class*='_add']:focus-visible {
+        color: var(--edge-select-ink, #101110) !important;
+        background: var(--edge-select-fill, #d9d9d9) !important;
+      }
+      /* 操作条 chips（插件 / 自动化任务 / 设置 / 工作区内修改 / 模型选择 /
+         智能体团队 / 标准模式 / 后台任务）。各功能包自己的 CSS 模块（哈希
+         类名、分属八个包），但悬停/按下底色**全部**消费
+         --dsw-alias-interactive-bg-* 一族——本主题在 body 上把它映射成强调
+         黄 α 洗，于是整排悬停都是工业黄。用户指定（2026-10-15）：这排 chips
+         改工业灰，与上面的 + 同一对划词灰。
+         实现走**容器内令牌重映射**而非逐 chip 枚举：chips 全部住在输入卡的
+         _tools / _modes / _standardControls 三行（语义后缀；发送键在
+         _trailing，不入列），重映射对整族一次生效——与 + 的「scoping fixes
+         the whole family」同一门派。各 chip 弹出的菜单都 portal 到 body、
+         不在作用域内，菜单行悬停不受影响；自定义属性向下继承，容器声明
+         盖过 body 层的同名令牌。按下（-active）一并换灰，否则点按瞬间会
+         闪一下黄。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) {
+        --dsw-alias-interactive-bg-hover: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-hover-solid: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-hover-accent: var(--edge-select-fill);
+        --dsw-alias-interactive-bg-active: var(--edge-select-fill);
+      }
+      /* 配对字色：chips 自身的悬停字色是 label-secondary/tertiary 一档，
+         暗色下压在 #6a6a6a 上只有约 1.7:1——悬停/按下/聚焦时强制换划词灰
+         的配对墨/白（亮 #101110、暗 #ffffff，随模式翻转），不枚举 chip 类名，
+         按行内可交互元素兜底。图标描边走 currentColor，一并换色。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):hover:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):active:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) :is(button, select, [role='button'], [role='combobox']):focus-visible {
+        color: var(--edge-select-ink, #101110) !important;
+      }
+      /* 还有第二路黄：下面「会话头部动作」的全局 [class$='_trigger'] 悬停规则
+         （实心强调 + !important）没有作用域，把输入卡里所有 *_trigger chips
+         （插件/团队/任务这类带弹出菜单的）也刷成了实心黄——令牌重映射管
+         不到它。这里用更高特异性（(0,7,0) > (0,3,0)）在同三行内把
+         _trigger 收回划词灰对，展开态（aria-expanded，菜单开着时 chip 常亮）
+         一并归灰。头部那些真正的 _trigger 不在本作用域，保持原样。 */
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger']:hover:not(:disabled),
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger'][aria-expanded='true'],
+      :is([data-composer-seat], [class$='_composerSeat'], [class$='_composerHero']) :is([class$='_tools'], [class$='_modes'], [class$='_standardControls']) [class$='_trigger']:focus-visible {
+        color: var(--edge-select-ink, #101110) !important;
+        background: var(--edge-select-fill, #d9d9d9) !important;
+      }
+      /* Dark: hardcoded #fff icon on yellow info-fill -> black icon; hover deeper yellow.
+         Scoped to the composer (the seat band in a live conversation, the hero
+         wrapper on the empty state) and to <button>: '_primary' as a bare suffix is
+         too generic to trust with a colour flip anywhere else. */
+      body[data-ds-dark-theme] :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary'] {
+        color: var(--edge-accent-ink, #101110) !important;
+      }
+      body[data-ds-dark-theme] :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary']:hover:not(:disabled) {
+        color: var(--edge-accent-ink, #101110) !important;
+        background: var(--edge-accent-deep) !important;
+      }
+      /* ================= light-mode white-on-dark buttons keep white icon ================= */
+      /* Generic hover inversion would make the white send icon black on the dark fill.
+         (The old list also had .zGbnIq_primaryButton from settings › 模型; upstream
+         removed that class in 0.1.2-rc.1. If a replacement appears, name it here
+         explicitly rather than widening the composer scope.) */
+      body:not([data-ds-dark-theme]) :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary'],
+      body:not([data-ds-dark-theme]) :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary']:hover:not(:disabled) {
+        color: #fff !important;
+      }
+      /* ================= official button material (等高线流线) =================
+         The official base button (.Button_button) carries a 320x72 flowing-line
+         PNG on its ::before: near-black ink (~#090909) at alpha 4-11%, per-row
+         mean alpha rising 14.4 -> 21.1 top to bottom, 63% coverage — faint
+         layered contour lines, visible only on dark fills (the official light
+         branch is the same image with filter: invert(1)). Measured live
+         2026-10-13, spec in docs/endfield-ui-research.md.
+
+         Owner request: 新会话 / 发送 / 提交 / 跳过 carry it, pattern replicated
+         from the official bytes, keeping the official 320:72 proportion, and
+         (2026-10-13 follow-up) the band is FULL HEIGHT and FLUSH RIGHT — no
+         gaps above or below, hugging the right edge; it grows leftward at the
+         intrinsic ratio, so a button wider than the band keeps clean space on
+         the left (that is the "not covering the whole button" part, given by
+         the ratio itself rather than a centred 56% patch). Per 素材取最省表达
+         this paints the element's own background-image layer instead of a
+         pseudo (the new-session ::after already belongs to the signal arrow,
+         and the app's own pseudo usage is not ours to take). All four hosts
+         are accent-filled or on paper in both schemes, so the dark-ink image
+         serves both — except 跳过 (an outline button on the card surface),
+         which takes the palette-inverted twin in dark. The theme's own
+         shorthand background rules above reset the image layer, so every
+         state they cover is restated here, after them; disabled buttons stay
+         clean (upstream dims them to .4). */
+      [class$='_newSession'],
+      [class$='_newSession']:hover,
+      [class$='_newSession']:focus-visible,
+      :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary'],
+      :is([class$='_composerSeat'], [class$='_composerHero']) button[class*='_primary']:hover:not(:disabled),
+      [data-question-key] button[class*='_primary'],
+      [data-question-key] button[class*='_primary']:hover:not(:disabled),
+      [data-question-key] button[class*='_outline'],
+      [data-question-key] button[class*='_outline']:hover:not(:disabled) {
+        background-image: var(--edge-btn-tex) !important;
+        background-repeat: no-repeat !important;
+        background-position: right -1px center !important;
+        /* background-origin defaults to the PADDING box: the sidebar's
+           new-session button carries a .5px border, which left a hairline
+           gap on the right/top/bottom (the band was sized to the inner
+           edge). Reference the BORDER box so the ink reaches the true
+           edge, painting under the border strip. */
+        background-origin: border-box !important;
+        /* Bleed 1px past every edge (clipped by the button box itself):
+           whatever the device pixel ratio rounds to, the ink is already
+           there — the last resort against sub-pixel hairlines. The width
+           stays ratio-driven (auto), so 320:72 holds. The material image
+           itself carries a build-time left-fade mask (see
+           scripts/build-texture.js): the official ink starts HARD at
+           x~103/320, which against a flat button fill read as a harsh
+           vertical cut — the mask fades the entry in instead. */
+        background-size: auto calc(100% + 2px) !important;
+      }
+      /* 跳过 sits on the card surface itself: near-black ink would vanish on
+         the dark card, so dark swaps to --edge-btn-tex-inv — the data form of
+         the official invert(1) branch (same alpha, flipped palette). */
+      body[data-ds-dark-theme] [data-question-key] button[class*='_outline'],
+      body[data-ds-dark-theme] [data-question-key] button[class*='_outline']:hover:not(:disabled) {
+        background-image: var(--edge-btn-tex-inv) !important;
+      }
+      /* ================= buttons the theme fills with the SOLID accent =================
+         Settings > 模型 draws its row actions with a '<hash>_secondaryButton'
+         class (zGbnIq_ in the 0.1.1 bundles), whose upstream rule is:
+             color:      var(--dsw-alias-label-primary)
+             background: var(--dsw-alias-interactive-bg-hover-solid)   (on :hover)
+         This theme maps that background token to the solid accent but upstream keeps
+         owning the foreground — so in dark mode the label stayed label-primary
+         (#f5f5f0) on signal yellow. Measured from a real screenshot of the 编辑
+         button: 63 px of #f5f5f0 sitting on #fff500 = 1.05:1, i.e. the word was
+         invisible. On 武陵青 the same pairing is 2.61:1 — still failing, just less
+         obviously, which is how it stayed hidden.
+
+         Why the existing hover-inversion rule did not already cover it: that
+         selector deliberately EXCLUDES plain buttons, because a button's own fill
+         and text must survive hover (the yellow toggle keeps black text, the
+         white-on-dark send button keeps white). This button is the case where the
+         fill comes from the THEME and the text from the APP, so it has to be named.
+
+         Scoped to the accent-filled states only, so the resting transparent button
+         keeps label-primary and stays correct in both schemes (measured 16.00:1
+         dark / 16.84:1 light). Guarded by test/settings-buttons.test.js.
+
+         .HOVERPROBE is included deliberately: a screenshot/computed-style test
+         cannot trigger :hover, so the test swaps in that class, which has the same
+         0,1,0 specificity as the pseudo-class and therefore the same cascade
+         outcome. Naming it here keeps the rule the test verifies identical to the
+         rule that ships, instead of testing a near-copy. It never matches in the
+         real app, since nothing renders that class.
+
+         The class list is not just the reported button. Auditing the installed
+         bundles for elements whose hover background is that token found SIX, and
+         three of them additionally re-assert color:label-primary in the same rule
+         (so they would fight a token-level fix):
+           *_secondaryButton   settings > 模型 row actions           <- reported
+           *_inspectButton     inspect panels (cordis / skill / tool —
+                               three modules, one semantic suffix)
+           *_arrow             attachment carousel arrow
+           *_add               composer + (already handled above)
+         All are the same defect on different screens, so they are fixed together
+         rather than one bug report at a time.
+
+         MATCHING IS HASH-FREE and matched on the SUBSTRING, not [class$=...]: an
+         attribute-suffix match requires the WHOLE class attribute to end with the
+         string, so it silently misses any element that carries a second class
+         after it (measured: [class$='_inspectButton'] failed on
+         class="gNWCoW_inspectButton HOVERPROBE"). Upstream composes class lists
+         freely AND rehashes modules between releases (0.1.2-rc.1 killed all 33
+         pinned hashes), so the semantic token embedded in the class is the only
+         durable hook — '_secondaryButton' / '_inspectButton' are specific enough
+         that no other component uses them.
+
+         '_arrow' is the one exception that needs SCOPING, not a bare match: two
+         other components (trajectory, workspace) also carry *_arrow classes and
+         take NO hover fill, so a bare match would force ink onto elements that
+         keep their normal background — black-on-near-black in dark mode,
+         inventing a new contrast bug while fixing this one. The attachment
+         carousel lives inside the composer, so the composer wrappers scope it;
+         if a hover-filled arrow ever renders elsewhere, add its scope here. */
+      :is([class*='_secondaryButton'], [class*='_inspectButton']):hover:not(:disabled),
+      :is([class*='_secondaryButton'], [class*='_inspectButton']):hover:not(:disabled) svg,
+      :is([class*='_secondaryButton'], [class*='_inspectButton']):hover:not(:disabled) svg path,
+      :is([class*='_secondaryButton'], [class*='_inspectButton']).HOVERPROBE:not(:disabled),
+      :is([class*='_secondaryButton'], [class*='_inspectButton']).HOVERPROBE:not(:disabled) svg,
+      :is([class*='_secondaryButton'], [class*='_inspectButton']).HOVERPROBE:not(:disabled) svg path,
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow']:hover:not(:disabled),
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow']:hover:not(:disabled) svg,
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow']:hover:not(:disabled) svg path,
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled),
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled) svg,
+      :is([class$='_composerSeat'], [class$='_composerHero']) [class*='_arrow'].HOVERPROBE:not(:disabled) svg path {
+        /* Accent-ink on accent: 16.50:1 on 谷地黄, 6.62:1 on 武陵青, white on
+           终末地灰's #626262 6.10:1 — all AA through --edge-accent-ink. */
+        color: var(--edge-accent-ink, #101110) !important;
+        fill: currentColor !important;
+      }
+      /* ---------- light mode: the danger (移除) button needs a darker red ----------
+         Not part of the accent work, but measured by the same test and failing:
+         --dsw-alias-state-error-primary is #ff3b30, which on the settings panel
+         (#f2f2ec) is only 3.16:1 — below AA for the 12px label it paints. iOS-style
+         reds are tuned for white-on-red fills, not red-on-paper text. Darkening the
+         TEXT colour alone (the token keeps its value for fills/dots elsewhere)
+         brings it to 5.12:1 while staying unmistakably red.
+         (0.1.2-rc.1 removed the old zGbnIq_dangerButton class; the semantic suffix
+         is kept so the rule re-arms itself if the button returns under the same
+         name, and no-ops harmlessly until then.) */
+      body:not([data-ds-dark-theme]) [class*='_dangerButton'] {
+        color: #c62016 !important;
+      }
+      /* ================= dark mode: selected rows = solid signal-yellow + black text ================= */
+      /* The translucent yellow wash makes white text look muddy olive; the reference
+         inverts to black-on-signal-yellow, so selected rows get the full inversion.
+         CARVED OUT (2026-10): the model menu rows ([role='menuitemradio'] — unique
+         to the model-selection package) and the permission popup rows
+         ([role='menuitem'] whose label embeds an '_optionLabel' span) use the
+         划词灰 selection pair instead — including in dark, where the pair flips
+         to #6a6a6a/#ffffff (see the 菜单当前项 section). :not() with :has() inside
+         is level-4 selectors, same dependency the header chip rule already has.
+         The user-questions option chips keep THIS rule: they carry '_optionLabel'
+         too but no menuitem role, so the second :not() cannot reach them. */
+      body[data-ds-dark-theme] [class*='selected' i]:not([class*='unselected' i]):not([role='menuitemradio']):not([role='menuitem']:has([class$='_optionLabel'])) {
+        color: var(--edge-accent-ink, #000) !important;
+        background: var(--edge-accent) !important;
+        border-color: var(--edge-accent) !important;
+      }
+      body[data-ds-dark-theme] [class*='selected' i]:not([class*='unselected' i]):not([role='menuitemradio']):not([role='menuitem']:has([class$='_optionLabel'])) *:not(svg):not(path) {
+        color: var(--edge-accent-ink, #000) !important;
+      }
+      /* ================= ask_user_question option chips ================= */
+      /* Two contrast collisions in the question card (@deepseek-ai/dsh-client-ui-user-questions),
+         both measured on a real card rather than guessed.
+
+         1) The recommended chip. Upstream paints it with
+              color: var(--dsw-alias-button-info-fill)
+              background: var(--dsw-specific-sidebar-nav-item-active-accent)
+            i.e. it uses info-fill as a FOREGROUND. This theme maps that token and the
+            nav accent to the SAME value in both modes (#101110 light / #fff500 dark),
+            so the label painted itself onto its own fill and the chip measured as a
+            single flat colour with ZERO glyph pixels. Broken in BOTH modes, not just
+            dark. Pin the pair explicitly instead of retuning either token, because
+            both are consumed as real background fills elsewhere. */
+      :is([role='radio'], [role='checkbox']) [class*='badge' i] {
+        color: var(--edge-accent-ink, #101110) !important;
+        background: var(--edge-accent) !important;
+      }
+      /* On a selected row the row itself is already solid signal yellow, so the chip
+         inverts to keep its edge instead of dissolving into the row. */
+      body[data-ds-dark-theme] [class*='selected' i]:not([class*='unselected' i]) [class*='badge' i] {
+        color: var(--edge-status-dark, var(--edge-accent)) !important;
+        background: #101110 !important;
+      }
+      /* 2) The option number ("1", "2", ...). The blanket dark inversion above
+            recolours descendant TEXT to black but cannot touch a descendant's own
+            background, so this chip kept its overlay fill
+            (--dsw-alias-bg-overlay = #1c1e1c) and rendered a black digit on
+            near-black: measured 1.25:1, i.e. the numbering vanished on the selected
+            row. Wash the chip rather than filling it, so the digit reads on yellow
+            and the chip still looks like a chip. */
+      body[data-ds-dark-theme] [class*='selected' i]:not([class*='unselected' i]) [class*='number' i] {
+        color: var(--edge-accent-ink, #101110) !important;
+        background: color-mix(in srgb, var(--edge-accent-ink, #101110) 14%, transparent) !important;
+      }
+      /* ---------- Turn-status label ("Deep diving...") ----------
+         Owner: @deepseek-ai/dsh-client-ui-conversation, class Md3f7G_turnStatus.
+
+         This label is GRADIENT TEXT, not coloured text. Upstream paints a
+         linear-gradient background, sets -webkit-text-fill-color: transparent plus
+         background-clip: text, and animates background-position to shimmer:
+
+           background: linear-gradient(90deg,
+             var(--dsw-static-deepseek-500) 0%   40%,
+             var(--dsw-static-deepseek-200) 50%,
+             var(--dsw-static-deepseek-500) 60% 100%);
+           color: #0000; -webkit-text-fill-color: transparent;
+
+         Two consequences drive the rules below:
+           1. A plain 'color:' CANNOT recolour this label — the transparent text
+              fill wins, so the glyphs would stay whatever the gradient paints. The
+              recolour therefore has to go through the gradient itself.
+           2. Retinting the shared --dsw-static-deepseek-* tokens is the wrong lever:
+              --dsw-static-deepseek-500/200 also back --dsw-alias-button-info-fill,
+              --dsw-alias-state-business-primary and --dsw-specific-bubble-highlight
+              (verified in dsh-client-ui-theme/styles/design-platform.css), so the
+              theme already maps them to ink/paper on purpose. Only
+              background-image is overridden here, which leaves upstream's
+              background-size, background-position and shimmer animation untouched.
+
+         COLOUR CHOICE IS MEASURED, NOT PICKED BY EYE. Every gradient stop must
+         clear WCAG AA 4.5:1 against BOTH backgrounds the label can sit on in its
+         mode (bg-base and bg-layer-1), because the mid-band sweeps through the
+         glyphs — and under prefers-reduced-motion upstream pins background-size to
+         100%, leaving that mid-band permanently inside the text. Measured:
+           light bg #e8e8e2 / #f2f2ec —  #fff500 scores 1.02:1 (invisible; the naive
+             "just make it yellow" reading of this request), #8f7c00 3.38, #7d6c00
+             4.25, and #6b5d00 5.35 is the FIRST gold that clears AA;
+           dark  bg #101110 / #181a18 —  #fff500 15.26, #a08a00 5.11, while #8f7c00
+             falls to 4.21 and fails.
+         Hence the sweep DIPS deeper in both modes instead of lifting brighter:
+         in light mode no gold above #6b5d00 can clear AA, and in dark mode a pale
+         lift band desaturates to near-white and loses the yellow entirely.
+         Light mode is a deep gold rather than signal yellow for the same reason the
+         watermark and rail are not: on cream, #fff500 is not a colour choice, it is
+         an erasure. */
+      body [class*='turnStatus']:not([class*='turnStatusClock']) {
+        background-image: linear-gradient(90deg,
+          var(--edge-status-light) 0%, var(--edge-status-light) 40%, var(--edge-status-light-mid) 50%, var(--edge-status-light) 60%, var(--edge-status-light) 100%) !important;
+      }
+      body[data-ds-dark-theme] [class*='turnStatus']:not([class*='turnStatusClock']) {
+        background-image: linear-gradient(90deg,
+          var(--edge-status-dark) 0%, var(--edge-status-dark) 40%, var(--edge-status-dark-mid) 50%, var(--edge-status-dark) 60%, var(--edge-status-dark) 100%) !important;
+      }

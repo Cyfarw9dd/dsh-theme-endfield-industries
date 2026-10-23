@@ -49,8 +49,9 @@ jobs:
         if: always()
         run: node .github/scripts/syntax-check.js
 
-      # 项目自带的护栏：专查那个单模板字面量里的游离反引号和 ${...} 插值。
-      # selftest.js 再拿故意改坏的副本验证护栏本身有效。
+      # 项目自带的护栏：check.js 查样式层清单与入口 ?raw 导入同名同序、CSS
+      # 结构（注释/大括号平衡、调色板变量、生成围栏）、产物可解析与统一下拉
+      # 形状；selftest.js 再拿故意改坏的副本树验证每条护栏真的会失败。
       - name: 样式表护栏
         if: always()
         run: |
@@ -136,79 +137,6 @@ jobs:
         run: node .github/scripts/run-tests.js test:ci
 
   # ---------------------------------------------------------------------------
-  # 性能与覆盖率：非阻塞。
-  #   contour-perf     阈值是 120fps 的 8.3ms/帧预算，虚拟化 runner 的算力抖动
-  #                    会让它假失败（同一台本机两次实测 p95 8.50 / 13.50ms）。
-  #   contour-coverage 跑 5 个随机种子，本身具间歇性。
-  # 数字仍有回归参考价值，所以照跑、写进摘要，只是不当门禁。
-  # ---------------------------------------------------------------------------
-  perf:
-    name: 性能与覆盖率 (非阻塞)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-
-      # test:ci 现在以 scripts/build-client.js --check 开头（产物新鲜度门禁），
-      # tsdown 等 devDependencies 必须先就位。
-      - name: 安装构建依赖
-        run: npm install --no-audit --no-fund
-
-      - name: 定位 Chrome
-        run: |
-          p="$(command -v google-chrome || command -v google-chrome-stable \
-            || command -v chromium-browser || command -v chromium || true)"
-          if [ -z "$p" ]; then echo "::warning::找不到 Chrome，跳过"; exit 1; fi
-          echo "CHROME_PATH=$p" >> "$GITHUB_ENV"
-
-      - name: 等高线性能 contour-perf
-        id: perf
-        continue-on-error: true
-        # pipefail 是必须的：没有它退出码取自 tee，step 永远 success，
-        # 摘要表里的 outcome 就再也反映不出失败了。
-        run: |
-          set -o pipefail
-          npm run test:perf 2>&1 | tee perf.log
-
-      - name: 等高线覆盖率 contour-coverage
-        id: coverage
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npm run test:coverage 2>&1 | tee coverage.log
-
-      - name: 写入摘要
-        if: always()
-        run: |
-          {
-            echo '## 性能与覆盖率（非阻塞）'
-            echo ''
-            echo "| 项目 | 结果 |"
-            echo "| --- | --- |"
-            echo "| contour-perf | ${{ steps.perf.outcome }} |"
-            echo "| contour-coverage | ${{ steps.coverage.outcome }} |"
-            echo ''
-            echo '> 这两项不作为合并门禁：perf 的 8.3ms/帧预算对虚拟化 runner 过紧，'
-            echo '> coverage 使用随机种子。数字仅作回归趋势参考。'
-            echo ''
-            for f in perf.log coverage.log; do
-              [ -f "$f" ] || continue
-              echo "<details><summary>$f</summary>"
-              echo ''
-              echo '```text'
-              cat "$f"
-              echo '```'
-              echo ''
-              echo '</details>'
-              echo ''
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # ---------------------------------------------------------------------------
   # 结论：把两个阻塞 job 的结果收成一条确定的状态。
   # 单独一个 job 的意义在于分支保护只需要盯这一个 required check——不用每加
   # 一个 job 就去改保护规则。skipped/cancelled 也算不通过，不然取消的运行会
@@ -292,7 +220,7 @@ jobs:
             echo ''
             echo "[运行详情]($RUN_URL) · commit \`${HEAD_SHA:0:7}\`"
             echo ''
-            echo '<sub>这条评论由 CI 覆盖更新，不会新增。性能与覆盖率是非阻塞项，不计入结论。</sub>'
+            echo '<sub>这条评论由 CI 覆盖更新，不会新增。</sub>'
           } > comment.md
 
           # 分两步取，不用 `gh api ... | head`：head 提前关管道会给 gh 一个
