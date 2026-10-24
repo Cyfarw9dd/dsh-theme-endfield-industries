@@ -474,6 +474,14 @@ if (cssText.includes("turnStatus")) {
     if (ok) pass('等高线材质 · ' + what)
     else fail('等高线材质失守：' + what)
   }
+  {
+    /* 侧栏「插件 / 自动化任务」入口的无边框契约（2026-10-24 所有者要求）：
+       原生 _panelRow 本就 border:none，这条规则是防御性剥离——守卫它，
+       无论哪个来源再给入口加边框都会被压掉；规则本身消失则守卫报警。 */
+    const stripOk = /\[class\$='_sidebarCol'\] \[class\*='_panelRow'\]\s*\{[^}]*border:\s*none !important[^}]*\}/.test(cssText)
+    if (stripOk) pass('侧栏入口 · 插件/自动化任务无边框（防御剥离钉死）')
+    else fail('侧栏 panelRow 剥边框规则消失——入口会随应用漂移重新长出边框')
+  }
 }
 
 /* --- 7. agent-team expanded board keeps its Endfield form ---
