@@ -13,7 +13,7 @@ DSH Web 主题插件（终末地工业终端风格）。改任何东西前先过
 ## 硬规则
 
 1. **素材来源**：只从官方渠道下载。第三方来源必须用户显式批准，并在 `scripts/build-*.js` 头注 + [docs/credits.md](docs/credits.md) 双重登记（先例：矢量徽标来自 Yue-plus/endfield_icons）
-2. **提交**：完整逻辑变更过验证后即可提交，不主动 push；Conventional Commits，作者用仓库本地 git config，信息经 `-F` 文件写入——细则见 [docs/git.md](docs/git.md)
+2. **提交**：逻辑变更完成后**先问用户**、点头才提交（迭代期只跑定向测试，提交前过全量门槛，分层细则见 git.md），不主动 push；Conventional Commits，作者用仓库本地 git config，信息经 `-F` 文件写入——细则见 [docs/git.md](docs/git.md)
 3. **颜色是量出来的**：新色值必须对实际底面算对比度并写进 `test/palette-contrast.test.js`；选中/光标是**不随调色板的固定灰**（官网语法，依据见 docs/endfield-ui-research.md）
 4. **测试从真实文件读值，不复述数值**；每条断言做过变异验证（selftest.js 方法论）
 5. **`--edge-*` 变量声明在 `body`，绝不在 `:root`**（应用令牌是 body 行内样式，:root 解析为空）
@@ -22,8 +22,8 @@ DSH Web 主题插件（终末地工业终端风格）。改任何东西前先过
 ## 验证门槛
 
 ```bash
-node check.js        # 秒级，任何改动前先跑
-CHROME_PATH=/usr/bin/chromium-browser npm test   # 样式/行为改动必须全绿（770+ 项）
+node check.js        # 秒级，任何改动前先跑；迭代期加跑命中的定向套件即可
+CHROME_PATH=/usr/bin/chromium-browser npm test   # 全量门槛：提交前（用户点头后）跑，绿了才提交
 ```
 
 本机已装系统 Chromium（`/usr/bin/chromium-browser`）：Fedora 拼法不在测试夹具的自动发现列表里，**裸 `npm test` 找不到它，必须带 `CHROME_PATH`**。其他机器换成各自的 Chrome/Edge 路径；备选浏览器是 `~/.cache/puppeteer/chrome/linux-*/chrome-linux64/chrome`（Chrome for Testing）。若 Chromium 启动即崩（crashpad 报 `--database is required`），排查线索见 [docs/development.md](docs/development.md) 的环境一节。
