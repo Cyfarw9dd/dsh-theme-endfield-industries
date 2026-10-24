@@ -22,7 +22,7 @@
         --dsw-alias-button-ghost-active-fill: #dcddd6;
         --dsw-alias-button-ghost-active-hover: #d8d9d5;
         --dsw-alias-button-ghost-active-border: #b6b8b3;
-        --dsw-alias-button-primary-hover: #2a2b28;
+        --dsw-alias-button-primary-hover: var(--edge-dark-raised);
         --dsw-alias-button-contrast-fill: #3a3c38;
         /* 浮层提示气泡（正常路径在 overrideTokens，这里是无 presenter 环境的兜底） */
         --dsw-alias-tooltip-bg: #f2f2ec;
@@ -45,37 +45,37 @@
         --dsw-alias-fill-tsp-secondary: #dcddd6;
       }
       body[data-ds-dark-theme] {
-        --dsw-alias-bg-layer-3: #2c2e2a;
-        --dsw-alias-bg-module-platform: #2c2e2a;
-        --dsw-alias-bg-layer-2: #1e201d;
-        --dsw-alias-markdown-code-block: #181a18;
-        --dsw-alias-button-elevated-fill: #3a3c38;
-        --dsw-alias-button-floating-fill: #343633;
-        --dsw-alias-button-floating-hover: #3a3c38;
-        --dsw-alias-button-ghost-active-fill: #343633;
-        --dsw-alias-button-ghost-active-hover: #3f413d;
-        --dsw-alias-button-ghost-active-border: #5f6460;
+        --dsw-alias-bg-layer-3: var(--edge-dark-raised);
+        --dsw-alias-bg-module-platform: var(--edge-dark-raised);
+        --dsw-alias-bg-layer-2: var(--edge-dark-layer-2);
+        --dsw-alias-markdown-code-block: var(--edge-dark-layer-1);
+        --dsw-alias-button-elevated-fill: var(--edge-dark-border-l1);
+        --dsw-alias-button-floating-fill: var(--edge-dark-border-l1);
+        --dsw-alias-button-floating-hover: var(--edge-dark-border-l1);
+        --dsw-alias-button-ghost-active-fill: var(--edge-dark-border-l1);
+        --dsw-alias-button-ghost-active-hover: var(--edge-dark-border-l1);
+        --dsw-alias-button-ghost-active-border: var(--edge-dark-border-l2);
         --dsw-alias-button-primary-hover: var(--edge-accent-deep);
-        --dsw-alias-button-contrast-fill: #f5f5f0;
+        --dsw-alias-button-contrast-fill: var(--edge-dark-label-primary);
         /* 浮层提示气泡（同上，兜底层） */
-        --dsw-alias-tooltip-bg: #1c1e1c;
-        --dsw-alias-tooltip-key-bg: #2c2e2a;
-        --dsw-specific-input-major: #202220;
-        --dsw-specific-selector: #2c2e2a;
-        --dsw-specific-tip: #2c2e2a;
-        --dsw-static-blue-400: #9a9d98;
+        --dsw-alias-tooltip-bg: var(--edge-dark-overlay);
+        --dsw-alias-tooltip-key-bg: var(--edge-dark-raised);
+        --dsw-specific-input-major: var(--edge-dark-overlay);
+        --dsw-specific-selector: var(--edge-dark-raised);
+        --dsw-specific-tip: var(--edge-dark-raised);
+        --dsw-static-blue-400: var(--edge-dark-label-secondary);
         --dsw-static-blue-450: var(--edge-accent);
-        --dsw-static-blue-500: #f5f5f0;
-        --dsw-alias-label-quaternary: #9a9d98;
+        --dsw-static-blue-500: var(--edge-dark-label-primary);
+        --dsw-alias-label-quaternary: var(--edge-dark-label-secondary);
         --dsw-alias-label-error: #ff6b61;
         --dsw-alias-label-inverse: #101110;
-        --dsw-alias-line-secondary: #343633;
-        --dsw-alias-separator-primary: #70736f;
-        --dsw-alias-border-secondary: #4a4d49;
-        --dsw-alias-bg-primary: #181a18;
+        --dsw-alias-line-secondary: var(--edge-dark-border-l1);
+        --dsw-alias-separator-primary: var(--edge-dark-border-l2);
+        --dsw-alias-border-secondary: var(--edge-dark-border-l2);
+        --dsw-alias-bg-primary: var(--edge-dark-layer-1);
         --dsw-alias-interactive-bg-primary: var(--edge-accent);
-        --dsw-alias-fill-l2: #242624;
-        --dsw-alias-fill-tsp-secondary: #242624;
+        --dsw-alias-fill-l2: var(--edge-dark-layer-2);
+        --dsw-alias-fill-tsp-secondary: var(--edge-dark-layer-2);
       }
       /* Token meter: messages segment signal yellow, system warm gray (tools keeps purple)
          Both suffixes are unique to the ContextMeter component, so a bare substring

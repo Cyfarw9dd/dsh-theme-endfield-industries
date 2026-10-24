@@ -161,7 +161,10 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
      alphas from the stylesheet, composite onto the real surface, and check the
      result stays inside the decorative band. */
   const LIGHT_SURFACES = { 'bg-base': '#e8e8e2', 'bg-layer-1': '#f2f2ec' }
-  const DARK_SURFACES = { 'bg-base': '#101110', 'bg-layer-1': '#181a18' }
+  /* 暗色底面自 2026-10-24 起随档位走（--edge-dark-* 梯度，默认块 = soft/C）。
+     从样式表真实读取默认档的 base/layer-1，不再硬编码退役的 #101110 系。 */
+  const darkLadder = (name) => (new RegExp('--edge-dark-' + name + ':\\s*(#[0-9a-f]{6})', 'i').exec(css) || [])[1]
+  const DARK_SURFACES = { 'bg-base': darkLadder('base'), 'bg-layer-1': darkLadder('layer-1') }
   /* Anchor on the whole first declaration line: '#181818' also appears in the
      documented fallbacks, so a bare colour search finds the wrong block. */
   const lightBlock = blockWithLoose('body { --edge-tex-ink: #181818;')

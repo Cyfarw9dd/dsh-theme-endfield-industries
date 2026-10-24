@@ -144,7 +144,29 @@ const glowLight=getComputedStyle(document.getElementById('status')).backgroundIm
 R('回合状态渐变文字亮色档为深金（#fff500 在纸上不可读）',
   /107,\\s*93,\\s*0|#6b5d00/i.test(glowLight), glowLight.slice(0,90))
 
-/* ---- 4. switching the theme off leaves no palette class behind ---- */
+/* ---- 4. the dark-tier ladder paints through the var() references ----
+    tokens.js's dark column is var(--edge-dark-*) all the way down; the default
+    (no attribute) is tier C「舒适」. Flipping the body attribute must re-resolve
+    the APPLIED inline token with zero JS repaint — that is the whole point of
+    the 暗色档位 setting row. Must run BEFORE the theme-off part below: unmount
+    disposes the token layer and blanks every inline token. */
+setScheme('dark')
+const baseDark=v('--dsw-alias-bg-base')
+R('暗色底令牌经 var(--edge-dark-base) 解析为默认 C 档 #1c1c1b',
+  /28,\s*28,\s*27|#1c1c1b/i.test(baseDark), baseDark)
+document.body.setAttribute('data-endfield-dark','warm')
+const baseWarm=v('--dsw-alias-bg-base')
+document.body.setAttribute('data-endfield-dark','neutral')
+const baseNeutral=v('--dsw-alias-bg-base')
+document.body.setAttribute('data-endfield-dark','soft')
+const baseSoft=v('--dsw-alias-bg-base')
+document.body.removeAttribute('data-endfield-dark')
+R('暗色档位切换即时重解析（warm=#161615 / neutral=#191919，soft 回默认）',
+  (/22,\s*22,\s*21|#161615/i.test(baseWarm)) && (/25,\s*25,\s*25|#191919/i.test(baseNeutral)) && baseSoft===baseDark,
+  baseWarm+' / '+baseNeutral+' → '+baseSoft)
+setScheme('light')
+
+/* ---- 5. switching the theme off leaves no palette class behind ---- */
 __prefs.setField('enabled','0')
 R('关闭主题后仍无配色 class 残留',
   PALETTE_CLASSES.every((c)=>!document.body.classList.contains(c)), document.body.className)

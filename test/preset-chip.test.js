@@ -40,6 +40,15 @@ const os = require('os')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
 /* Browser plumbing (launch/CDP/PNG) is shared — see test/fixtures/chrome-cdp.js. */
 const { launch } = require('./fixtures/chrome-cdp.js')
+/* The chip is a [class] element, so it rides the global corner ladder at the
+   official mainstay tier (2026-10-24 micro-round rework). Read the tier out of
+   tokens.css instead of restating "4px". */
+const css = require('../scripts/lib/sources.js').concatCss()
+const RADIUS_MAIN = (() => {
+  const m = /--edge-radius:\s*([0-9]+(?:\.[0-9]+)?px)/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))
+  if (!m) { console.error('FAIL  tokens.css 里读不到 --edge-radius 主力档'); process.exit(1) }
+  return m[1]
+})()
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-chip-'))
@@ -192,8 +201,8 @@ const STOCK_RGB = 'rgb(200, 200, 200)'
   else fail('A: chip ink is ' + a.chipInk + ', expected ' + ACCENT_INK_RGB)
   if (a.chipMaxWidth === '180px') ok('A: the stock 180px cap is kept, so a long preset name cannot widen the chip into a bar')
   else fail('A: chip max-width is ' + a.chipMaxWidth + ', expected the stock 180px cap')
-  if (a.chipRadius === '0px') ok('A: square radius mode squares the chip')
-  else fail('A: chip radius is ' + a.chipRadius + ', expected 0px (body has no theme-endfield-round)')
+  if (a.chipRadius === RADIUS_MAIN) ok('A: micro-round mode holds the chip at the official mainstay tier (' + a.chipRadius + ')')
+  else fail('A: chip radius is ' + a.chipRadius + ', expected ' + RADIUS_MAIN + ' (body has no theme-endfield-round)')
 
   /* The chip must stay a CHIP. An earlier attempt at this fix reproduced the old
      "fills the action row" intent (flatten the slot wrapper + grow the container),

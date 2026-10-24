@@ -8,12 +8,16 @@
 
 历史内存风格：这些开关最初存浏览器 `localStorage`。由于浏览器存储按「协议 + 主机 + 端口」的 origin 隔离，而 DSH Desktop 每次启动都在 127.0.0.1 绑定一个**随机临时端口**，端口一变 origin 就变，上次保存的设置永远读不到，表现为「重启后恢复默认」。已改用 DSH 官方的用户设置命名空间：
 
-- **DSH 0.1.7-rc.1（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，23 个字段全部 `.volatile()`——0.1.7 只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。
+- **DSH 0.1.7-rc.1（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，24 个字段全部 `.volatile()`——0.1.7 只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。
 - **≤ 0.1.5-rc.2（旧宿主，已不支持）**：`ctx.settings.register` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）一代已随 **DSH 0.2.0 兼容下限**一并移除（peerDependencies 钉住）；没有 `configForms` 服务的页面（独立页、进程内测试）回落内存默认值，开关当次会话有效、不落盘。
 
 落盘位置由 DSH 决定（`$DSH_HOME` 或 `~/.dsh/...`），与浏览器 origin/端口无关，因此在 **dsh web（浏览器、固定/默认端口）** 和 **DSH Desktop（随机临时端口）** 两种运行方式下设置都能正确持久化——它们跑的都是 127.0.0.1 loopback 页面，DSH 会把连接解析为 `host` 持久化模式。
 
 > **升级提示**：0.1.7-rc.1 废弃了 `settings.yaml`（启动时改名为 `settings.yaml.imported`），且其内置迁移只认少数几个段落名，旧的 `dsh-theme-endfield` 段落不在其中——**升级后请在「设置 › 终末地主题设置」里重设一次**。旧值仍可在 `settings.yaml.imported` 中手工对照。详见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)。
+
+### 暗色档位（下拉：舒适/微暖工业灰/官网中性，默认舒适）
+
+2026-10-24 起，暗色模式的底色梯度做成三档可切（设置 › 终末地主题设置 › 01 主题），**切换即时生效、不需要刷新**：实现是 tokens.css 的 `--edge-dark-*` 八变量梯度 + `body[data-endfield-dark]` 属性，tokens.js 覆盖表暗色列全部 `var()` 引用（与 brand-primary 同机制，palette-resolve.test.js 钉住）。取值与对比度全表见 [notes/dark-palette-research.md](notes/dark-palette-research.md)：**舒适**＝C 档（默认，VS Code 长读档，正文 12.04:1，底 `#1c1c1b`）；**微暖工业灰**＝B 档（14.50:1，底 `#161615`，与亮色暖纸墨成对）；**官网中性**＝A 档（13.78:1，底 `#191919` 与官网主灰同值）。旧的 `#101110` 绿味暗色（17.30:1）随本功能移除。亮色侧不受影响。
 
 下表「字段」（缩写）就是存储里的字段名：0.1.7-rc.1 起是 profile patch 里 Config 的 volatile 路径，旧世代是 `settings.yaml` 段落里的键，两者同名（都等价于旧 localStorage 键名的尾部）。
 
@@ -24,9 +28,10 @@
 | 组 | 开关 | 默认 | 命名空间字段 |
 | --- | --- | --- | --- |
 | 01 主题 | 终末地主题 | 开 | `enabled`（旧键 `dsh-theme-endfield-enabled`）|
-| | 主题圆角 | 直角 | `radius` |
+| | 主题圆角 | 微倒角 | `radius` |
 | | 磨砂玻璃 | 关 | `glass` |
 | | 按钮动效 | 开启 | `motion` |
+| | 暗色档位 | 舒适 | `darkTier` |
 | | 工业底纹 | 完整（官网 /operator） | `texture` |
 | 02 背景 | 背景水印 | 开 | `watermark` |
 | | 水印保持显示 | 关 | `watermarkPersist` |
@@ -164,7 +169,7 @@
 
 ### 工业风通知（默认开启）
 
-右下角工业风卡片（纸底、墨框、信号色侧栏、全直角），三触发：
+右下角工业风卡片（纸底、墨框、信号色侧栏、官网 4px 微倒角），三触发：
 
 | 触发 | 行为 | 存活 |
 | --- | --- | --- |

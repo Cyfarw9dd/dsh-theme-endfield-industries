@@ -43,6 +43,21 @@ export function createMotionSync({ prefs, isEnabled }) {
     if (isEnabled() && value !== 'off') document.body.setAttribute?.('data-endfield-texture', value)
     else document.body.removeAttribute?.('data-endfield-texture')
   }
+  /* 暗色档位（2026-10-24，所有者选定 C 为默认并做成设置行）：三档梯度全部
+     声明在 tokens.css 的 --edge-dark-* 变量里，切换只翻 body 属性、令牌
+     （tokens.js 暗色列的 var() 引用）即时重解析——与纹理同一门派，且比它
+     更简单：没有 off 档，主题开启时属性恒在。 */
+  const DARK_TIER_KEY = 'dsh-theme-endfield-dark-tier'
+  const DARK_TIER_OPTIONS = ['soft', 'warm', 'neutral']
+  const readDarkTier = () => {
+    const value = prefs.get(DARK_TIER_KEY)
+    return DARK_TIER_OPTIONS.includes(value) ? value : 'soft'
+  }
+  const syncDarkTier = () => {
+    if (typeof document === 'undefined' || document.body === null) return
+    if (isEnabled()) document.body.setAttribute?.('data-endfield-dark', readDarkTier())
+    else document.body.removeAttribute?.('data-endfield-dark')
+  }
   const GLASS_KEY = 'dsh-theme-endfield-glass'
   const GLASS_OPTIONS = ['off', 'subtle', 'standard', 'strong']
   const readGlass = () => {
@@ -99,6 +114,7 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion()
     syncGlass()
     syncTexture()
+    syncDarkTier()
   }
   /* The unmount-side counterpart of syncAll: the classes/attributes that only
      mean something under this theme's stylesheet must leave WITH that sheet.
@@ -116,11 +132,14 @@ export function createMotionSync({ prefs, isEnabled }) {
     MOTION_KEY,
     TEXTURE_KEY,
     GLASS_KEY,
+    DARK_TIER_KEY,
     TEXTURE_OPTIONS,
     GLASS_OPTIONS,
+    DARK_TIER_OPTIONS,
     readMotion,
     readTexture,
     readGlass,
+    readDarkTier,
     isDarkScheme,
     prefersReducedMotion,
     findAppFrame,
@@ -128,6 +147,7 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion,
     syncGlass,
     syncTexture,
+    syncDarkTier,
     syncAll,
     detach,
   }

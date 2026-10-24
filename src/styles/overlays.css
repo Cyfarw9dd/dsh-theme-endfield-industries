@@ -360,7 +360,7 @@
         align-items: stretch;
         background: var(--dsw-alias-bg-layer-1);
         border: 2px solid var(--dsw-alias-label-primary);
-        border-radius: 0;
+        border-radius: var(--edge-radius);
         box-shadow: 4px 4px 0 rgba(16, 17, 16, 0.35);
         overflow: hidden;
         animation: endfield-notify-in 220ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
@@ -404,7 +404,7 @@
         width: 22px;
         height: 22px;
         border: 1px solid var(--dsw-alias-border-l2);
-        border-radius: 0;
+        border-radius: var(--edge-radius-sm);
         background: transparent;
         color: var(--dsw-alias-label-secondary);
         font-size: 14px;

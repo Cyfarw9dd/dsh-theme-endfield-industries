@@ -123,6 +123,15 @@
         --edge-panel: var(--dsw-alias-bg-layer-1);
         --edge-line: var(--dsw-alias-border-l1);
         --edge-soft: var(--dsw-alias-bg-layer-2);
+        /* ---------- 官网微倒角体系（2026-10-24 所有者拍板对齐）----------
+           实测依据 docs/notes/button-radius-research.md：官网全部可点矩形控件
+           带 2–8px 恒定微倒角，主力 4px（.25rem/4px 合计 29 处），状态变化从
+           不动角（唯一例外 .Button_button 2→6px，按「圆角全局恒定」准则不采用）。
+           取字面值不折算——要整体调轻/调重改这三个变量即可。round 档
+           （theme-endfield-round，应用原生圆角）不消费它们。 */
+        --edge-radius: 4px;      /* 主力：按钮/触发器/面板/CTA/Toast（官网 .25rem/4px）*/
+        --edge-radius-sm: 3px;   /* 小件：滚动条/图标槽（官网 .1875rem）*/
+        --edge-radius-card: 8px; /* 内容卡（官网 .5rem）*/
         /* The theme's own face. THREE things are deliberate here.
 
            (1) THE THEME STACK LEADS, with --dsw-font-family as a trailing
@@ -249,5 +258,48 @@
       }
       body[data-ds-dark-theme] {
         --edge-wm-alpha: 0.085;
-        --edge-wm-emblem-alpha: 0.105;
+        /* 0.105→0.095（2026-10-24）：暗色改为三档可切（见下方 --edge-dark-* 梯度），
+           徽标墨须在最亮的 C 档底 #1c1c1b 上也压在上限内——0.105 在其上理论
+           1.347 超过水印暗色上限 1.32；0.095 时四档底色全部落在 1.26–1.31。 */
+        --edge-wm-emblem-alpha: 0.095;
+      }
+      /* ---------- 暗色三档梯度（2026-10-24，所有者定 C 为默认并做成设置行）----------
+         tokens.js 覆盖表的暗色列全部以 var() 引用这九个变量（含 raised 抬高层：layer-3/键帽/选择器族），body 属性
+         data-endfield-dark（soft|warm|neutral）切换即整组重解析——与纹理
+         同一门派。取值与对比度全表见 docs/notes/dark-palette-research.md（描边 L1 较调研值各降 2 阶，压回本主题 1.6 装饰上限内，三档均 1.54）：
+         默认 soft = C「舒适」（VS Code 档，正文 12.04:1）；warm = B「微暖」
+         （14.50:1，与亮色暖纸墨成对）；neutral = A「官网中性」（13.78:1，
+         #191919 与官网主灰/Radix gray2 同值）。亮色侧与此无关。 */
+      body {
+        --edge-dark-base: #1c1c1b;        /* C 舒适（默认） */
+        --edge-dark-layer-1: #232322;
+        --edge-dark-layer-2: #2b2b29;
+        --edge-dark-raised: #343433;
+        --edge-dark-overlay: #272726;
+        --edge-dark-border-l1: #3c3c3b;
+        --edge-dark-border-l2: #575755;
+        --edge-dark-label-primary: #d9d9d4;
+        --edge-dark-label-secondary: #94948f;
+      }
+      body[data-endfield-dark='neutral'] {
+        --edge-dark-base: #191919;        /* A 官网中性 */
+        --edge-dark-layer-1: #222222;
+        --edge-dark-layer-2: #2a2a2a;
+        --edge-dark-raised: #333333;
+        --edge-dark-overlay: #262626;
+        --edge-dark-border-l1: #3a3a39;
+        --edge-dark-border-l2: #525252;
+        --edge-dark-label-primary: #e4e4df;
+        --edge-dark-label-secondary: #9a9a95;
+      }
+      body[data-endfield-dark='warm'] {
+        --edge-dark-base: #161615;        /* B 微暖工业灰 */
+        --edge-dark-layer-1: #1e1e1c;
+        --edge-dark-layer-2: #262623;
+        --edge-dark-raised: #2f2f2c;
+        --edge-dark-overlay: #222220;
+        --edge-dark-border-l1: #393834;
+        --edge-dark-border-l2: #54524c;
+        --edge-dark-label-primary: #e8e6df;
+        --edge-dark-label-secondary: #a09e96;
       }

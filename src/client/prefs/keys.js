@@ -87,6 +87,7 @@ export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-radius': 'radius',
   'dsh-theme-endfield-glass': 'glass',
   'dsh-theme-endfield-texture': 'texture',
+  'dsh-theme-endfield-dark-tier': 'darkTier',
   'dsh-theme-endfield-motion': 'motion',
   'dsh-theme-endfield-watermark': 'watermark',
   'dsh-theme-endfield-watermark-persist': 'watermarkPersist',

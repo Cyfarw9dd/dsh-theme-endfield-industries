@@ -4,7 +4,7 @@ English (current) · [简体中文](README.zh-CN.md)
 
 A DSH Web theme plugin modeled on the official Arknights: Endfield website (an unofficial fan work).
 
-Cream paper background, ink-black text, zero-radius Endfield industrial-terminal look. The one palette is **Valley Yellow** (the official signal yellow `#fff500`; the earlier Endfield Gray / Wuling Teal switch shipped until 2026-10). The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
+Cream paper background, ink-black text, Endfield industrial-terminal look with the official constant micro-round corners (4px-scale; measured system in docs/notes/button-radius-research.md). The one palette is **Valley Yellow** (the official signal yellow `#fff500`; the earlier Endfield Gray / Wuling Teal switch shipped until 2026-10). The client half (`client.js`) restyles the UI through theme tokens and one global stylesheet; the host half (`index.js`) only handles settings persistence and optional audio notifications (spawned system-player subprocesses). Neither modifies application code.
 
 ## Origin
 
@@ -24,7 +24,7 @@ dsh plugin --profile web rm dsh-theme-endfield-industries
 
 ## Features
 
-Adjust in **Settings › Endfield Theme Settings** (23 fields; all labels follow the DSH language setting, zh/en, switching live):
+Adjust in **Settings › Endfield Theme Settings** (24 fields; all labels follow the DSH language setting, zh/en, switching live):
 
 - **01 Theme**: master switch (off = native app look, no refresh needed, and the settings page stays readable while off); square/rounded corners; frosted glass (off by default); button motion (on by default, merged design: arrow slide-in on approval buttons + 12px engineering corner brackets on session/search rows); industrial texture (off/light/full, **full** by default = the official `/operator` set: engineering grid + 45° hatching + two levels of waves and a top glow, anchored to the main content column only);
 - **02 Background**: the big `ENDFIELD` wordmark watermark (on by default, new-session page only, never intercepts interaction, protected against browser mistranslation) and a keep-showing toggle; the brand mark on the new-session page (the collab "Endfield Mark 3" above the headline, built as two alpha masks, painted in the asset's own colors in both light and dark);

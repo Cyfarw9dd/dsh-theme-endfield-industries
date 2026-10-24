@@ -232,6 +232,9 @@ const body = cssText
       '--edge-accent', '--edge-accent-ink', '--edge-accent-rgb', '--edge-accent-deep', '--edge-accent-onpaper',
       '--edge-status-light', '--edge-status-light-mid', '--edge-status-dark',
       '--edge-status-dark-mid', '--edge-glow-light', '--edge-glow-dark',
+      /* 暗色三档梯度（tokens.css，tokens.js 暗色列经 var() 消费） */
+      '--edge-dark-base', '--edge-dark-layer-1', '--edge-dark-layer-2', '--edge-dark-overlay', '--edge-dark-raised',
+      '--edge-dark-border-l1', '--edge-dark-border-l2', '--edge-dark-label-primary', '--edge-dark-label-secondary',
     ]
     const missing = paletteVars.filter((v) => !new RegExp('^\\s*' + v + '\\s*:', 'm').test(stripped))
     if (missing.length === 0) pass(`all ${paletteVars.length} palette variables are defined in live CSS`)
