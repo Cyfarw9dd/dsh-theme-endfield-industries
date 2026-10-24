@@ -3144,7 +3144,7 @@
 	* 通过 `dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries` 安装挂载。
 	*/
 	window.__ModuleLoader__.load({
-		id: "dsh-theme-endfield",
+		id: "dsh-theme-endfield-industries",
 		factory: (require) => {
 			var module = { exports: {} };
 			var exports = module.exports;
