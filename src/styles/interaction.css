@@ -29,8 +29,9 @@
          E 读数随 CTA 归属信号而失去独立母题；两套幸存母题按角色分工——
 
            · 信号（官网签名，原方案A）：
-             - 新会话按钮 / 审批按钮：箭头自左侧滑入（transform + opacity，
-               合成器级，零重排）；
+             - 审批按钮：箭头自左侧滑入（transform + opacity，合成器级，
+               零重排）——新会话按钮的箭头已按所有者决定移除（2026-10-24，
+               见 2 号注）；
              - 表格行（tbody tr）：悬停左缘 3px 信号色细条。
 
            · 角标（工程标注，原方案D 的母题、收到行角色）：
@@ -49,10 +50,11 @@
 
          色彩取值分两类，**不要混**：
          · 画在纸/面板上的（角标、表格行左边条亮色档）走 --edge-accent-onpaper；
-         · 画在**强调色实心底**上的只有信号箭头，它走 --edge-accent-ink——新会话
-           按钮自己的底就是 --edge-accent（悬停/按下 --edge-accent-deep），同色叠
-           同色会 1.00:1，而 onpaper 在亮黄/亮青里**等于** accent（1.00–1.51:1）。
-           这个反例真的上线过，最后被像素断言抓住。
+         · 画在**强调色实心底**上的角色（读数条等）走 --edge-accent-ink。留档
+           反例：新会话按钮的滑入箭头（2026-10-24 已随动效移除）自己的底就是
+           --edge-accent（悬停/按下 --edge-accent-deep），同色叠同色会 1.00:1，
+           而 onpaper 在亮黄/亮青里**等于** accent（1.00–1.51:1）——这个反例
+           真的上线过，最后被像素断言抓住。
          配对由 test/palette-contrast.test.js 第 12 节断言（ink × accent/deep，
          各配色 5.41–16.50:1）。
 
@@ -126,33 +128,14 @@
          倒角」。直角模式一律 0；圆角模式（theme-endfield-round）保持上游原样；
          两种模式各自恒定。附带收益：border-radius 被浏览器按「可能触发重排」
          处理，悬停改圆角在长列表上有实测成本（见性能段）。 */
-      /* 2. 新会话按钮箭头动效。
-         不做 clip-path 变形——两个 polygon 之间的点位插值在过渡期间产生
-         自交形状（蝶形），视觉上闪烁扭曲。改为：形状固定为右指三角，
-         仅动画 transform + opacity（合成器级，零 paint，零重排）。
-         悬停时箭头从左侧滑入并放大到位。 */
-      body[data-endfield-motion] [class$='_newSession'] {
-        position: relative;
-      }
-      body[data-endfield-motion] [class$='_newSession']::after {
-        content: '';
-        position: absolute;
-        left: 6px;
-        top: 50%;
-        width: 12px;
-        height: 60%;
-        background-color: var(--edge-accent-ink, #101110);
-        clip-path: polygon(0 15%, 100% 50%, 0 85%);
-        opacity: 0;
-        transform: translateY(-50%) translateX(-14px) scale(.4);
-        transition: opacity .2s ease, transform .2s cubic-bezier(.16, 1, .3, 1);
-        pointer-events: none;
-        z-index: 1;
-      }
-      body[data-endfield-motion] [class$='_newSession']:hover::after {
-        opacity: 1;
-        transform: translateY(-50%) translateX(0) scale(1);
-      }
+      /* 2.（已删除，2026-10-24）新会话按钮箭头动效。
+         取消理由与 4 号注（发送/停止按钮）同源：新会话是页面上最显眼的
+         主 CTA，箭头在每一次悬停都重放，属于噪音；官网参考对象
+         （/operator 右列圆按钮）也没有形变式动效——状态靠颜色与边框
+         表达。hero 页现已带完整工业底纹，按钮保留等高线材质与全局颜色
+         过渡即可。旧实现的教训留档：不做 clip-path 变形——两个 polygon
+         之间的点位插值在过渡期产生自交形状（蝶形），视觉上闪烁扭曲；
+         「只动 transform + opacity」的写法由审批按钮（下一条）继承。 */
 
       /* 3. 审批按钮：同款箭头滑入 */
       body[data-endfield-motion] [data-cordis-approve] {
@@ -305,7 +288,6 @@
            corners of the bracket rows — a rule that only kills ::after leaves
            the ::before corner painted (measured: the clamp top-left bracket
            survived 'reduce' until this list included it). */
-        body[data-endfield-motion] [class$='_newSession']::after,
         body[data-endfield-motion] [data-cordis-approve]::after,
         body[data-endfield-motion] [class$='_sidebarCol'] [class$='_sessionRow']::before,
         body[data-endfield-motion] [class$='_sidebarCol'] [class$='_sessionRow']::after,
