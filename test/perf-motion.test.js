@@ -69,8 +69,21 @@ const cssFromSource = sources.concatCss()
 /* ---------------- 1. static guard ---------------- */
 const motionSection = (() => {
   const start = cssFromSource.indexOf('按钮交互动效')
-  const from = cssFromSource.lastIndexOf('/*', start)
-  const end = cssFromSource.indexOf('Square corners (default)')
+  const from = start === -1 ? -1 : cssFromSource.lastIndexOf('/*', start)
+  /* End anchor is the FIRST RULE of the corner ladder (chrome.css), not its
+     comment: the previous comment-text anchor ('Square corners (default)')
+     died silently when the 2026-10-24 micro-round rework reworded it —
+     indexOf gave -1 and slice(from, -1) fed almost the WHOLE stylesheet
+     through the guard, which then flagged owner-approved text-indent
+     transitions (chrome.css tab wash) and even words inside English comments
+     as violations. Anchor on code (the ladder itself is pinned by other
+     tests) and fail LOUDLY on any missing anchor: a section guard that
+     quietly scans the wrong range is worse than none. */
+  const end = cssFromSource.indexOf('body:not(.theme-endfield-round) button')
+  if (start === -1 || from === -1 || end === -1 || end <= from) {
+    console.error('FAIL  static guard: motion-section anchors missing or out of order (start=' + start + ', from=' + from + ', end=' + end + ') — the guard would scan the wrong range; update the anchors')
+    process.exit(1)
+  }
   return cssFromSource.slice(from, end)
 })()
 if (!/endfield-clamp-in/.test(motionSection) || !/\[data-cordis-approve\]::after/.test(motionSection)) {

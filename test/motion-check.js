@@ -717,7 +717,7 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       await park()
       await hover('plain')
       const plainHoverR = (await styleOf('plain')).borderRadius
-      if (plainHoverR === '0px') pass('方角按钮 · 悬停仍是直角  [' + plainHoverR + ']')
+      if (plainHoverR === '4px') pass('微倒角按钮 · 悬停仍恒定 4px（官网语法，状态不动角）  [' + plainHoverR + ']')
       else fail('方角按钮 · 悬停长出了倒角  [' + plainHoverR + ']')
       await park()
     }

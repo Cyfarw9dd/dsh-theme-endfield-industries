@@ -34,12 +34,42 @@ const ROOT = path.resolve(__dirname, '..')
    literals live in the PRE-BUNDLE source: the bundler re-quotes strings
    (single → double), so the artifact cannot be matched with this regex. */
 /* The token literals moved to ui/tokens.js with the module split; read the whole client tree. */
-const src = require('../scripts/lib/sources.js').concatClientJs()
-const jsToken = (name) => {
-  const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(src)
-  if (!m) { console.error('FAIL  overrideTokens 里读不到 ' + name); process.exit(1) }
-  return { light: m[1], dark: m[2] }
+const sources = require('../scripts/lib/sources.js')
+const src = sources.concatClientJs()
+const css = sources.concatCss()
+/* The dark column became var(--edge-dark-*) references with the 2026-10-24
+   three-tier ladder (tokens.css); this fixture never sets data-endfield-dark,
+   so resolve those references against the DEFAULT tier — the plain body block,
+   first match wins. Same LADDER mechanism as palette-contrast.test.js; if the
+   reference resolves to nothing the fixture's computed style and EXPECT drift
+   apart loudly instead of silently. */
+const LADDER = {}
+{
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const m of noComments.matchAll(/--edge-dark-([a-z0-9-]+):\s*(#[0-9a-f]{6})/g)) {
+    if (LADDER[m[1]] === undefined) LADDER[m[1]] = m[2].toLowerCase()
+  }
 }
+const resolveDark = (raw) => {
+  const v = /^var\(--edge-dark-([a-z0-9-]+)\)$/.exec(String(raw).trim())
+  return v ? LADDER[v[1]] : raw
+}
+const jsToken = (name) => {
+  const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'([^']+)'", 'i').exec(src)
+  if (!m) { console.error('FAIL  overrideTokens 里读不到 ' + name); process.exit(1) }
+  const dark = resolveDark(m[2])
+  if (!/^#[0-9a-f]{6}$/i.test(dark)) { console.error('FAIL  ' + name + ' 暗色列不是 hex 也解析不出梯度值: ' + m[2]); process.exit(1) }
+  return { light: m[1], dark }
+}
+/* The bubble rides the global corner ladder at the official mainstay tier
+   (body:not(.theme-endfield-round) [role='tooltip'] → var(--edge-radius));
+   read the tier out of tokens.css instead of restating "4px". */
+const RADIUS_MAIN = (() => {
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const m = /--edge-radius:\s*([0-9]+(?:\.[0-9]+)?px)/.exec(noComments)
+  if (!m) { console.error('FAIL  tokens.css 里读不到 --edge-radius 主力档'); process.exit(1) }
+  return m[1]
+})()
 const EXPECT = {
   bubble: jsToken('--dsw-alias-tooltip-bg'),
   key: jsToken('--dsw-alias-tooltip-key-bg'),
@@ -144,8 +174,10 @@ const run=(paletteName)=>{
       ks.backgroundColor+' 期望 '+hex2rgb(EXPECT.key[s]))
     R(tag+' · 键帽=inset hairline', ks.boxShadow.indexOf('inset')>=0 && ks.boxShadow.indexOf(hex2rgb(EXPECT.keyRing[s]))>=0,
       ks.boxShadow)
-    /* 5. square corners (global derounding reaches the bubble) */
-    R(tag+' · 直角', bs.borderRadius==='0px', bs.borderRadius)
+    /* 5. micro-round: the global corner ladder reaches the bubble at the
+          official mainstay tier (2026-10-24 rework; constant per element) */
+    R(tag+' · 微倒角（官网主力档 ${RADIUS_MAIN}）', bs.borderRadius==='${RADIUS_MAIN}',
+      bs.borderRadius+' 期望 ${RADIUS_MAIN}')
     /* 6. composited contrast, measured on what the browser reports */
     const lc=parse(getComputedStyle(label).color)
     const bc=parse(bs.backgroundColor)

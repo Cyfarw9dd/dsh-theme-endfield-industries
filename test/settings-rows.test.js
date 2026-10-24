@@ -209,11 +209,11 @@ const buttons = nodes.filter((n) => n.type === 'button')
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 23) pass('panel has all 23 setting rows')
+if (rows.length === 24) pass('panel has all 24 setting rows')
 else fail('expected 23 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group

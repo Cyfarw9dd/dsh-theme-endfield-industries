@@ -30,6 +30,28 @@ const css = sources.concatCss()
 /* The token literals moved to ui/tokens.js with the module split; read the whole client tree. */
 const clientSrc = sources.concatClientJs()
 
+/* 暗色三档（2026-10-24）：tokens.js 的暗色列全部是 var(--edge-dark-*) 引用，
+   档位真值声明在样式表梯度里（第一个 body 块 = 默认档 soft/C「舒适」）。
+   resolveDark 把 var 引用解析成默认档字面值供对比度取数；亮色仍读字面量。
+   依据 docs/notes/dark-palette-research.md（三档自身的对比关系已在该报告
+   逐档实算，此处钉默认档）。 */
+const LADDER = {}
+{
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const m of noComments.matchAll(/--edge-dark-([a-z0-9-]+):\s*(#[0-9a-f]{6})/g)) {
+    if (LADDER[m[1]] === undefined) LADDER[m[1]] = m[2].toLowerCase()
+  }
+}
+const resolveDark = (raw) => {
+  const v = /^var\(--edge-dark-([a-z0-9-]+)\)$/.exec(String(raw).trim())
+  return v ? LADDER[v[1]] : raw
+}
+/* css 侧（surfaces.css 兜底块）的 var() 值同样经 LADDER 解析成默认档字面值 */
+const cssVarVal = (name) => {
+  const m = new RegExp(name + ':\\s*var\\(--edge-dark-([a-z0-9-]+)\\)', 'i').exec(css)
+  return m ? LADDER[m[1]] : undefined
+}
+
 let failures = 0
 const fail = (m) => { console.error('FAIL  ' + m); failures++ }
 const pass = (m) => console.log('ok    ' + m)
@@ -378,6 +400,43 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10b-bis. dark tiers: every ladder paints sound pairs ----------
+   The dark palette is three switchable ladders (2026-10-24). Parse each tier
+   block out of the real stylesheet (default block = soft/C, plus the
+   [data-endfield-dark] blocks) and assert the load-bearing pairs per tier —
+   body text in the comfort band (4.5 AA floor, 15 comfort ceiling), secondary
+   ≥4.5, keycap raised over the bubble overlay ≥1.06, border-l1 within the
+   theme's own 1.6 decorative ceiling over the base. */
+{
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const tierBlocks = [...noComments.matchAll(/(--edge-dark-[a-z0-9-]+):\s*(#[0-9a-f]{6})/g)]
+  const tiers = new Map()
+  const order = []
+  for (const m of tierBlocks) {
+    const block = m.index >= noComments.indexOf("data-endfield-dark='neutral'") && m.index < noComments.indexOf("data-endfield-dark='warm'")
+      ? 'neutral' : (m.index > noComments.indexOf("data-endfield-dark='warm'") ? 'warm' : 'soft')
+    if (!tiers.has(block)) { tiers.set(block, {}); order.push(block) }
+    if (!(m[1].slice(12) in tiers.get(block))) tiers.get(block)[m[1].slice(12)] = m[2].toLowerCase()
+  }
+  if (order.length !== 3 || tiers.get('soft').base !== '#1c1c1b' || tiers.get('warm').base !== '#161615' || tiers.get('neutral').base !== '#191919') {
+    fail('暗色三档 · 梯度块解析失败（' + order.join('/') + '，soft=' + (tiers.get('soft') || {}).base + '）')
+  } else for (const t of order) {
+    const L = tiers.get(t)
+    const rBody = ratio(hex(L['label-primary']), hex(L.base))
+    if (rBody >= 4.5 && rBody <= 15) pass('暗色三档 · ' + t + ' 正文×底 ' + rBody.toFixed(2) + ':1（AA 且 ≤15 舒适上限）')
+    else fail('暗色三档 · ' + t + ' 正文 ' + rBody.toFixed(2) + ':1 出带')
+    const rSec = ratio(hex(L['label-secondary']), hex(L.base))
+    if (rSec >= 4.5) pass('暗色三档 · ' + t + ' 次级×底 ' + rSec.toFixed(2) + ':1 (AA)')
+    else fail('暗色三档 · ' + t + ' 次级 ' + rSec.toFixed(2) + ':1 低于 AA')
+    const rKey = ratio(hex(L.raised), hex(L.overlay))
+    if (rKey >= 1.06) pass('暗色三档 · ' + t + ' 键帽(raised)×气泡(overlay) ' + rKey.toFixed(2) + ':1（装饰下限）')
+    else fail('暗色三档 · ' + t + ' 键帽读不出来：' + rKey.toFixed(2) + ':1')
+    const rB1 = ratio(hex(L['border-l1']), hex(L.base))
+    if (rB1 >= 1.06 && rB1 <= 1.6) pass('暗色三档 · ' + t + ' 描边L1×底 ' + rB1.toFixed(2) + ':1（装饰区间）')
+    else fail('暗色三档 · ' + t + ' 描边L1 ' + rB1.toFixed(2) + ':1 出区间')
+  }
+}
+
 /* ---------- 10c. hover tooltip: the floating paper chip ----------
    The app's Tooltip primitive bubbles ([role='tooltip'], e.g. the sidebar 归档
    hint) ship near-black (#2c2c2e/#43454a) with white text — a dead-black chip on
@@ -389,8 +448,8 @@ for (const [name, block] of Object.entries(palettes)) {
    text/fill pair plus the decorative floors (ring edge, keycap separation). */
 {
   const jsToken = (name) => {
-    const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc)
-    return m ? { light: m[1], dark: m[2] } : null
+    const m = new RegExp("'" + name + "'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'\\s*,\\s*dark:\\s*'([^']+)'", 'i').exec(clientSrc)
+    return m ? { light: m[1], dark: resolveDark(m[2]) } : null
   }
   const cssVals = (name) => [...css.matchAll(new RegExp(name + ':\\s*(#[0-9a-f]{6})', 'gi'))].map((m) => m[1].toLowerCase())
   const bubble = jsToken('--dsw-alias-tooltip-bg')
@@ -406,12 +465,14 @@ for (const [name, block] of Object.entries(palettes)) {
        layer, in source order light-then-dark — otherwise the two layers drift. */
     const fbBg = cssVals('--dsw-alias-tooltip-bg')
     const fbKey = cssVals('--dsw-alias-tooltip-key-bg')
-    if (fbBg.length === 2 && fbBg[0] === bubble.light.toLowerCase() && fbBg[1] === bubble.dark.toLowerCase()) {
-      pass('提示气泡 · 兜底块气泡底与令牌层一致：' + fbBg.join(' / '))
-    } else fail('提示气泡 · 兜底块气泡底漂移：' + JSON.stringify(fbBg) + ' ≠ ' + bubble.light + '/' + bubble.dark)
-    if (fbKey.length === 2 && fbKey[0] === key.light.toLowerCase() && fbKey[1] === key.dark.toLowerCase()) {
-      pass('提示气泡 · 兜底块键帽底与令牌层一致：' + fbKey.join(' / '))
-    } else fail('提示气泡 · 兜底块键帽底漂移：' + JSON.stringify(fbKey) + ' ≠ ' + key.light + '/' + key.dark)
+    const fbBgDark = cssVarVal('--dsw-alias-tooltip-bg')
+    const fbKeyDark = cssVarVal('--dsw-alias-tooltip-key-bg')
+    if (fbBg.length === 1 && fbBg[0] === bubble.light.toLowerCase() && fbBgDark === bubble.dark.toLowerCase()) {
+      pass('提示气泡 · 兜底块气泡底与令牌层一致：' + fbBg[0] + ' / var→' + fbBgDark)
+    } else fail('提示气泡 · 兜底块气泡底漂移：' + JSON.stringify(fbBg) + '+var→' + fbBgDark + ' ≠ ' + bubble.light + '/' + bubble.dark)
+    if (fbKey.length === 1 && fbKey[0] === key.light.toLowerCase() && fbKeyDark === key.dark.toLowerCase()) {
+      pass('提示气泡 · 兜底块键帽底与令牌层一致：' + fbKey[0] + ' / var→' + fbKeyDark)
+    } else fail('提示气泡 · 兜底块键帽底漂移：' + JSON.stringify(fbKey) + '+var→' + fbKeyDark + ' ≠ ' + key.light + '/' + key.dark)
     for (const mode of ['light', 'dark']) {
       const label = mode === 'light' ? '亮色' : '暗色'
       const r1 = ratio(hex(text[mode]), hex(bubble[mode]))
@@ -486,7 +547,7 @@ for (const [name, block] of Object.entries(palettes)) {
        the chip colours literally; the divider reads the border-l1 token). */
     const circleM = /fill='%23([0-9a-f]{6})'/i.exec(src)
     const chevM = /stroke='%23([0-9a-f]{6})'/i.exec(src)
-    const bl1 = { light: hoverA === undefined ? null : (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1], dark: (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1] }
+    const bl1 = { light: hoverA === undefined ? null : (new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1], dark: resolveDark((new RegExp("'--dsw-alias-border-l1'\\s*:\\s*\\{[^}]*dark:\\s*'([^']+)'", 'i').exec(clientSrc) || [])[1]) }
     if (circleM && chevM && bl1.light && bl1.dark) {
       const circle = '#' + circleM[1], chev = '#' + chevM[1]
       const rCircle = ratio(hex(circle), comp(activeA))
@@ -495,7 +556,7 @@ for (const [name, block] of Object.entries(palettes)) {
       const rChev = ratio(hex(chev), hex(circle))
       if (rChev >= 1.6) pass('页签箭头 · 山形/圆片：' + chev + ' = ' + rChev.toFixed(2) + ':1（官方 #999/#fafafa ' + official('#999999', '#fafafa').toFixed(2) + ':1）')
       else fail('页签箭头山形不可读：' + rChev.toFixed(2) + ':1')
-      const darkBase = (new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{[^}]*dark:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
+      const darkBase = resolveDark((new RegExp("'--dsw-alias-bg-base'\\s*:\\s*\\{[^}]*dark:\\s*'([^']+)'", 'i').exec(clientSrc) || [])[1])
       for (const [mode, v, base] of [['亮', bl1.light, paper], ['暗', bl1.dark, darkBase]]) {
         if (!v || !base) { fail('页签分隔线 · ' + mode + '色底色读不到'); continue }
         const rDiv = ratio(hex(v), hex(base))
@@ -520,9 +581,13 @@ for (const [name, block] of Object.entries(palettes)) {
   const flat = noComments.replace(/\n\s*/g, ' ')
   const lightBody = /body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):hover, body \[data-team-panel\] \[class\$='_member'\]:not\(:disabled\):focus-visible \{([^}]*)\}/.exec(flat)
   const washM = lightBody && /rgba\(0, 0, 0, 0\.(\d+)\)/.exec(lightBody[1])
-  const tok = (name, mode) => (new RegExp("'" + name + "'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
+  const tok = (name, mode) => {
+    const raw = (new RegExp("'" + name + "'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'([^']+)'", 'i').exec(clientSrc) || [])[1]
+    return mode === 'dark' ? resolveDark(raw) : raw
+  }
   const l2 = { light: tok('--dsw-alias-bg-layer-2', 'light'), dark: tok('--dsw-alias-bg-layer-2', 'dark') }
-  const l3dark = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-bg-layer-3: (#[0-9a-f]{6})/.exec(flat) || [])[1]
+  const l3m = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-bg-layer-3: (var\(--edge-dark-[a-z0-9-]+\)|#[0-9a-f]{6})/.exec(flat) || [])[1]
+  const l3dark = l3m ? (l3m[0] === '#' ? l3m : LADDER[/--edge-dark-([a-z0-9-]+)/.exec(l3m)[1]]) : undefined
   const inkLight = tok('--dsw-alias-label-primary', 'light')
   const inkDark = tok('--dsw-alias-label-primary', 'dark')
   if (!washM || !l2.light || !l2.dark || !l3dark || !inkLight || !inkDark) {
@@ -559,7 +624,10 @@ for (const [name, block] of Object.entries(palettes)) {
   const band = /\[data-team-panel\]::after\s*\{([^}]*)\}/.exec(flat)
   const tok = (name) => (new RegExp(name + ":\\s*(#[0-9a-f]{6})").exec(noC) || [])[1]
   const alpha = (name) => (new RegExp(name + ":\\s*(\\d+)%").exec(noC) || [])[1]
-  const menu = (mode) => (new RegExp("'--dsw-menu-surface-fill'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
+  const menu = (mode) => {
+    const raw = (new RegExp("'--dsw-menu-surface-fill'\\s*:\\s*\\{[^}]*" + mode + ":\\s*'([^']+)'", 'i').exec(clientSrc) || [])[1]
+    return mode === 'dark' ? resolveDark(raw) : raw
+  }
   const inkLight = tok('--edge-tex-ink'), aLight = alpha('--edge-tex-hatch-a')
   const inkDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-ink:\s*(#[0-9a-f]{6})/.exec(flat)
   const aDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-hatch-a:\s*(\d+)%/.exec(flat)

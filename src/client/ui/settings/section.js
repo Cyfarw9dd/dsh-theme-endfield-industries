@@ -93,6 +93,7 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
         const [loaderOn, setLoaderOn] = R.useState(loader.isOn())
         const [glass, setGlass] = R.useState(motionSync.readGlass())
         const [texture, setTexture] = R.useState(motionSync.readTexture())
+        const [darkTier, setDarkTier] = R.useState(motionSync.readDarkTier())
         const [mode, setMode] = R.useState(prefs.get(motionSync.RADIUS_KEY) || 'square')
         const [motion, setMotion] = R.useState(motionSync.readMotion())
         /* 音频通知 is a HOST feature: the browser only owns its switches and
@@ -246,6 +247,12 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
           prefs.set(motionSync.TEXTURE_KEY, value)
           setTexture(value)
           motionSync.syncTexture()
+        }
+        const setDarkTierValue = (value) => {
+          if (!motionSync.DARK_TIER_OPTIONS.includes(value)) return
+          prefs.set(motionSync.DARK_TIER_KEY, value)
+          setDarkTier(value)
+          motionSync.syncDarkTier()
         }
         /* ---------- toggles ----------
            EVERY handler below derives its `next` value from the STORE
@@ -649,6 +656,17 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
                   value, label: t(value === 'off' ? 'textureOff' : value === 'subtle' ? 'textureSubtle' : 'textureStandard'),
                 })),
                 onChange: setTextureValue,
+              })
+            ]),
+            row('dark-tier', false, [
+              R.createElement('span', { style: labelStyle }, t('darkTierRow'),
+                R.createElement('span', { style: hintStyle }, t('darkTierHint'))),
+              endfieldSelect({
+                value: darkTier, ariaLabel: t('darkTierRow'),
+                options: motionSync.DARK_TIER_OPTIONS.map((value) => ({
+                  value, label: t(value === 'soft' ? 'tierSoft' : value === 'warm' ? 'tierWarm' : 'tierNeutral'),
+                })),
+                onChange: setDarkTierValue,
               })
             ]),
             row('radius', true, [

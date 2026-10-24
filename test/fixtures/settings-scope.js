@@ -51,6 +51,7 @@ const FIELD_DEFAULTS = {
   radius: 'square',
   glass: 'off',
   texture: 'standard',
+  darkTier: 'soft',
   motion: 'signal',
 
   watermark: '1',
@@ -83,6 +84,7 @@ const KEY_TO_FIELD = {
   'dsh-theme-endfield-radius': 'radius',
   'dsh-theme-endfield-glass': 'glass',
   'dsh-theme-endfield-texture': 'texture',
+  'dsh-theme-endfield-dark-tier': 'darkTier',
   'dsh-theme-endfield-motion': 'motion',
 
   'dsh-theme-endfield-watermark': 'watermark',

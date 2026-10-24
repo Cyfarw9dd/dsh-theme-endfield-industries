@@ -278,7 +278,7 @@ const wmPersistValue = (tree) => {
 }
 /** The option label a stored literal renders as, per row. */
 const optionTextFor = (rowKey, value) => {
-  if (rowKey === 'radius') return value === 'round' ? '圆角' : '直角'
+  if (rowKey === 'radius') return value === 'round' ? '圆角' : '微倒角'
   if (rowKey === 'watermark-persist') return value === '1' ? '保持显示' : '仅新建页'
   return value === '1' ? '开启' : '关闭'
 }

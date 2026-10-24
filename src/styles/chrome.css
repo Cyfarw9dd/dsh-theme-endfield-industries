@@ -24,9 +24,9 @@
          这里的色值不随调色板也不随亮暗：官网就是一块固定的深色铭牌，强调色
          只留给焦点环（全局规则）。
 
-         radius 写明 2px：直角模式下全局 [class]{border-radius:0!important} 把它
-         归零，圆角模式下才是官方的 .25rem。菜单在行内绝对定位，不 portal——
-         设置页无 overflow 裁剪，absolute 还让菜单随页面滚动跟随触发器。 */
+         radius＝--edge-radius（官网 Dropdown_trigger/panel 的 .25rem，2026-10-24
+         对齐）。菜单在行内绝对定位，不 portal——设置页无 overflow 裁剪，
+         absolute 还让菜单随页面滚动跟随触发器。 */
       .endfield-select {
         position: relative;
         display: inline-flex;
@@ -43,7 +43,7 @@
         box-sizing: border-box;
         padding: 0 10px;
         border: none;
-        border-radius: 2px;
+        border-radius: var(--edge-radius);
         cursor: pointer;
         background-color: #3a3a3a;
         color: #ffffff;
@@ -94,7 +94,7 @@
         padding: 2px 0;
         display: flex;
         flex-direction: column;
-        border-radius: 2px;
+        border-radius: var(--edge-radius);
         background: var(--dsw-menu-surface-fill);
         box-shadow: 0 0 10px rgba(0, 0, 0, .25);
         animation: endfield-select-in .15s ease 1 both;
@@ -176,7 +176,12 @@
         .endfield-select-option-bg { transition: none; }
       }
 
-      /* Square corners (default): zero EVERY classed element, then restore circles/pills below.
+      /* Micro-round corners (2026-10-24, owner decision to align with the official
+         site — docs/notes/button-radius-research.md): every classed element takes
+         the official mainstay 4px (--edge-radius), the ladder above restores
+         circles and the follow-ups below restore small-parts/cards. Constant per
+         element: state changes never touch the radius (the official
+         .Button_button 2→6px hover stays rejected — 圆角全局恒定).
          body.theme-endfield-round disables all of this and restores app-native rounding. */
       body:not(.theme-endfield-round) button,
       body:not(.theme-endfield-round) input,
@@ -187,10 +192,10 @@
       body:not(.theme-endfield-round) [role='menu'],
       body:not(.theme-endfield-round) [role='tooltip'],
       body:not(.theme-endfield-round) [role='tab'] {
-        border-radius: 0 !important;
+        border-radius: var(--edge-radius) !important;
       }
       body:not(.theme-endfield-round) [class] {
-        border-radius: 0 !important;
+        border-radius: var(--edge-radius) !important;
       }
       body:not(.theme-endfield-round) [class*='avatar'],
       body:not(.theme-endfield-round) [class*='Avatar'],
@@ -202,6 +207,10 @@
       body:not(.theme-endfield-round) [class$='_iconButton'] {
         border-radius: 50% !important;
       }
+      /* Content cards take the official .5rem tier (noticeItem/图片容器). */
+      body:not(.theme-endfield-round) [class$='_card']:has(> [class$='_header']) {
+        border-radius: var(--edge-radius-card) !important;
+      }
       /* Hover feedback should track the pointer immediately; the app's broad
          transition rule otherwise makes colour changes feel delayed. */
       button,
@@ -210,7 +219,7 @@
       }
       body:not(.theme-endfield-round) [class*='scrollbar'],
       body:not(.theme-endfield-round) [class*='Scrollbar'] {
-        border-radius: 0 !important;
+        border-radius: var(--edge-radius-sm) !important;
       }
       /* ---------- 浮动提示气泡（Tooltip 原语）的墨字、描边与阴影 ----------
          底色/键帽底在令牌层（overrideTokens：应用把 alias 令牌写成 body 的
@@ -365,7 +374,7 @@
         height: 10px;
       }
       ::-webkit-scrollbar-thumb {
-        border-radius: 0;
+        border-radius: var(--edge-radius-sm);
         background: var(--edge-line);
       }
       ::-webkit-scrollbar-thumb:hover {
@@ -466,13 +475,14 @@
         /* 几何外扩：应用页签原生零水平内边距，上一版 inset:0 的洗面「刚刚把
            文字罩下来」（用户实测）；现在 padding 22px 已给盘内呼吸位，负偏移
            −12px 再把盘子边缘衬出字外（官方盘沿永远在字外），上 −4px，bottom
-           5px 止于分划线上方。倒角 2px：官方 4px/60px 盒按 0.46 缩放——伪元素
-           不在全局直角化清单（[class] 只命中元素），可安全使用。 */
+           5px 止于分划线上方。倒角＝--edge-radius（2026-10-24 起对齐官网 4px，
+         不再按 0.46 折算）——伪元素不在全局圆角清单（[class] 只命中元素），
+         必须在此写明。 */
         left: -12px;
         right: -12px;
         top: -4px;
         bottom: 5px;
-        border-radius: 2px;
+        border-radius: var(--edge-radius);
         background-color: rgba(0, 0, 0, 0.04);
         opacity: 0;
         transition: opacity .2s ease;
@@ -690,7 +700,7 @@
         border-color: transparent !important;
       }
       body:not(.theme-endfield-round) [class$='_newSession'] {
-        border-radius: 0 !important;
+        border-radius: var(--edge-radius) !important;
       }
       [class$='_newSession']:hover,
       [class$='_newSession']:focus-visible {
@@ -789,7 +799,7 @@
         padding: 0 12px !important;
       }
       body:not(.theme-endfield-round) [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) {
-        border-radius: 0 !important;
+        border-radius: var(--edge-radius) !important;
       }
       [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) svg,
       [class$='_centerCol'] [class$='_header'] [class$='_headerActions'] [class*='_label']:has(> svg) [class*='_icon'] {

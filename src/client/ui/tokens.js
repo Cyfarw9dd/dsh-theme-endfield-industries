@@ -8,21 +8,26 @@
  * test/tooltip.test.js read these literals through sources.concatClientJs().
  */
 export const THEME_TOKEN_OVERRIDES = {
+      /* 暗色列自 2026-10-24 起全部是 var(--edge-dark-*) 引用：三档梯度声明在
+         tokens.css（body[data-endfield-dark]，设置行「暗色档位」切换，即时
+         重解析、无需重注册本层），机制与下方 brand-primary 的 var() 引用同源
+         （palette-resolve.test.js 钉住）。亮色列仍为字面值。全表依据
+         docs/notes/dark-palette-research.md。 */
       '--dsw-alias-bg-base': {
         light: '#e8e8e2',
-        dark: '#101110',
+        dark: 'var(--edge-dark-base)',
       },
       '--dsw-alias-bg-layer-1': {
         light: '#f2f2ec',
-        dark: '#181a18',
+        dark: 'var(--edge-dark-layer-1)',
       },
       '--dsw-alias-bg-layer-2': {
         light: '#dcddd6',
-        dark: '#1e201d',
+        dark: 'var(--edge-dark-layer-2)',
       },
       '--dsw-alias-bg-overlay': {
         light: '#f2f2ec',
-        dark: '#1c1e1c',
+        dark: 'var(--edge-dark-overlay)',
       },
       /* 菜单/弹层面（@ 与 / 呼出的列表、模型选择、工作区菜单……）。
          上游默认 --dsw-menu-surface-fill 是 **58%/45% alpha 的半透明**
@@ -34,7 +39,7 @@ export const THEME_TOKEN_OVERRIDES = {
          不能只留半透明。 */
       '--dsw-menu-surface-fill': {
         light: '#f2f2ec',
-        dark: '#1c1e1c',
+        dark: 'var(--edge-dark-overlay)',
       },
       /* 浮动提示气泡（Tooltip 原语，[role='tooltip']，侧栏归档/工具栏按钮的
          hover 提示）。上游默认近黑底白字（tooltip-bg → neutral-bluish 850/750
@@ -45,19 +50,25 @@ export const THEME_TOKEN_OVERRIDES = {
          后混白与底不可分，改沉底块（layer-3 同值）。 */
       '--dsw-alias-tooltip-bg': {
         light: '#f2f2ec',
-        dark: '#1c1e1c',
+        dark: 'var(--edge-dark-overlay)',
       },
       '--dsw-alias-tooltip-key-bg': {
         light: '#dcddd6',
-        dark: '#2c2e2a',
+        dark: 'var(--edge-dark-raised)',
+      },
+      /* layer-3 是应用侧的「抬高层」（成员卡洗面等）：不随档位走会在亮基底上失去
+         层次，故并入 raised 档（亮色 = layer-2 同值，与上游一致）。 */
+      '--dsw-alias-bg-layer-3': {
+        light: '#dcddd6',
+        dark: 'var(--edge-dark-raised)',
       },
       '--dsw-alias-border-l1': {
         light: '#d8d9d5',
-        dark: '#343633',
+        dark: 'var(--edge-dark-border-l1)',
       },
       '--dsw-alias-border-l2': {
         light: '#b6b8b3',
-        dark: '#4a4d49',
+        dark: 'var(--edge-dark-border-l2)',
       },
       '--dsw-alias-brand-primary': {
         light: '#101110',
@@ -72,11 +83,11 @@ export const THEME_TOKEN_OVERRIDES = {
       },
       '--dsw-alias-label-primary': {
         light: '#101110',
-        dark: '#f5f5f0',
+        dark: 'var(--edge-dark-label-primary)',
       },
       '--dsw-alias-label-secondary': {
         light: '#4a4c48',
-        dark: '#898d89',
+        dark: 'var(--edge-dark-label-secondary)',
       },
       '--dsw-alias-state-error-primary': {
         light: '#ff3b30',
@@ -92,6 +103,6 @@ export const THEME_TOKEN_OVERRIDES = {
       },
       '--dsw-specific-sidebar-fill': {
         light: '#e8e8e2',
-        dark: '#101110',
+        dark: 'var(--edge-dark-base)',
       },
 }

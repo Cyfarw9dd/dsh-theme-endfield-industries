@@ -375,11 +375,11 @@ async function main() {
       fail('configForms value was not adopted: <body> lacks theme-endfield-round')
     }
 
-    /* The write probe drives the dropdown to 直角: the section already holds
+    /* The write probe drives the dropdown to 微倒角: the section already holds
        radius=round (the adoption read above), and the store-derived handler
        no-ops a re-selection of the stored value — so the OPPOSITE option is
        the one that must reach the wire. */
-    const step = panelRadiusWrite(client, '直角')
+    const step = panelRadiusWrite(client, '微倒角')
     if (step !== 'ok') {
       fail('radius dropdown could not be driven: ' + step)
     } else {
@@ -674,8 +674,8 @@ async function main() {
     // Boot render: the section is still in flight, so the panel shows defaults.
     const before = panelSelectTrigger(client, '主题圆角')
     if (!before) fail('no radius select rendered (late-section read case)')
-    else if (!textOf(before).includes('直角')) {
-      fail('precondition: radius trigger should start on 直角, got ' + textOf(before))
+    else if (!textOf(before).includes('微倒角')) {
+      fail('precondition: radius trigger should start on 微倒角, got ' + textOf(before))
     } else {
       pass('precondition: panel starts on the schema default while the section is in flight')
     }
@@ -692,7 +692,7 @@ async function main() {
     /* 0-indexed: the 7th useState is `mode` (radius: enabled, wmOn, wmPersist,
        loader, glass, texture, mode). Keep this list in step with the panel's
        useState order in src/client/ui/settings/section.js. */
-    const radiusSlot = hooks[6]
+    const radiusSlot = hooks[7]
     if (radiusSlot === 'round') {
       pass('panel hook state adopted the served radius (slot moved off its default)')
     } else {

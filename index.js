@@ -109,6 +109,7 @@ const FIELD_DEFAULTS = {
   enabled: '1',             // 终末地主题 —— default on
   glass: 'off',             // optional local frost; original material by default
   texture: 'standard',      // 工业底纹 —— off/subtle/standard；默认 standard＝官网 /operator 那套
+  darkTier: 'soft',         // 暗色档位 —— soft(舒适,VS Code 档)/warm(微暖)/neutral(官网中性)；默认 soft（2026-10-24 所有者定）
   motion: 'signal',          // 按钮动效 —— 合并设计（'signal'=开 / 'off'=关；旧方案名读取时并轨为开）
   radius: 'square',         // 主题圆角 —— 直角
   watermark: '1',           // 背景水印 —— default on
