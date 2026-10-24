@@ -18,6 +18,8 @@ const fs = require('fs')
 const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
+/* 暗色三档梯度从真值口读取（fixtures/theme-values.js），逐档合成 */
+const { TIERS, LADDERS } = require('./fixtures/theme-values.js')
 
 const ROOT = path.resolve(__dirname, '..')
 /* The sync layer moved to src/client/motion/sync.js with the module split, so
@@ -161,10 +163,11 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
      alphas from the stylesheet, composite onto the real surface, and check the
      result stays inside the decorative band. */
   const LIGHT_SURFACES = { 'bg-base': '#e8e8e2', 'bg-layer-1': '#f2f2ec' }
-  /* 暗色底面自 2026-10-24 起随档位走（--edge-dark-* 梯度，默认块 = soft/C）。
-     从样式表真实读取默认档的 base/layer-1，不再硬编码退役的 #101110 系。 */
-  const darkLadder = (name) => (new RegExp('--edge-dark-' + name + ':\\s*(#[0-9a-f]{6})', 'i').exec(css) || [])[1]
-  const DARK_SURFACES = { 'bg-base': darkLadder('base'), 'bg-layer-1': darkLadder('layer-1') }
+  /* 暗色底面自 2026-10-24 起随档位走（--edge-dark-* 梯度）：三档逐档从
+     真值口读 base/layer-1 合成过带——此前只测默认档，另两档的装饰强度
+     是注释承诺；回抄字面量的旧版（#101110 系）更是退役值。 */
+  const DARK_SURFACES = {}
+  for (const t of TIERS) DARK_SURFACES[t] = { 'bg-base': LADDERS[t].base, 'bg-layer-1': LADDERS[t].layer1 }
   /* Anchor on the whole first declaration line: '#181818' also appears in the
      documented fallbacks, so a bare colour search finds the wrong block. */
   const lightBlock = blockWithLoose('body { --edge-tex-ink: #181818;')
@@ -195,9 +198,11 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
     for (const [label, ink, a, surf] of [
       ['亮色 网格', LIGHT_INK, LIGHT_GRID, LIGHT_SURFACES],
       ['亮色 斜纹', LIGHT_INK, LIGHT_HATCH, LIGHT_SURFACES],
-      ['暗色 网格', DARK_INK, DARK_GRID, DARK_SURFACES],
-      ['暗色 斜纹', DARK_INK, DARK_HATCH, DARK_SURFACES],
     ]) check(label, ink, a, surf)
+    for (const t of TIERS) {
+      check('暗色·' + t + ' 网格', DARK_INK, DARK_GRID, DARK_SURFACES[t])
+      check('暗色·' + t + ' 斜纹', DARK_INK, DARK_HATCH, DARK_SURFACES[t])
+    }
   }
 }
 

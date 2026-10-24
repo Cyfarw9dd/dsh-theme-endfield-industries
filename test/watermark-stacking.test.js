@@ -49,6 +49,18 @@ const os = require('os')
 /* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
 const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
+/* Fixture surfaces from the real token source (fixtures/theme-values.js). */
+const { jsTokenPair } = require('./fixtures/theme-values.js')
+const TOKENS = {
+  bgBase: jsTokenPair('--dsw-alias-bg-base'),
+  bgLayer1: jsTokenPair('--dsw-alias-bg-layer-1'),
+  bgLayer3: jsTokenPair('--dsw-alias-bg-layer-3'),
+  labelPrimary: jsTokenPair('--dsw-alias-label-primary'),
+  labelSecondary: jsTokenPair('--dsw-alias-label-secondary'),
+  sidebarFill: jsTokenPair('--dsw-specific-sidebar-fill'),
+  borderL1: jsTokenPair('--dsw-alias-border-l1'),
+}
+const rgbTriple = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = process.env.ENDFIELD_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-stack-'))
@@ -74,14 +86,18 @@ const DARK = process.env.ENDFIELD_SCHEME !== 'light'
 const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
   :root{
-    --dsw-alias-bg-base:${DARK ? '#101110' : '#e8e8e2'};
-    --dsw-alias-bg-layer-1:${DARK ? '#181a18' : '#f2f2ec'};
-    --dsw-alias-bg-layer-3:${DARK ? '#2c2e2a' : '#dcddd6'};
+    /* 真值化（fixtures/theme-values.js）：旧字面量是退役的 #101110 系暗色，
+       1.32 上限一直跑在全梯度最深的底上——而 0.105→0.095 修的是最亮 C 档
+       超限，最深底根本测不出那个回归。现在暗色跑在默认 soft 档（最亮、
+       最险的档），最坏情形由 palette-contrast 的逐档静态断言钉住。 */
+    --dsw-alias-bg-base:${DARK ? TOKENS.bgBase.dark : TOKENS.bgBase.light};
+    --dsw-alias-bg-layer-1:${DARK ? TOKENS.bgLayer1.dark : TOKENS.bgLayer1.light};
+    --dsw-alias-bg-layer-3:${DARK ? TOKENS.bgLayer3.dark : TOKENS.bgLayer3.light};
     --dsw-specific-menu:var(--dsw-alias-bg-layer-3);
-    --dsw-alias-label-primary:${DARK ? '#f5f5f0' : '#101110'};
-    --dsw-alias-label-secondary:${DARK ? '#898d89' : '#4a4c48'};
-    --dsw-specific-sidebar-fill:${DARK ? '#101110' : '#e8e8e2'};
-    --dsw-alias-border-l1:${DARK ? '#343633' : '#d8d9d5'};
+    --dsw-alias-label-primary:${DARK ? TOKENS.labelPrimary.dark : TOKENS.labelPrimary.light};
+    --dsw-alias-label-secondary:${DARK ? TOKENS.labelSecondary.dark : TOKENS.labelSecondary.light};
+    --dsw-specific-sidebar-fill:${DARK ? TOKENS.sidebarFill.dark : TOKENS.sidebarFill.light};
+    --dsw-alias-border-l1:${DARK ? TOKENS.borderL1.dark : TOKENS.borderL1.light};
     --dsw-alias-border-inverted:${DARK ? '#4a4d49' : '#b6b8b3'};
     --dsw-font-family:Arial,sans-serif;
     --dsh-composer-card-max-width:780px; --dsh-composer-side-clearance:16px;
@@ -252,7 +268,7 @@ await run('0', shotOff)
    needs no image dependency: both files are drawn to a canvas and read back. */
 const cmpPage = path.join(OUT, 'cmp.html')
 fs.writeFileSync(cmpPage, `<!doctype html><meta charset="utf-8"><body><script>
-const FILL=${JSON.stringify(DARK ? [44, 46, 42] : [220, 221, 214])}
+const FILL=${JSON.stringify(rgbTriple(DARK ? TOKENS.bgLayer3.dark : TOKENS.bgLayer3.light))}
 const load=(u)=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=u})
 Promise.all([load('on.png'),load('off.png')]).then(([a,b])=>{
   const W=a.width,H=a.height
@@ -265,16 +281,44 @@ Promise.all([load('on.png'),load('off.png')]).then(([a,b])=>{
   /* Locate the dropdown FROM THE PIXELS of the watermark-off render, by its own
      opaque fill, instead of trusting a reported rect. A rect measured in a
      different browser run can be stale (that happened: it was 74px off), which
-     would silently move the assertion window off the actual popover. */
-  let minX=1e9,minY=1e9,maxX=-1,maxY=-1,fill=0
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const i=(y*W+x)*4
-    if(db[i]===FILL[0]&&db[i+1]===FILL[1]&&db[i+2]===FILL[2]){fill++
-      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}
-  }
+     would silently move the assertion window off the actual popover.
+     Row x COLUMN co-clustering (2026-10-24): a bare exact-colour bbox is a
+     collision lottery — the industrial texture blends grid/hatch lines over the
+     surfaces, and the moment a blend lands exactly on the fill colour (it did,
+     on the soft-tier base #1c1c1b vs fill #343433) the strays poison the box:
+     scattered dots stretch it over the page, a HORIZONTAL line is row-dense
+     (survives a row filter) and a vertical one column-dense. A solid rectangle
+     is dense in BOTH directions, so cluster twice each way and keep only pixels
+     dense in the other dimension's cluster; a fill/box ratio guard then fails
+     loudly if the box ever inflates again. */
+  const isFill=(i)=>db[i]===FILL[0]&&db[i+1]===FILL[1]&&db[i+2]===FILL[2]
+  let fill=0
+  const colHits=new Array(W).fill(0)
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4
+    if(isFill(i)){fill++;colHits[x]++}}
+  const DENSE=20
+  const xLimit=(hits,lo,hi)=>{let a=1e9,b=-1
+    for(let k=lo;k<=hi;k++)if(hits[k]>=DENSE){if(k<a)a=k;if(k>b)b=k}
+    return b<0?null:[a,b]}
+  const cols1=xLimit(colHits,0,W-1)
+  if(!cols1){document.title='CMP '+JSON.stringify({...out,fillPx:fill,noCols:true});return}
+  const rowHits=new Array(H).fill(0)
+  for(let y=0;y<H;y++)for(let x=cols1[0];x<=cols1[1];x++){const i=(y*W+x)*4
+    if(isFill(i))rowHits[y]++}
+  const rows1=xLimit(rowHits,0,H-1)
+  if(!rows1){document.title='CMP '+JSON.stringify({...out,fillPx:fill,noRows:true});return}
+  const colHits2=new Array(W).fill(0)
+  for(let y=rows1[0];y<=rows1[1];y++)for(let x=0;x<W;x++){const i=(y*W+x)*4
+    if(isFill(i))colHits2[x]++}
+  const cols2=xLimit(colHits2,0,W-1)
+  if(!cols2){document.title='CMP '+JSON.stringify({...out,fillPx:fill,noCols2:true});return}
+  let minX=cols2[0],maxX=cols2[1],minY=rows1[0],maxY=rows1[1],fillDense=0
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){const i=(y*W+x)*4
+    if(isFill(i))fillDense++}
   out.fillPx=fill
-  out.box=fill?{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1}:null
-  if(!out.box){document.title='CMP '+JSON.stringify(out);return}
+  out.fillDensePx=fillDense
+  out.box={x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1}
+  if(fillDense<out.box.w*out.box.h*0.5){out.sparseBox=true;document.title='CMP '+JSON.stringify(out);return}
   // Inset past the 1px border so its antialiasing is not counted as leakage.
   const x0=minX+2,y0=minY+2,x1=maxX-1,y1=maxY-1
   let inBox=0,inBoxMax=0,outBox=0,outMax=0
@@ -405,11 +449,17 @@ if (g.zIndex !== '-1') {
 }
 
 // The comparison window must be the real popover, found in the pixels.
-if (!c.box || c.fillPx < 5000) {
+if (c.sparseBox) {
+  fail('the fill-colour box is sparse (' + c.fillDensePx + ' dense px in a '
+    + c.box.w + 'x' + c.box.h + ' box) — the locator is matching scattered'
+    + '\n      texture blends, not a solid dropdown; the assertion window is garbage.'
+    + '\n      -> fix the locator (row-density threshold) or the fill colour; do not trust this run')
+} else if (!c.box || c.fillPx < 5000) {
   fail('could not locate the dropdown fill in the render (' + c.fillPx + ' px)'
     + '\n      -> the assertion window is unknown; do not trust this run')
 } else {
-  pass('dropdown located in the pixels: ' + c.fillPx + ' px of opaque fill')
+  pass('dropdown located in the pixels: ' + c.fillPx + ' px of opaque fill'
+    + ' (dense ' + c.fillDensePx + ' px in a ' + c.box.w + 'x' + c.box.h + ' box)')
 }
 
 /* GUARD AGAINST A VACUOUS PASS. Without real overlap the leakage assertion
