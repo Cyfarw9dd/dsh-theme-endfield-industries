@@ -20,7 +20,7 @@ const ROOT = path.resolve(__dirname, '..')
 /* Unlike the .test.js files this one deliberately KEEPS its output (the PNGs are
    the point), so it writes to a gitignored scratch directory rather than a temp
    dir that is hard to find afterwards. */
-const OUT = path.join(ROOT, '.kagent', 'shots')
+const OUT = path.join(ROOT, 'tmp', 'shots')
 
 /* Mock of the real conversation page. Class names and the opaque bg-base fills
    are copied from the installed @deepseek-ai bundles so the screenshot exercises
