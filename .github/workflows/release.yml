@@ -1,0 +1,176 @@
+name: 发版
+
+# 主题自己的发版管线（自 0.3.0 起，版本号 = 主题自己的 semver，随特性手动演进）：
+#   1. 校验：输入版本号合法、与 package.json 一致、远端 tag 不存在
+#   2. 全量门禁：test:ci 清单逐项跑（build-client --check / check.js / selftest / 全部测试）
+#   3. 自带验证戳：按 .github/dsh-track.json 记录的版本安装 @deepseek-ai/dsh，
+#      契约漂移探针在这个树上重新绿一遍——发的不是「雷达 6 小时前说没事」，
+#      而是「发版这一刻对实测版本重新绿过」
+#   4. tag v<版本> + GitHub Release（notes 引用实测 DSH 版本与上版以来的提交）
+#   5. npm publish 预留：inputs.publish_npm=true 且配好 NPM_TOKEN 才执行
+# 「对齐 DSH 版本」发生在本文件的探针与 Release notes 里，不发生在版本号里。
+# 兼容雷达见 dsh-track.yml；设计与操作细节：docs/cookbook/dsh-version-tracking.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要发的版本号（主题自己的 semver，如 0.3.0；须与 package.json 一致）'
+        required: true
+      publish_npm:
+        description: '同时发布到 npm（需已配置 NPM_TOKEN secret）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write   # 推 tag + 开 Release
+  id-token: write   # npm provenance（publish 启用时）
+
+jobs:
+  release:
+    name: 发版 v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # Release notes 要列上个 tag 以来的提交
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org/
+
+      # 先挡住再干活：版本号形状、与 package.json 一致、远端 tag 不存在。
+      - name: 校验版本输入
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          case "$VERSION" in
+            v*) echo "::error title=版本号不要带 v 前缀::tag 会自动加 v"; exit 1 ;;
+          esac
+          node -e '
+            const v = process.env.VERSION
+            if (!/^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$/.test(v)) {
+              console.error("::error title=版本号不合法::" + JSON.stringify(v))
+              process.exit(1)
+            }
+            const pkg = require("./package.json")
+            if (pkg.version !== v) {
+              console.error("::error title=版本号与 package.json 不一致::输入 " + v + "，package.json 是 " + pkg.version + "。先把版本号改进 package.json 并提交，再触发发版。")
+              process.exit(1)
+            }
+          '
+          # 先落变量再判空（避免 SIGPIPE 陷阱，同 dsh-track.yml 的先例）。
+          remote_tag="$(git ls-remote --tags origin "refs/tags/v$VERSION")"
+          if [ -n "$remote_tag" ]; then
+            echo "::error title=tag 已存在::refs/tags/v$VERSION"
+            exit 1
+          fi
+
+      # 与 ci.yml / dsh-track.yml 同构：test:ci 以 build-client --check 开头，
+      # tsdown 等 devDependencies 必须先就位。
+      - name: 安装构建依赖
+        run: npm install --no-audit --no-fund
+
+      # 自带验证戳：装雷达记录的实测版本，探针在这个树上重新绿一遍。
+      - name: 安装实测版 DSH（来自雷达记录）
+        run: |
+          v="$(node -p "require('./.github/dsh-track.json').dshVersion")"
+          npm install --prefix "$RUNNER_TEMP/dsh-tree" \
+            --omit=dev --ignore-scripts --no-audit --no-fund \
+            "@deepseek-ai/dsh@$v"
+          got="$(node -p "require('$RUNNER_TEMP/dsh-tree/node_modules/@deepseek-ai/dsh/package.json').version")"
+          if [ "$got" != "$v" ]; then
+            echo "::error title=安装版本不符::要求 $v，装上的是 $got"
+            exit 1
+          fi
+          echo "已安装 @deepseek-ai/dsh@$v（雷达记录的实测版本）"
+
+      - name: 契约漂移探针
+        run: |
+          set -o pipefail
+          node .github/scripts/dsh-drift-probe.js "$RUNNER_TEMP/dsh-tree/node_modules/@deepseek-ai" 2>&1 | tee probe.log
+
+      - name: 定位 Chrome
+        run: |
+          p="$(command -v google-chrome || command -v google-chrome-stable \
+            || command -v chromium-browser || command -v chromium || true)"
+          if [ -z "$p" ]; then
+            echo "::error title=环境缺失::runner 上找不到 Chrome/Chromium，浏览器测试无法运行"
+            exit 1
+          fi
+          echo "CHROME_PATH=$p" >> "$GITHUB_ENV"
+          echo "使用 $p"
+
+      # 与 ci.yml 相同的冒烟检查：测试用 'file:///' + 绝对路径 拼 URL，
+      # 该拼法的 Linux 行为要先探一次，否则失败会是一堆神秘的红。
+      - name: headless Chrome 冒烟检查
+        run: |
+          tmp="$(mktemp -d)"
+          printf '<!doctype html><title>SMOKE-OK</title>' > "$tmp/probe.html"
+          dom="$("$CHROME_PATH" --headless=new --disable-gpu --no-sandbox \
+            --user-data-dir="$(mktemp -d)" --dump-dom "file:///$tmp/probe.html" 2>/dev/null || true)"
+          case "$dom" in
+            *SMOKE-OK*) echo "ok    headless Chrome 冒烟通过" ;;
+            *) echo "::error title=file URL 拼法在 Linux 上失效::见 ci.yml 同名步骤的说明"; exit 1 ;;
+          esac
+
+      - name: 完整测试套件
+        run: |
+          set -o pipefail
+          node .github/scripts/run-tests.js test:ci 2>&1 | tee suite.log
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "## 发版 v${{ inputs.version }}"
+            echo ''
+            echo '```text'
+            tail -n 5 probe.log 2>/dev/null || true
+            tail -n 3 suite.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 打 tag、开 Release。notes 三要素：实测 DSH 版本、探针重跑声明、上版以来的提交清单。
+      - name: 打 tag 并发布 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          dsh_v="$(node -p "require('./.github/dsh-track.json').dshVersion")"
+          {
+            echo "## Theme v$VERSION — validated against @deepseek-ai/dsh@$dsh_v"
+            echo ''
+            echo '- Contract drift probe re-run against the recorded DSH version at release time: all green'
+            echo '- Full test suite: all green'
+            echo "- Compatibility record: `.github/dsh-track.json` (kept fresh by the DSH 兼容雷达 workflow)"
+            echo "- Release run: $RUN_URL"
+            echo ''
+            echo '### Changes since previous tag'
+            echo ''
+            echo '```text'
+            prev="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+            if [ -n "$prev" ]; then git log --oneline "$prev..HEAD"; else git log --oneline -30; fi
+            echo '```'
+          } > release-notes.md
+          git tag -a "v$VERSION" -m "Theme v$VERSION — validated against @deepseek-ai/dsh@$dsh_v"
+          git push origin "refs/tags/v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file release-notes.md
+
+      # npm 预留：publish_npm=true 才执行；缺 NPM_TOKEN 大声失败，绝不静默跳过。
+      # TODO(npm-day): 启用前复核 package.json 的 files 白名单仍然准确
+      #（npm 发布的 tarball 只含白名单内容），并检查 provenance/2FA 前置条件。
+      - name: npm publish（预留，默认关闭）
+        if: ${{ inputs.publish_npm }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error title=缺 NPM_TOKEN secret::publish_npm=true 但仓库没配 NPM_TOKEN。要么配 secret，要么去掉 publish_npm。"
+            exit 1
+          fi
+          npm publish --provenance --access public

@@ -1,13 +1,13 @@
-name: DSH 版本追踪
+name: DSH 兼容雷达
 
-# 监测 @deepseek-ai/dsh（npm 官方源）的 latest / next 通道，版本变化时：
-#   1. 安装该版本，跑契约漂移探针 + 完整测试套件（validate）
-#   2. 全绿 → package.json 同号提升、打 tag v<版本>、GitHub Release（release）
-#   3. 有红 → 不发版，报警（红任务 + ::error 注解 + 失败通知），修复后下一次运行自动补发（report）
+# 纯信号，不发版：监测 @deepseek-ai/dsh（npm 官方源）的 latest / next 通道，
+#   1. 有「比记录更新」的版本 → 安装它，跑契约漂移探针 + 完整测试套件（validate）
+#   2. 全绿 → 只把 .github/dsh-track.json 的验证记录推上 main（record）
+#   3. 有红 → 报警（红任务 + ::error 注解 + 失败通知），记录不落盘，
+#      修复后下一次运行自动重试（report）
+# 版本号是主题自己的 semver（0.3.0 起），发版走 release.yml；
+# 「对齐 DSH 版本」发生在 release.yml 的探针与 Release notes 里，不在这里。
 # 设计与操作细节：docs/cookbook/dsh-version-tracking.md
-#
-# 发版=同号：本主题的版本号就是它验证过的 DSH 版本（如 v0.2.0-rc.2）。
-# 主题自身的日常改动只进 main，不发版；下一个 DSH 版本验证通过时一并带出。
 
 on:
   schedule:
@@ -20,7 +20,7 @@ on:
         required: false
         default: ''
 
-# 串行：同一时刻最多一个追踪运行，避免两个版本同时发版互相顶。
+# 串行：同一时刻最多一个雷达运行，避免两个版本同时验证互相顶。
 concurrency:
   group: dsh-track
   cancel-in-progress: false
@@ -53,7 +53,7 @@ jobs:
         run: |
           if [ -n "$MANUAL_VERSION" ]; then
             # 手动入口：不查 dist-tags（验证 alpha 等未进通道的版本时用），
-            # 但仍取一份快照放进发版记录，便于审计“当时各通道在哪”。
+            # 但仍取一份快照放进验证记录，便于审计“当时各通道在哪”。
             tags="$(npm view @deepseek-ai/dsh dist-tags --json --prefer-online)"
             echo "changed=true"        >> "$GITHUB_OUTPUT"
             echo "version=$MANUAL_VERSION" >> "$GITHUB_OUTPUT"
@@ -110,6 +110,13 @@ jobs:
           fi
           echo "已安装 @deepseek-ai/dsh@$got"
 
+      # 与 ci.yml 的 test job 同构：test:ci 以 scripts/build-client.js --check
+      # 开头（产物新鲜度门禁），tsdown 等 devDependencies 必须先就位。本 job
+      # 曾漏装依赖：2026-10-23 起三次验证全部红在 tsdown 上（漂移探针本身
+      # 零依赖，所以红得很晚才暴露）。
+      - name: 安装构建依赖
+        run: npm install --no-audit --no-fund
+
       - name: 契约漂移探针
         run: |
           set -o pipefail
@@ -157,11 +164,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
-  # 发版：验证全绿后——记录状态、package.json 同号提升、提交、tag、Release。
+  # 记录：验证全绿后只把 .github/dsh-track.json 推上 main（发版在 release.yml）。
   # 提交身份是 github-actions[bot]；提交信息走 Conventional Commits。
   # ---------------------------------------------------------------------------
-  release:
-    name: 发版 v${{ needs.detect.outputs.version }}
+  record:
+    name: 记录 DSH ${{ needs.detect.outputs.version }} 验证通过
     needs: [detect, validate]
     if: needs.detect.outputs.changed == 'true' && needs.validate.result == 'success'
     runs-on: ubuntu-latest
@@ -175,86 +182,38 @@ jobs:
         with:
           node-version: '22'
 
-      - name: 记录状态并提升版本号
+      - name: 落盘验证记录（不碰 package.json）
         env:
           DSH_VERSION: ${{ needs.detect.outputs.version }}
           DIST_TAGS: ${{ needs.detect.outputs.distTags }}
-        run: node .github/scripts/dsh-track.js --apply "$DSH_VERSION" --dist-tags "$DIST_TAGS"
+        run: node .github/scripts/dsh-track.js --record "$DSH_VERSION" --dist-tags "$DIST_TAGS"
 
-      - name: 提交与打 tag
-        id: commit
+      - name: 提交记录文件并推送
         env:
           DSH_VERSION: ${{ needs.detect.outputs.version }}
           CHANNEL: ${{ needs.detect.outputs.channel }}
-          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-          committed=no; tagged=no
-          if ! git diff --quiet; then
-            # 不用 printf 反斜杠续行——单引号里的字面反斜杠会进提交信息。
-            {
-              echo "chore(release): v$DSH_VERSION — validated against @deepseek-ai/dsh $DSH_VERSION"
-              echo ''
-              echo "- Contract drift probe + full test suite all green (found via the $CHANNEL channel)"
-              echo "- dist-tags snapshot: $DIST_TAGS"
-              echo "- Validation run: $RUN_URL"
-            } > commit-msg.txt
-            git add -A
-            git commit -F commit-msg.txt
-            committed=yes
-          else
-            echo '工作树无变更（版本号已是目标值）——跳过提交。'
-          fi
-
-          # 不用 `ls-remote | grep -q .`：grep 提前退出给 ls-remote 一个 SIGPIPE，
-          # 配合 pipefail 会把“远端没有 tag”误判成“有”。先落变量再判空。
-          remote_tag="$(git ls-remote --tags origin "refs/tags/v$DSH_VERSION")"
-          if [ -z "$remote_tag" ] && ! git rev-parse -q --verify "refs/tags/v$DSH_VERSION" >/dev/null; then
-            git tag -a "v$DSH_VERSION" -m "Theme release validated against @deepseek-ai/dsh $DSH_VERSION"
-            tagged=yes
-          else
-            echo "tag v$DSH_VERSION 已存在——跳过。"
-          fi
-
-          # 只有真的产生了提交或新 tag 才需要推。
-          if [ "$committed" = yes ] || [ "$tagged" = yes ]; then
-            git push origin HEAD:main
-            [ "$tagged" = yes ] && git push origin "refs/tags/v$DSH_VERSION"
-            echo "pushed=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "pushed=no" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DSH_VERSION: ${{ needs.detect.outputs.version }}
-          CHANNEL: ${{ needs.detect.outputs.channel }}
-          DIST_TAGS: ${{ needs.detect.outputs.distTags }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if gh release view "v$DSH_VERSION" >/dev/null 2>&1; then
-            echo "Release v$DSH_VERSION 已存在，跳过。"
+          if git diff --quiet; then
+            echo '记录文件无变更（内容已是目标值）——跳过提交。'
             exit 0
           fi
+          # 只提交记录文件：雷达不产生任何其他工作树变更；显式列名让意外变更在 diff 里一眼可见。
           {
-            echo "## Theme v$DSH_VERSION — validated against @deepseek-ai/dsh $DSH_VERSION"
+            echo "chore(track): record @deepseek-ai/dsh@$DSH_VERSION validated"
             echo ''
-            echo '- Contract drift probe: every upstream contract extracted from the theme client.js verified item by item against the new bundle'
-            echo '- Full test suite: all green'
-            echo "- Found via: \`$CHANNEL\` · dist-tags snapshot: \`${DIST_TAGS}\`"
+            echo "- Contract drift probe + full test suite all green (found via the $CHANNEL channel)"
             echo "- Validation run: $RUN_URL"
-            echo ''
-            echo '> Version-mirroring convention: this theme'"'"'s version number is the DSH version it was validated against;'
-            echo '> the theme'"'"'s own changes ride along with the next validated DSH release.'
-          } > release-notes.md
-          gh release create "v$DSH_VERSION" --title "v$DSH_VERSION" --notes-file release-notes.md
+          } > commit-msg.txt
+          git add .github/dsh-track.json
+          git commit -F commit-msg.txt
+          git push origin HEAD:main
 
   # ---------------------------------------------------------------------------
-  # 报警：验证有红时不发版，直接把失败打到任务页与通知里——**不开 issue**
+  # 报警：验证有红时记录不落盘，把失败打到任务页与通知里——**不开 issue**
   # （2026-10-18 所有者指定；仓库 Issues 功能也处于关闭状态，旧的
   # 「开/关追踪 issue」机制在 Issues 关闭的仓库上只会让 workflow 无谓染红）。
   # 报警通道是 GitHub 自带的：定时任务失败时，GitHub 会给「最后编辑过
@@ -265,7 +224,10 @@ jobs:
   report:
     name: 报警 DSH 版本验证失败
     needs: [detect, validate]
-    if: needs.detect.outputs.changed == 'true' && needs.validate.result == 'failure'
+    # !cancelled() 必须显式写：if 里不含任何状态检查函数时 GitHub 会隐式包一层
+    # success()，validate 一红本 job 就被整体 skip——2026-10-23~24 的三连红里
+    # 报警一次都没发出去，就是它（详见 docs/cookbook/dsh-version-tracking.md）。
+    if: ${{ !cancelled() && needs.detect.outputs.changed == 'true' && needs.validate.result == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -285,7 +247,7 @@ jobs:
           tail -c 8000 failed-full.log > failed.log || true
 
           {
-            echo "## DSH \`$DSH_VERSION\` 契约验证失败，已拦截发版"
+            echo "## DSH \`$DSH_VERSION\` 契约验证失败，记录未落盘"
             echo ''
             echo "- 发现渠道: \`$CHANNEL\` · dist-tags: \`${DIST_TAGS}\`"
             echo "- 验证运行: $RUN_URL"
@@ -301,5 +263,5 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           # ::error 注解：任务页红条 + 失败通知里都带它，最后退出 1 让本任务红。
-          echo "::error title=DSH $DSH_VERSION 验证失败::新版本破坏了主题契约，发版已拦截。失败摘要见本步骤 Summary，完整日志：$RUN_URL"
+          echo "::error title=DSH $DSH_VERSION 验证失败::新版本破坏了主题契约，验证已拦截。失败摘要见本步骤 Summary，完整日志：$RUN_URL"
           exit 1

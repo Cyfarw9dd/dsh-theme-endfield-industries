@@ -1,29 +1,55 @@
-# DSH 版本追踪与同号发版
+# DSH 版本追踪与发版
 
-本页回答「怎么做」：如何让仓库在 DSH 发新版时自动验证、自动按 DSH 的版本号发版。
-为什么这样做（上游依赖面的风险分级）见 [../compatibility.md](../compatibility.md)。
+本页回答「怎么做」：雷达如何在新版 DSH 出现时自动验证并落记录，发版如何按主题
+自己的节奏走、并把 Release 对齐到实测的 DSH 版本。为什么这样做（上游依赖面的
+风险分级）见 [../compatibility.md](../compatibility.md)。
 
 ## 机制总览
 
 | 部件 | 位置 | 职责 |
 | --- | --- | --- |
-| 追踪工作流 | `.github/workflows/dsh-track.yml` | 每 6 小时（cron `23 */6 * * *`，UTC）+ 手动触发；探测→验证→发版/报告 |
+| 兼容雷达 | `.github/workflows/dsh-track.yml` | 每 6 小时（cron `23 */6 * * *`，UTC）+ 手动触发；探测→验证→落记录/报警，**不发版** |
 | 版本探测 | `.github/scripts/dsh-track.js --check` | 查 npm **官方源**的 `@deepseek-ai/dsh` dist-tags（registry 不是 npmjs.org 即拒绝）；对比记录文件输出 JSON |
 | 漂移探针 | `.github/scripts/dsh-drift-probe.js` | 从 client.js **自动提取**三类上游契约，在目标版安装树里逐项验证 |
 | 验证记录 | `.github/dsh-track.json` | `dshVersion` 语义是「**已通过验证**的最后版本」；验证失败不落盘 |
-| 落盘与同号 | `.github/scripts/dsh-track.js --apply` | 写记录文件 + 把 `package.json` 的 `version` 提为 DSH 版本号 |
+| 落盘 | `.github/scripts/dsh-track.js --record` | 只写记录文件（github-actions[bot] 提交推送）；不碰 package.json |
+| 发版管线 | `.github/workflows/release.yml` | 手动 dispatch：全量门禁 + 对实测版重跑探针 → tag/Release（npm publish 预留） |
 
 监测通道是 **latest 与 next**（next 优先）；alpha 噪音大不自动追，要验证时用
 workflow_dispatch 手动填版本号（如 `0.2.1-alpha.1`）。
 
-## 发版=同号
+**候选必须比记录更新**（`pickCandidate` 的降级保护，2026-10-24 加入）。事故：
+rc.3 只发了 next、latest 钉在 rc.2，追踪器记录 rc.3 后每轮都把 latest 的旧
+rc.2 当「新版本」反复验证。现在通道目标与记录相等或更旧都不算事件（CI 日志
+里留一行 note）；手动入口是人的显式决定，不受此约束。比较语义是 semver 子集
+（`compareVersions`），`test/dsh-track-guards.test.js` 直测并在事故快照上重放。
 
-本主题的版本号**就是**它验证过的 DSH 版本（如 `v0.2.0-rc.2`）：
+验证 job 跑 test:ci 前必须 `npm install --no-audit --no-fund`——test:ci 以
+`scripts/build-client.js --check` 开头，tsdown 等 devDependencies 不装就必红
+（2026-10-23~24 三连红的另一半根因；漂移探针零依赖，所以红得很晚才暴露）。
 
-- 验证全绿 → `--apply` 同号提升 `package.json` → Conventional Commits 提交
-  （作者 `github-actions[bot]`）→ 附注 tag `v<版本>` → GitHub Release
-- 主题自身的日常改动只进 main、不发版，随下一个 DSH 版本一并带出
-- 同一版本重复验证是幂等的：无变更则跳过提交，tag/Release 已存在则跳过
+## 发版：own semver + Release 对齐实测 DSH 版本
+
+版本号是主题自己的 semver（自 **0.3.0** 起），随特性手动演进；「对齐 DSH」发生在
+发版管线的探针与 Release notes 里，不发生在版本号里。此前的「发版=同号」
+（版本号镜像验证过的 DSH 版本）已于 2026-10-24 退役——背景：主题特性高频产出而
+DSH 发版节奏不受我们控制，镜像制下特性拿不到版本号；且 npm 上线后版本号必须
+承担升级路径。生态参照（独立 semver + engines/peerDeps 区间）见上游主题
+`dsh-theme-endfield@1.2.x` 与 wallpaper-engine / cost-meter 等 npm 插件。
+
+**发版操作**（release.yml，手动 dispatch）：
+
+1. 把目标版本号改进 `package.json` 并提交（版本号属于特性提交的一部分）
+2. Actions 页运行「发版」，输入版本号（可选勾选 `publish_npm`，默认关）
+3. 管线：校验输入（与 package.json 一致、tag 不存在）→ 装依赖 → 按
+   `.github/dsh-track.json` 记录装实测版 DSH 重跑漂移探针 → 完整测试套件
+   → tag `v<版本>` → GitHub Release（notes 自动带实测 DSH 版本与上版以来的提交）
+4. npm 步骤预留：`publish_npm` 闸门 + `NPM_TOKEN` secret，启用前复核 `files`
+   白名单与 provenance/2FA 前置条件
+
+**宿主区间声明**：`engines.dsh`（`>=0.2.1-rc.3 <0.3`，下限=实测点，上限在
+0.3 实测前是护栏）+ 既有 `peerDependencies`。雷达每次验证新绿都会推进记录里的
+实测版本；`engines` 的下限随主题自己的发版判断手动抬升。
 
 ## 漂移探针查什么
 
@@ -56,12 +82,18 @@ node .github/scripts/dsh-drift-probe.js <某份 node_modules/@deepseek-ai>
   report 任务以红色结束并打 `::error` 注解（任务页红条 + GitHub 失败通知都带它，
   定时任务的失败通知发给最后编辑过 workflow 文件的用户），失败日志截尾收进
   该步骤的 Summary
+- report 的 `if` 必须以 `!cancelled()` 开头：if 表达式里不含任何状态检查函数时
+  GitHub 会隐式包一层 `success()`，validate 一红 report 就被整体 skip——上面
+  三连红期间报警一次都没响就是它。该契约由 `test/dsh-track-guards.test.js`
+  对 workflow 真实文本断言
 - 处置指引按 [../compatibility.md](../compatibility.md) 的新版本流程
 
-## 首次部署清单
+## 运行与运维
 
-1. 推送本机制到 main（scheduled workflow 只在默认分支生效）
-2. Actions 页手动运行「DSH 版本追踪」，`dsh_version` 填当前已验证版本
-   （`.github/dsh-track.json` 的 `dshVersion`，本文写作时是 `0.2.0-rc.2`）——
-   让首个 Release 走一遍完整管线
-3. 之后完全自动；想验证未进通道的版本随时手动触发
+- 两个 workflow 都只在默认分支生效；推送后雷达完全自动（每 6 小时一轮）
+- 想验证未进通道的版本（如 alpha）：手动运行「DSH 兼容雷达」，`dsh_version`
+  填目标版本——手动入口不受降级保护约束（人的显式决定），但同样只落记录不发版
+- 想发版：按上一节操作 release.yml；tag 命名 `v<主题 semver>`（镜像时代的
+  `v0.2.1-rc.3` 之前缀同形但语义不同，历史 tag 不迁移）
+- 雷达的 record job 以 github-actions[bot] 身份推 main（只动
+  `.github/dsh-track.json`），会触发 CI 跑一轮——正常现象
