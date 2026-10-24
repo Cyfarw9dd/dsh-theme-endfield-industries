@@ -25,6 +25,17 @@ const { execFileSync } = require('child_process')
 const ROOT = path.resolve(__dirname, '..')
 const { ARTIFACT, DIST_ARTIFACT: DIST } = require('./lib/sources.js')
 
+/* The boot-graph row the Host serves this bundle under is keyed by the real
+   package name (see the registration comment in src/client/index.js), so the
+   artifact's __ModuleLoader__ registration id must equal package.json "name".
+   This is the drift gate for exactly the 2026-10-24 failure: the rename commit
+   missed the id, the browser retried the bundle and died on "duplicate factory
+   registration", and web boot reported "import failed" for the whole plugin. */
+function registrationIdOf(code) {
+  const m = code.match(/window\.__ModuleLoader__\.load\(\{\s*id:\s*"([^"]+)"/)
+  return m && m[1]
+}
+
 function runTsdown(extra = []) {
   const bin = path.join(ROOT, 'node_modules', '.bin', 'tsdown')
   if (!fs.existsSync(bin)) {
@@ -41,6 +52,11 @@ function artifactFrom(dist) {
      files embedded). A bundle that silently dropped either is not shippable. */
   if (!code.includes('window.__ModuleLoader__.load')) {
     throw new Error('built artifact lost the __ModuleLoader__ registration')
+  }
+  const packageName = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).name
+  const registeredId = registrationIdOf(code)
+  if (registeredId !== packageName) {
+    throw new Error('built artifact registers __ModuleLoader__ id "' + registeredId + '" but package.json name is "' + packageName + '" — the Host serves the graph row under the package name, so the browser would fail the import (duplicate factory registration after the single-URL retry)')
   }
   for (const probe of ['theme-endfield', '--edge-accent', 'EDGE_TEX_BEGIN', 'EMBLEM_MASK_BEGIN']) {
     if (!code.includes(probe)) throw new Error('built artifact is missing expected content: ' + probe)

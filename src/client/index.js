@@ -39,8 +39,18 @@ import { THEME_TOKEN_OVERRIDES } from './ui/tokens.js'
  * 由 dsh-client-modules 以 /plugins/dsh-theme-endfield-industries/client.js 形式加载；
  * 通过 `dsh plugin --profile web add github:Cyfarw9dd/dsh-theme-endfield-industries` 安装挂载。
  */
+/* The registration id below MUST equal package.json "name": the Host keys the
+   boot-graph row (and the /plugins/<id>/client.js route) by the real package
+   name, and dsh-client-modules' browser half rejects a bundle whose registered
+   id misses that row — the combo batch executes once, the row is reported
+   "not registered", the single-URL retry executes the bundle again, and
+   register() throws "duplicate factory registration" (the 2026-10-24
+   "web boot: import failed" outage was exactly this, left by the rename).
+   The historical `theme-endfield` spellings elsewhere (PREFS_NS, data-plugin
+   attribute, entry id) are user-data join keys and deliberately do NOT follow
+   package renames; this id is the one string that must. */
 window.__ModuleLoader__.load({
-	id: "dsh-theme-endfield",
+	id: "dsh-theme-endfield-industries",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
