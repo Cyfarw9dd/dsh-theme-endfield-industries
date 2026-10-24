@@ -32,6 +32,8 @@ const os = require('os')
 /* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
 const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
+/* fixture 的「应用暗色外壳」从真值口读（fixtures/theme-values.js），不抄字面量 */
+const { LADDERS } = require('./fixtures/theme-values.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-loader-late-'))
@@ -49,8 +51,8 @@ const BUDGET_MS = 16000
 function makePage({ initial, readyDelayMs, flip }) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
-  :root{--dsw-alias-bg-base:#101110;--dsw-alias-label-primary:#f5f5f0;
-    --dsw-specific-sidebar-fill:#101110;--dsw-alias-border-l1:#343633;
+  :root{--dsw-alias-bg-base:${LADDERS.soft.base};--dsw-alias-label-primary:${LADDERS.soft.labelPrimary};
+    --dsw-specific-sidebar-fill:${LADDERS.soft.base};--dsw-alias-border-l1:${LADDERS.soft.borderL1};
     --dsw-font-family:Arial,sans-serif}
   body{background:var(--dsw-alias-bg-base)}
   .pI_x6G_frame{background:var(--dsw-alias-bg-base);height:100%;

@@ -19,6 +19,8 @@ const fs = require('fs')
 const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
+/* 水墨 alpha 与上限从同一真值口读取（fixtures/theme-values.js），不在此复述 */
+const { WM, WM_CEILING } = require('./fixtures/theme-values.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
@@ -434,6 +436,18 @@ for (const [name, block] of Object.entries(palettes)) {
     const rB1 = ratio(hex(L['border-l1']), hex(L.base))
     if (rB1 >= 1.06 && rB1 <= 1.6) pass('暗色三档 · ' + t + ' 描边L1×底 ' + rB1.toFixed(2) + ':1（装饰区间）')
     else fail('暗色三档 · ' + t + ' 描边L1 ' + rB1.toFixed(2) + ':1 出区间')
+    /* 水印墨逐档（徽标 currentColor=label-primary × --edge-wm-emblem-alpha，
+       字母 × --edge-wm-alpha）：0.105→0.095 就是为了在最亮 C 档底上压回
+       1.32 上限（tokens.css 注释承诺 0.095 时各档落在 1.26–1.31）——此前
+       该承诺只有注释没有测试，浏览器套件的 1.32 检查又跑在退役最深底上，
+       结构上抓不到那个回归。此处静态合成逐档钉死。 */
+    const wmPair = (inkHex, alpha, what) => {
+      const r = ratio(over(hex(inkHex), hex(L.base), alpha), hex(L.base))
+      if (r >= 1.06 && r <= WM_CEILING.dark) pass('暗色三档 · ' + t + ' 水印' + what + '×底 ' + r.toFixed(2) + ':1（1.06–' + WM_CEILING.dark + '）')
+      else fail('暗色三档 · ' + t + ' 水印' + what + ' ' + r.toFixed(2) + ':1 出带（alpha 或梯度改动需重算）')
+    }
+    wmPair(L['label-primary'], WM.dark.emblem, '徽标墨')
+    wmPair(L['label-primary'], WM.dark.letters, '字母墨')
   }
 }
 

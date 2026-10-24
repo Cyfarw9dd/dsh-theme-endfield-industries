@@ -44,6 +44,9 @@ const { launch } = require('./fixtures/chrome-cdp.js')
    official mainstay tier (2026-10-24 micro-round rework). Read the tier out of
    tokens.css instead of restating "4px". */
 const css = require('../scripts/lib/sources.js').concatCss()
+/* fixture 的「应用暗色外壳」从真值口读（fixtures/theme-values.js）：旧字面量是
+   退役的 #101110 系，虽不影响断言，但每次暗色改动都会留一批过期色。 */
+const { LADDERS } = require('./fixtures/theme-values.js')
 const RADIUS_MAIN = (() => {
   const m = /--edge-radius:\s*([0-9]+(?:\.[0-9]+)?px)/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))
   if (!m) { console.error('FAIL  tokens.css 里读不到 --edge-radius 主力档'); process.exit(1) }
@@ -60,7 +63,7 @@ const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-chip-'))
 const STOCK = `
   html,body{margin:0}
   .probe_frame{display:grid;grid-template-columns:248px 1fr;height:100vh}
-  .probe_sidebarCol{background:#101110}
+  .probe_sidebarCol{background:${LADDERS.soft.base}}
   .probe_centerCol{display:flex;flex-direction:column;min-width:0;overflow:hidden}
   .probe_root{display:flex;flex-direction:column;flex:1;min-width:0}
   .probe_header{flex:none;min-height:76px;padding:10px 28px 0 20px;box-sizing:border-box}
@@ -101,9 +104,9 @@ function makePage(chip) {
               <div><span class="probe_label"><svg class="probe_icon" width="14" height="14"></svg>创造模式</span></div>`
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
-  :root{--dsw-alias-bg-base:#101110;--dsw-alias-label-primary:#f5f5f0;
-    --dsw-specific-sidebar-fill:#101110;--dsw-alias-border-l1:#343633;
-    --dsw-alias-fill-tsp-secondary:#2a2b28;--dsw-alias-label-secondary:#9a9d98;
+  :root{--dsw-alias-bg-base:${LADDERS.soft.base};--dsw-alias-label-primary:${LADDERS.soft.labelPrimary};
+    --dsw-specific-sidebar-fill:${LADDERS.soft.base};--dsw-alias-border-l1:${LADDERS.soft.borderL1};
+    --dsw-alias-fill-tsp-secondary:${LADDERS.soft.layer2};--dsw-alias-label-secondary:${LADDERS.soft.labelSecondary};
     --dsw-font-family:Arial,sans-serif}
   ${STOCK}
 </style></head><body><div id="root">

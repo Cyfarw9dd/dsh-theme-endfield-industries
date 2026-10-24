@@ -32,4 +32,4 @@
 3. 素材来源政策：只从官方渠道下载；第三方来源需显式批准并在
    `scripts/build-*.js` 头注与 [credits.md](credits.md)「素材归属」双重登记
 4. 完整逻辑变更完成后**先问用户再提交**（**不主动 push**）；提交遵循 Conventional Commits，
-   细则见 [git.md](git.md)；作者身份用仓库本地 git config
+   细则见 [git.md](git.md)

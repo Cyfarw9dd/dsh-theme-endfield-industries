@@ -30,6 +30,18 @@ const os = require('os')
 /* Browser plumbing is shared — see test/fixtures/chrome-cdp.js. */
 const { launch } = require('./fixtures/chrome-cdp.js')
 const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixtures', 'settings-scope.browser.js'))
+/* Fixture surfaces come from the real token source (fixtures/theme-values.js):
+   the old literals were the retired #101110 darks, so every dark-side ratio
+   below was measured against a base the theme no longer paints. */
+const { jsTokenPair } = require('./fixtures/theme-values.js')
+const TOKENS = {
+  bgBase: jsTokenPair('--dsw-alias-bg-base'),
+  bgLayer1: jsTokenPair('--dsw-alias-bg-layer-1'),
+  bgLayer3: jsTokenPair('--dsw-alias-bg-layer-3'),
+  labelPrimary: jsTokenPair('--dsw-alias-label-primary'),
+  labelSecondary: jsTokenPair('--dsw-alias-label-secondary'),
+  borderL1: jsTokenPair('--dsw-alias-border-l1'),
+}
 
 const ROOT = path.resolve(__dirname, '..')
 const OUT = process.env.ENDFIELD_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'endfield-herologo-'))
@@ -134,12 +146,12 @@ const HERO_01 = `<div class="wSkVaW_composerStack wSkVaW_composerHero">
 const page = (dark, generation, hero) => `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
   :root{
-    --dsw-alias-bg-base:${dark ? '#101110' : '#e8e8e2'};
-    --dsw-alias-bg-layer-1:${dark ? '#181a18' : '#f2f2ec'};
-    --dsw-alias-bg-layer-3:${dark ? '#2c2e2a' : '#dcddd6'};
-    --dsw-alias-label-primary:${dark ? '#f5f5f0' : '#101110'};
-    --dsw-alias-label-secondary:${dark ? '#898d89' : '#4a4c48'};
-    --dsw-alias-border-l1:${dark ? '#343633' : '#d8d9d5'};
+    --dsw-alias-bg-base:${dark ? TOKENS.bgBase.dark : TOKENS.bgBase.light};
+    --dsw-alias-bg-layer-1:${dark ? TOKENS.bgLayer1.dark : TOKENS.bgLayer1.light};
+    --dsw-alias-bg-layer-3:${dark ? TOKENS.bgLayer3.dark : TOKENS.bgLayer3.light};
+    --dsw-alias-label-primary:${dark ? TOKENS.labelPrimary.dark : TOKENS.labelPrimary.light};
+    --dsw-alias-label-secondary:${dark ? TOKENS.labelSecondary.dark : TOKENS.labelSecondary.light};
+    --dsw-alias-border-l1:${dark ? TOKENS.borderL1.dark : TOKENS.borderL1.light};
     --dsw-font-family:Arial,sans-serif;
     --dsh-composer-card-max-width:780px; --dsh-composer-side-clearance:16px;
   }

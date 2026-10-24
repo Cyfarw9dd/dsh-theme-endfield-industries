@@ -42,7 +42,6 @@ scope 可省（本仓库体量小，仅在有明确半区时用：`client` / `ho
 
 ## 操作细节
 
-- **作者身份**用仓库本地 git config（`git config user.name/user.email`），不借用历史提交身份，不改全局配置
 - **提交信息经文件写入**：`git commit -F <file>`，避免 shell 引号转义吞字符（本仓库踩过）
 - **未推送**的提交可用 `--amend` 折叠后续修复（保持一个逻辑变更一个提交）；**已推送禁 amend**，需要改历史必须用户明示
 - 提交后 `git status` 必须干净；不把临时探针、截图产物（`tmp/` 已 ignore）带进提交
