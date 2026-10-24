@@ -51,5 +51,5 @@ CHROME_PATH=/usr/bin/chromium-browser npm test  # 全量（含真实渲染）
 ## 提交与发布
 
 - 完整逻辑变更过验证即可提交；Conventional Commits 规范与操作细则见 [git.md](git.md)
-- 版本号在 package.json；**发版=同号**：版本号跟随验证过的 DSH 版本（如 `v0.2.0-rc.2`），由 [DSH 版本追踪](cookbook/dsh-version-tracking.md) 工作流在新版验证全绿时自动提升；主题自身改动不单独发版
+- 版本号在 package.json，是**主题自己的 semver**（自 0.3.0 起），随特性手动演进；[DSH 兼容雷达](cookbook/dsh-version-tracking.md) 只负责验证新版 DSH 并落记录，发版走 release.yml，Release notes 引用实测 DSH 版本（对齐在元数据，不在版本号）
 - 未推送的提交可用 `--amend` 折叠后续修复；已推送禁用
