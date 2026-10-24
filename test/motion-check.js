@@ -6,8 +6,10 @@
  * D clamp / E meter / F stamp) are collapsed into ONE design, gated only on the
  * presence of data-endfield-motion:
  *
- *   signal motif  — arrow slides into the new-session CTA and the approve
- *                   button on hover (transform + opacity only);
+ *   signal motif  — arrow slides into the approve button on hover
+ *                   (transform + opacity only; the new-session CTA's arrow
+ *                   was removed 2026-10-24 — hover-replayed noise on the
+ *                   page's most prominent CTA — and its absence is asserted);
  *                   tbody rows keep the 3px left signal rule on hover.
  *   clamp motif   — sidebar session rows + search result rows gain 12px L
  *                   corner brackets on hover (two gradient arms per corner,
@@ -247,8 +249,12 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
   /* The merged design's own markers — and a guard that the removed schemes are
      really gone, not just unreachable. */
   if (!/\[class\$='_sessionRow'\]::before/.test(cssFromSource)
-    || !/data-endfield-motion\] \[class\$='_newSession'\]::after/.test(cssFromSource)) {
+    || !/data-endfield-motion\] \[data-cordis-approve\]::after/.test(cssFromSource)) {
     console.error('FAIL  the stylesheet under test has no merged motion rules — extraction is wrong or the rules are missing')
+    process.exit(1)
+  }
+  if (/data-endfield-motion\] \[class\$='_newSession'\]::after/.test(cssFromSource)) {
+    console.error('FAIL  the new-session arrow rule is back — removed 2026-10-24 (owner decision)')
     process.exit(1)
   }
   pass('stylesheet read from src/styles (theme.css + generated.css, ' + cssFromSource.length + ' chars)')
@@ -390,20 +396,16 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
 
     /* ============ 信号母题 ============ */
     {
-      const rest = await styleOf('newSession', '::after')
+      /* The new-session arrow was removed 2026-10-24 (owner decision): assert
+         the button carries NO decorative pseudo even under hover, so the rule
+         cannot creep back through the ::after of some other selector. */
+      const restNs = await styleOf('newSession', '::after')
       await hover('newSession')
-      const hov = await styleOf('newSession', '::after')
-      const inkHex = await evaluate("window.__var__('--edge-accent-ink')")
-      /* computed transforms are matrices, not the authored functions */
-      const tx = (tr) => { const mm = /matrix\(([-\d.]+), [-\d.]+, [-\d.]+, [-\d.]+, ([-\d.]+),/.exec(String(tr)); return mm ? { s: parseFloat(mm[1]), x: parseFloat(mm[2]) } : null }
-      const restM = tx(rest.transform), hovM = tx(hov.transform)
-      if (rest.opacity === '0' && hov.opacity === '1'
-        && restM && hovM && Math.abs(restM.x + 14) < 0.5 && Math.abs(restM.s - 0.4) < 0.01
-        && Math.abs(hovM.x) < 0.5 && Math.abs(hovM.s - 1) < 0.01
-        && nearRgb(hov.backgroundColor, inkHex, 4)) {
-        pass('信号 · 新会话箭头常态隐藏、悬停滑入点亮（transform+opacity，色=accent-ink）')
+      const hovNs = await styleOf('newSession', '::after')
+      if ((!restNs.content || restNs.content === 'none') && (!hovNs.content || hovNs.content === 'none')) {
+        pass('信号 · 新会话按钮不再有箭头伪元素（常态与悬停都无，2026-10-24 移除）')
       } else {
-        fail('信号 · 新会话箭头动效不符  [rest=' + rest.opacity + ' ' + rest.transform + ' → ' + hov.opacity + ' ' + hov.transform + ' bg=' + hov.backgroundColor + ']')
+        fail('信号 · 新会话按钮仍有装饰伪元素  [rest=' + restNs.content + ' hover=' + hovNs.content + ']')
       }
       await park()
       const restA = await styleOf('approve', '::after')
@@ -753,10 +755,10 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       const offB = await styleOf('sessionRow', '::before')
       const offRow = await styleOf('sessionRow')
       const armsOff = (String(offB.backgroundImage || '').match(/linear-gradient/g) || []).length
-      await hover('newSession')
-      const offArrow = await styleOf('newSession', '::after')
+      await hover('approve')
+      const offArrow = await styleOf('approve', '::after')
       if (armsOff === 0 && (!offArrow.content || offArrow.content === 'none')) {
-        pass('off · 关闭后会话行角标与 CTA 箭头全部消失')
+        pass('off · 关闭后会话行角标与审批箭头全部消失')
       } else {
         fail('off · 关闭后仍有动效残留  [arms=' + armsOff + ' arrow=' + offArrow.content + ']')
       }
@@ -784,12 +786,12 @@ const fixture = (css, motion) => `<!doctype html><html><head><meta charset="utf-
       const imgRm = await shoot()
       const rmCorner = countNear(imgRm, { x: bRm.x - 1, y: bRm.y - 1, w: 14, h: 14 }, accent, 30)
       await park()
-      await hover('newSession')
-      const rmArrow = await styleOf('newSession', '::after')
+      await hover('approve')
+      const rmArrow = await styleOf('approve', '::after')
       await park()
       if ((rmBefore.content === 'none' || !rmBefore.content) && (rmAfter.content === 'none' || !rmAfter.content)
         && rmCorner === 0 && (!rmArrow.content || rmArrow.content === 'none')) {
-        pass('reduce-motion · 两个角标与 CTA 箭头都不生成（含 ::before 与像素验证）')
+        pass('reduce-motion · 两个角标与审批箭头都不生成（含 ::before 与像素验证）')
       } else {
         fail('reduce-motion · 装饰仍有残留  [before=' + rmBefore.content + ' after=' + rmAfter.content
           + ' corner px=' + rmCorner + ' arrow=' + rmArrow.content + ']')

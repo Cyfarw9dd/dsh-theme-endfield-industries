@@ -14,7 +14,7 @@
 export function createMotionSync({ prefs, isEnabled }) {
   const RADIUS_KEY = 'dsh-theme-endfield-radius'
   const MOTION_KEY = 'dsh-theme-endfield-motion'
-  /* 按钮动效自 2026-10 起是**一套合并设计**（信号母题 × 新会话/审批/表格行 +
+  /* 按钮动效自 2026-10 起是**一套合并设计**（信号母题 × 审批/表格行 +
      角标母题 × 侧边栏会话行，详见样式表动效区），不再是六选一的方案下拉。
      存储字面量只剩两个：
        'signal' = 开（沿用历史字面量，默认值与旧存量都不用迁移）；

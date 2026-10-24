@@ -73,8 +73,12 @@ const motionSection = (() => {
   const end = cssFromSource.indexOf('Square corners (default)')
   return cssFromSource.slice(from, end)
 })()
-if (!/endfield-clamp-in/.test(motionSection) || !/_newSession'\]::after/.test(motionSection)) {
+if (!/endfield-clamp-in/.test(motionSection) || !/\[data-cordis-approve\]::after/.test(motionSection)) {
   console.error('FAIL  static guard: could not locate the merged motion section')
+  process.exit(1)
+}
+if (/_newSession'\]::after/.test(motionSection)) {
+  console.error('FAIL  static guard: the new-session arrow rule is back (removed 2026-10-24, owner decision)')
   process.exit(1)
 }
 {
@@ -133,7 +137,10 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
   .x_sessionRow:hover{background:var(--dsw-alias-interactive-bg-hover)}
   .x_btn{display:inline-block;margin:3px;padding:6px 12px;border:1px solid #b6b8b3;
     background:#f2f2ec;cursor:pointer;position:relative}
-  .x_newSession{display:block;width:200px;height:34px;margin:6px 0;border:1px solid #b6b8b3;
+  /* The CTA family is the approve button — the only sliding arrow left since
+     the new-session CTA's arrow was removed (2026-10-24). Same shape, same
+     transition class, so the budget still measures a real animated ::after. */
+  .x_approve{display:block;width:200px;height:34px;margin:6px 0;border:1px solid #b6b8b3;
     background:#f2f2ec;cursor:pointer;position:relative}
   .x_iconButton{width:28px;height:28px;border:0;background:transparent;cursor:pointer;position:relative}
 </style><style>${cssFromSource}</style></head>
@@ -142,7 +149,7 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
     <div id="list" class="x_sidebarCol">${Array.from({ length: 150 }, (_, i) =>
       `<div class="x_sessionRow" role="treeitem" aria-selected="false">session row ${i}</div>`).join('')}</div>
     <div id="grid">
-      ${Array.from({ length: 8 }, (_, i) => `<button class="x_newSession">+ 新建会话 ${i}</button>`).join('')}
+      ${Array.from({ length: 8 }, (_, i) => `<button class="x_approve" data-cordis-approve>允许 ${i}</button>`).join('')}
       <div>${Array.from({ length: 24 }, () => '<button class="x_iconButton">···</button>').join('')}</div>
       <div style="height:10px"></div>
       ${Array.from({ length: 40 }, (_, i) => `<button class="x_btn">btn ${i}</button>`).join('')}
@@ -214,13 +221,13 @@ const pct = (arr, p) => {
         return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] }
       return {
         row: pick('.x_sessionRow'),
-        cta: pick('.x_newSession'),
+        cta: pick('.x_approve'),
         icon: pick('.x_iconButton'),
         plain: pick('.x_btn'),
       }})())`)
     const points = JSON.parse(familyPoints)
     if (process.env.PERF_COVERAGE) {
-      console.log('GEO', await evaluate(`JSON.stringify((()=>{const g=(sel)=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)]};return {vh:innerHeight,list:g('#list'),cta:g('.x_newSession'),icon:g('.x_iconButton'),plain:g('.x_btn'),wrap:g('#wrap')}})())`))
+      console.log('GEO', await evaluate(`JSON.stringify((()=>{const g=(sel)=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)]};return {vh:innerHeight,list:g('#list'),cta:g('.x_approve'),icon:g('.x_iconButton'),plain:g('.x_btn'),wrap:g('#wrap')}})())`))
     }
     const usable = ['row', 'cta', 'icon', 'plain'].filter((f) => Array.isArray(points[f]))
     const pointList = usable.map((f) => ({ family: f, x: points[f][0], y: points[f][1] }))
@@ -257,7 +264,7 @@ const pct = (arr, p) => {
          buttons only. Count what the pointer is over, and fail if a family is never
          touched. */
       if (process.env.PERF_COVERAGE) {
-        const cov = await evaluate(`JSON.stringify((()=>{const r=document.getElementById('grid').getBoundingClientRect();return {vh:innerHeight, scrollH:document.documentElement.scrollHeight, nsFirstY:document.querySelector('.x_newSession')?document.querySelector('.x_newSession').getBoundingClientRect().y:null, iconFirstY:document.querySelector('.x_iconButton')?document.querySelector('.x_iconButton').getBoundingClientRect().y:null, gridY:r.y}})())`)
+        const cov = await evaluate(`JSON.stringify((()=>{const r=document.getElementById('grid').getBoundingClientRect();return {vh:innerHeight, scrollH:document.documentElement.scrollHeight, ctaFirstY:document.querySelector('.x_approve')?document.querySelector('.x_approve').getBoundingClientRect().y:null, iconFirstY:document.querySelector('.x_iconButton')?document.querySelector('.x_iconButton').getBoundingClientRect().y:null, gridY:r.y}})())`)
         console.log('COVERAGE', cov)
       }
       await move(4, 4)
