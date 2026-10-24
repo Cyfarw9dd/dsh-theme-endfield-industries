@@ -73,7 +73,7 @@ const classify = (r, g, b) => {
 }
 
 const ROOT = path.resolve(__dirname, '..')
-const SHOTS = path.join(ROOT, '.kagent', 'shots')
+const SHOTS = path.join(ROOT, 'tmp', 'shots')
 let failures = 0
 const results = {}
 
