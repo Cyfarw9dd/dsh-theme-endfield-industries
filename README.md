@@ -63,7 +63,7 @@ All docs are written in Chinese.
 | [docs/development.md](docs/development.md) | Theme | Development and release workflow |
 | [docs/git.md](docs/git.md) | Theme | Git commit strategy and Conventional Commits conventions |
 | [docs/cookbook/](docs/cookbook/) | Cookbook | How-to topics: [audio notifications](docs/cookbook/audio-notifications.md) · [frosted glass](docs/cookbook/glass.md) · [DSH version tracking](docs/cookbook/dsh-version-tracking.md) |
-| [docs/notes/](docs/notes/) | Archive | One-off records ([PR description](docs/notes/PR-description.md), [official motion research](docs/notes/endfield-motion-research.md)) |
+| [docs/notes/](docs/notes/) | Archive | One-off records ([PR description](docs/notes/PR-description.md), [official motion research](docs/notes/endfield-motion-research.md), [dark palette research](docs/notes/dark-palette-research.md), [button radius research](docs/notes/button-radius-research.md)) |
 
 ## Development & verification
 
