@@ -720,6 +720,13 @@
       [class$='_sidebarCol'] [class*='_panelRow'][class*='_panelActive'] {
         background: var(--edge-select-fill) !important;
       }
+      /* Owner request (2026-10-24): these entries read as quiet rows — no
+         borders. Native _panelRow is already border:none, so this is a
+         defensive strip: whatever reintroduces a border (app drift, sibling
+         bundles) loses to it. Scoped like the wash rules above. */
+      [class$='_sidebarCol'] [class*='_panelRow'] {
+        border: none !important;
+      }
       /* ---------- Badge hover: signal-yellow inversion (reference .kpi:hover) ---------- */
       [class*='badge' i]:hover,
       [class*='badge' i]:hover *,
