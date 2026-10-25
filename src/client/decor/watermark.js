@@ -26,9 +26,21 @@
 export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   const WATERMARK_KEY = 'dsh-theme-endfield-watermark'
   const WATERMARK_PERSIST_KEY = 'dsh-theme-endfield-watermark-persist'
+  const WATERMARK_STYLE_KEY = 'dsh-theme-endfield-watermark-style'
+  const WATERMARK_EMBLEM_KEY = 'dsh-theme-endfield-watermark-emblem'
   const isWatermarkOn = () => prefs.get(WATERMARK_KEY) !== '0'
   // Default OFF: the hero-only behaviour stays the shipped default.
   const isWatermarkPersistOn = () => prefs.get(WATERMARK_PERSIST_KEY) === '1'
+  /* 'hatch' = the official /operator hatch on the big letters; default 'solid'
+     (the loading plate's flat grey). Applied as a body attribute; the stylesheet
+     owns both appearances. */
+  const isWatermarkHatchOn = () => prefs.get(WATERMARK_STYLE_KEY) === 'hatch'
+  /* Which language the inverted-triangle Industries emblem in the tile's clear
+     gap speaks. 'en' is the shipped look (Yue-plus vectorization); 'zh' swaps in
+     the locally traced Chinese lockup from the PRTS-archived PNG. Only the
+     ::after emblem swaps — the giant ENDFIELD / INDUSTRIES band is untouched.
+     Applied as a body attribute; the stylesheet picks the mask. */
+  const isWatermarkEmblemZh = () => prefs.get(WATERMARK_EMBLEM_KEY) === 'zh'
   /* Hash-free selectors only. DSH 0.1.2-rc.1 rebuilt its CSS modules and every
      hex hash changed (0/33 of the old pinned hashes survive), so anything of the
      form [class*='pXSMma_root'] dies silently on upgrade. The stable hooks are
@@ -115,10 +127,12 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
     const hr = host.getBoundingClientRect()
     const cy = r.top + r.height / 2
     const cx = r.left + r.width / 2
-    const vw = (typeof window !== 'undefined' && window.innerWidth) || (typeof document !== 'undefined' ? document.documentElement.clientWidth : 0)
-    // Half the logo box: 13vw wide (240px cap) x square aspect / 2 (see the
-    // ::after sizing and the height calc in styleWatermark).
-    const half = vw * 0.13 * 0.51
+    /* Half the BAND's measured height, not a formula: the host's height is the
+       band height in hero mode (the stylesheet sizes both absolutely-placed
+       layers), so a fixed constant would drift the moment the band changes.
+       The hero loop already measures the headline every frame, so one more rect
+       read is the only cost. */
+    const half = watermarkEl.getBoundingClientRect().height / 2
     const top = (cy - half - hr.top) + 'px'
     const tx = 'translateX(' + (cx - (hr.left + hr.width / 2)) + 'px)'
     // Only write when the value actually changed, so a stable layout costs nothing.
@@ -141,12 +155,13 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
     s.alignItems = 'center'
     s.justifyContent = 'center'
     s.pointerEvents = 'none'
-    s.fontWeight = '900'
-    s.letterSpacing = '0.1em'
     s.color = 'var(--dsw-alias-label-primary)'
-    s.textTransform = 'uppercase'
     s.userSelect = 'none'
-    /* Single-child mark: the official logo paints as the ::after mask. */
+    /* Two painted layers, both CSS masks: the hatched ENDFIELD/INDUSTRIES
+       wordmark band (::before, assets/endfield-wordmark.svg, repeated in x by
+       the stylesheet) and the Endfield Industries emblem stamped over it
+       (::after, assets/endfield-industries.svg). No glyph is drawn from type,
+       so translators have no text node to rewrite. */
     /* The theme's own face, via its own variable. It used to read
        --dsw-font-family directly, which now points at the APP's stack (the
        theme no longer overrides that token) — so reading it here would silently
@@ -158,12 +173,13 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
        a scheme flip simply re-resolves the variable — no observer, no repaint
        logic here. An inline numeric opacity would also outrank the stylesheet,
        which is exactly what made this value unthemeable before. */
-    /* Opacity now lives on the ::before (letters) and ::after (emblem) rules in
-       the stylesheet instead of on the element, for the same themeability
-       reason as before (CSS variables, scheme-dependent values, no repaint on
-       flip) plus one new one: the official emblem mask is a soft blur that
-       needs a slightly HIGHER alpha than the letters to read as part of the
-       same mark, and one element-level opacity cannot express that. */
+    /* Opacity lives on the ::before (hatched wordmark) and ::after (emblem)
+       rules in the stylesheet instead of on the element, for the same
+       themeability reason as before (CSS variables, scheme-dependent values,
+       no repaint on flip) plus one new one: the two masks need DIFFERENT
+       alphas — the emblem is a soft blur that needs a lift, and the wordmark's
+       hatching covers only ~9% of each glyph, so one element-level opacity
+       cannot express both. */
     if (mode === 'hero') {
       /* In-column absolute (2026-10-24; was a body-level position:fixed strip).
          The hero column gets isolation:isolate + position:relative from the
@@ -185,10 +201,10 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
       s.right = '0'
       s.top = ''
       s.bottom = ''
-      /* Logo-only box: 13vw wide (240px cap) x the square viewBox. */
-      s.height = 'calc(min(13vw, 240px) * 1.02)'
+      /* Height comes from the stylesheet (`[data-endfield-watermark='hero']`
+         sets it to the band height); the follow loop centres the measured box
+         on the headline. */
       s.zIndex = '-1'
-      s.fontSize = '9.5vw'
       s.transform = ''
     } else {
       // Fill the conversation column and sit behind its content. z-index:-1 paints
@@ -202,11 +218,21 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
       s.bottom = '0'
       s.height = ''
       s.zIndex = '-1'
-      s.fontSize = '9.5vw'
       s.transform = ''
     }
   }
+  /* Keep the body attributes in step with the two appearance switches BEFORE
+     the streaming fast path below (that path returns early and must not skip an
+     appearance change). The emblem language is an attribute, not a class, for
+     the same reason as the style: the stylesheet owns both masks and the element
+     stays identical, so a flip is one attribute write and no remount. */
+  const applyWatermarkStyle = () => {
+    if (typeof document === 'undefined' || !document.body) return
+    document.body.setAttribute('data-edge-wm-style', isWatermarkHatchOn() ? 'hatch' : 'solid')
+    document.body.setAttribute('data-edge-wm-emblem', isWatermarkEmblemZh() ? 'zh' : 'en')
+  }
   const syncWatermarkVisibility = () => {
+    applyWatermarkStyle()
     /* Streaming fast path. A mounted persist-mode mark is still correctly
        placed while (a) the switches that could turn it off are unchanged,
        (b) no hero root exists in the document and (c) its host is still
@@ -305,8 +331,12 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   return {
     KEY: WATERMARK_KEY,
     PERSIST_KEY: WATERMARK_PERSIST_KEY,
+    STYLE_KEY: WATERMARK_STYLE_KEY,
+    EMBLEM_KEY: WATERMARK_EMBLEM_KEY,
     isOn: isWatermarkOn,
     isPersistOn: isWatermarkPersistOn,
+    isHatchOn: isWatermarkHatchOn,
+    isEmblemZh: isWatermarkEmblemZh,
     sync: syncWatermarkVisibility,
     detach,
     dispose,

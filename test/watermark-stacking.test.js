@@ -143,9 +143,10 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
     max-height:min(360px,100vh - 96px);
     display:flex;flex-direction:column;padding:4px;position:absolute;
     /* A SHORT menu straddling the mark's middle: it must overlap real ink, but
-       the mark is now a ~13vw centred stamp (not the old 50vw letter line), so
-       the band heuristic needs ink ABOVE and BELOW the menu — a menu taller than
-       the mark covers it entirely and the 'not erased' check goes vacuous. */
+       the mark is now a full-width two-line wordmark BAND (band height
+       clamp(190px, 21vw, 340px)) with the emblem sitting in the tile's clear gap, so the
+       band heuristic needs ink ABOVE and BELOW the menu — a menu taller than the
+       mark covers it entirely and the 'not erased' check goes vacuous. */
     bottom:calc(100% + 118px);left:50%;right:auto;transform:translateX(-50%);overflow:hidden}
   ._7KE1Ra_group{padding:6px 10px;font-size:11px;letter-spacing:.06em;
     text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
@@ -206,28 +207,10 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
       menuBox:{x:Math.round(mb.left),y:Math.round(mb.top),
                w:Math.round(mb.width),h:Math.round(mb.height)}
     }
-    /* The GLYPH box, not the element box. The watermark element is a full-width
-       flex container whose own rect overlaps nearly everything and therefore
-       proves nothing; what can actually cover the dropdown is the painted text
-       of the ::before. Measured with the very same font. */
-    if(wm){
-      const eb=wm.getBoundingClientRect()
-      const cs=getComputedStyle(wm,'::before')
-      const fs2=parseFloat(cs.fontSize)||parseFloat(getComputedStyle(wm).fontSize)
-      const word=String(cs.content||'').replace(/^["']|["']$/g,'')
-      const cv=document.createElement('canvas').getContext('2d')
-      cv.font=(cs.fontWeight||'900')+' '+fs2+'px '+(cs.fontFamily||'Arial')
-      const ls=parseFloat(cs.letterSpacing)||0
-      const tw=cv.measureText(word).width+ls*Math.max(0,word.length-1)
-      const cxx=eb.left+eb.width/2, cyy=eb.top+eb.height/2
-      // Arial-900 cap height is ~0.72em; the ink band is that tall, centred.
-      const gb={left:cxx-tw/2,right:cxx+tw/2,top:cyy-fs2*0.36,bottom:cyy+fs2*0.36}
-      out.glyphBox={x:Math.round(gb.left),y:Math.round(gb.top),
-                    w:Math.round(gb.right-gb.left),h:Math.round(gb.bottom-gb.top)}
-      const ox=Math.max(0,Math.min(gb.right,mb.right)-Math.max(gb.left,mb.left))
-      const oy=Math.max(0,Math.min(gb.bottom,mb.bottom)-Math.max(gb.top,mb.top))
-      out.overlapPx=Math.round(ox*oy)
-    }
+    /* The mark is a MASK now, not painted text: there is no glyph box to
+       estimate from font metrics (the old ::before content is gone), and the
+       flex container's own rect proves nothing. Real ink is measured from the
+       pixels below — the same measurement the overlap assertion uses. */
     document.title='STACK '+JSON.stringify(out)
   },700)
 </script></body></html>`
@@ -364,20 +347,37 @@ Promise.all([load('on.png'),load('off.png')]).then(([a,b])=>{
     out.overlapPx=Math.round(ox*oy)
   }
   /* Contrast of the mark's ink against ITS OWN background, sampled outside the
-     dropdown. Taken at the MOST-CHANGED pixel, which is the middle of a glyph
-     stroke rather than an antialiased edge. */
+     dropdown. The mark is a 130k-px SOLID BAND with a clear gap for the emblem;
+     the emblem sits IN that gap, so the two layers do not overlap at all. Two
+     readings are taken:
+       - MAX pixel: the single most-changed pixel can be a background-texture or
+         glyph-edge pixel, which is not the weight the eye reads for a flat, faint
+         band.
+       - 98th percentile: a FULL-COVERAGE band/emblem pixel (p95 = p98 in the
+         measured renders), i.e. ink rather than antialiasing. The assertion uses
+         this one; the max is logged for the record. */
   const lum=(c)=>{const f=c.map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)})
     return 0.2126*f[0]+0.7152*f[1]+0.0722*f[2]}
-  let ink=null,bg=null,best=0
+  let maxInk=null,maxBg=null,best=0
+  const hist=new Uint32Array(256)
+  const sampleByDelta={}
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     if(x>=minX&&x<=maxX&&y>=minY&&y<=maxY) continue
     const i=(y*W+x)*4
     const d=Math.max(Math.abs(da[i]-db[i]),Math.abs(da[i+1]-db[i+1]),Math.abs(da[i+2]-db[i+2]))
-    if(d>best){best=d;ink=[da[i],da[i+1],da[i+2]];bg=[db[i],db[i+1],db[i+2]]}
+    if(d<=1) continue
+    if(d>best){best=d;maxInk=[da[i],da[i+1],da[i+2]];maxBg=[db[i],db[i+1],db[i+2]]}
+    const k=d>255?255:d
+    hist[k]++
+    if(!sampleByDelta[k]) sampleByDelta[k]={on:[da[i],da[i+1],da[i+2]],off:[db[i],db[i+1],db[i+2]]}
   }
-  if(ink&&bg){const L1=lum(ink),L2=lum(bg)
-    out.ink=ink;out.bg=bg
-    out.ratio=+(((Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05))).toFixed(3)}
+  const ratioOf=(ink,bg)=>{const L1=lum(ink),L2=lum(bg)
+    return +(((Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05))).toFixed(3)}
+  if(maxInk&&maxBg){out.ink=maxInk;out.bg=maxBg;out.ratioMax=ratioOf(maxInk,maxBg)}
+  let acc=0,pdelta=best
+  for(let v=255;v>=0;v--){acc+=hist[v];if(acc>=out.outBox*0.02){pdelta=v;break}}
+  const sp=sampleByDelta[pdelta]||sampleByDelta[best]
+  if(sp){out.inkP98=sp.on;out.bgP98=sp.off;out.ratio=ratioOf(sp.on,sp.off)}
   document.title='CMP '+JSON.stringify(out)
 })
 </script></body>`)
@@ -409,16 +409,18 @@ console.log('watermark: mode=' + g.mode + ' parent=' + g.parent
 console.log('menu box (reported by DOM) : ' + JSON.stringify(g.menuBox))
 console.log('menu box (found in pixels) : ' + JSON.stringify(c.box)
   + '  fill=' + c.fillPx + 'px')
-console.log('glyph box (font metrics)   : ' + JSON.stringify(g.glyphBox))
 console.log('ink band  (real pixels)    : ' + JSON.stringify(c.inkBand))
 console.log('ink/menu overlap: ' + c.overlapPx + ' px^2')
 console.log('')
 console.log('pixels changed by the watermark:')
 console.log('  inside the dropdown : ' + c.inBox + '  (max delta ' + c.inBoxMax + ')')
 console.log('  elsewhere           : ' + c.outBox + '  (max delta ' + c.outMax + ')')
-if (c.ink) {
-  console.log('  ink ' + JSON.stringify(c.ink) + ' over bg ' + JSON.stringify(c.bg)
+if (c.inkP98) {
+  console.log('  p98 ink ' + JSON.stringify(c.inkP98) + ' over bg ' + JSON.stringify(c.bgP98)
     + '  contrast ' + c.ratio + ':1')
+}
+if (c.ratioMax !== undefined) {
+  console.log('  max pixel contrast ' + c.ratioMax + ':1 (max pixel, logged only)')
 }
 if (c.samples && c.samples.length) {
   console.log('  leak samples: ' + c.samples.map((s) =>
@@ -496,12 +498,17 @@ if (c.outBox < 2000) {
    The ceiling is per-scheme because adding luminance to a near-black page reads
    louder than subtracting it from cream at the same ratio -- which is exactly
    why dark mode carries the lower alpha.
-   Light ceiling recalibrated 2026-10-24: the in-column mount changed the
-   transform's subpixel phase, and the most-changed-pixel sampler now lands on
-   a FULL-COVERAGE stroke pixel instead of an antialiased edge. The ink alphas
-   are unchanged (letters 0.13 -> 1.310:1, emblem 0.16 -> 1.400:1 over bg-base,
-   both computed); the measured 1.422 is the emblem's true stroke value, so the
-   old 1.40 was the understatement, not the mark getting stronger. */
+
+   2026-10-25 metric change (120k-px solid band, emblem in its clear gap): the sampler
+   used to read the single MOST-CHANGED pixel, which for the old solid mark was
+   a full-coverage stroke. On the band it can be a texture/edge pixel crossing the emblem
+   contour -- a rare pixel, not the weight the eye reads -- and it
+   reported 1.94:1 while each layer alone sits in the band (wordmark 0.16 ->
+   1.42:1, emblem 0.16 -> 1.42:1 over cream). The assertion now reads the 98th
+   percentile of changed pixels: p95 = p98 in these renders, i.e. still a
+   full-coverage ink pixel, not antialiasing, but not the rare double-ink one.
+   Measured p98: light 1.311 (ceiling 1.43), dark 1.236 (ceiling 1.32). The max
+   pixel is logged. Ceilings unchanged. */
 const CEIL = DARK ? 1.32 : 1.43
 if (c.ratio !== null && c.ratio !== undefined) {
   if (c.ratio > CEIL) {

@@ -177,6 +177,18 @@ ${BROWSER_SETTINGS_SCOPE_SNIPPET}
       markEmblemWidth: mark ? getComputedStyle(mark, '::after').width : null,
       markEmblemRatio: mark ? getComputedStyle(mark, '::after').aspectRatio : null,
     }
+    /* --- 5. the emblem-language switch paints the OTHER embedded mask ---
+       Setting the preference must (a) move the body attribute the sheet keys on,
+       (b) swap the ::after mask to the Chinese data URI, and (c) do it on the
+       SAME node (an attribute flip, not a remount). Read the computed mask, not
+       the stylesheet text, so a build that forgot to embed --edge-emblem-zh
+       fails here instead of silently painting the English mark. */
+    var emblemMaskEn = out.markEmblemMask
+    __prefs.setField('watermarkEmblem', 'zh')
+    out.bodyEmblemAttr = document.body.getAttribute('data-edge-wm-emblem')
+    out.markEmblemMaskZh = mark ? getComputedStyle(mark, '::after').maskImage : null
+    out.markStillSameNode = mark === document.querySelector('[data-endfield-watermark]')
+    out.markEmblemMaskEn = emblemMaskEn
     document.title = 'FONTSCOPE ' + JSON.stringify(out)
   })
 </script></body></html>`
@@ -269,6 +281,23 @@ if (r.markMounted) {
   const wpx = parseFloat(r.markEmblemWidth)
   if (wpx > 40) pass('the emblem box has real width (' + r.markEmblemWidth + ')')
   else fail('the emblem box collapsed: ' + r.markEmblemWidth)
+
+  /* --- 5. the emblem-language switch, measured in the same render --- */
+  if (r.bodyEmblemAttr === 'zh') {
+    pass('watermarkEmblem=zh moves the body attribute the sheet keys on')
+  } else {
+    fail('watermarkEmblem=zh left body[data-edge-wm-emblem] at ' + JSON.stringify(r.bodyEmblemAttr))
+  }
+  const zhMask = String(r.markEmblemMaskZh || '')
+  const enMask = String(r.markEmblemMaskEn || '')
+  if (zhMask.includes('data:image/svg+xml;base64') && zhMask !== enMask) {
+    pass('the Chinese emblem resolves a DIFFERENT embedded mask (the ::after mask actually swapped)')
+  } else {
+    fail('the ::after mask did not swap to --edge-emblem-zh: zh=' + zhMask.slice(0, 60)
+      + ' en=' + enMask.slice(0, 60))
+  }
+  if (r.markStillSameNode) pass('the language switch flips the mask in place (no remount)')
+  else fail('the language switch re-created the watermark node — it should be a body-attribute flip')
 }
 
 console.log('')

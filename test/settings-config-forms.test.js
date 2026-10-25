@@ -689,10 +689,10 @@ async function main() {
     // bug ("the panel's state never moved off its boot defaults") and it cannot
     // be confused by anything in the render helper.
     const hooks = client.hooks()
-    /* 0-indexed: the 7th useState is `mode` (radius: enabled, wmOn, wmPersist,
-       loader, glass, texture, mode). Keep this list in step with the panel's
-       useState order in src/client/ui/settings/section.js. */
-    const radiusSlot = hooks[7]
+    /* 0-indexed: the 9th useState is `mode` (radius: enabled, wmOn, wmPersist,
+       wmHatch, wmEmblem, loader, glass, texture, darkTier, mode). Keep this list
+       in step with the panel's useState order in src/client/ui/settings/section.js. */
+    const radiusSlot = hooks[9]
     if (radiusSlot === 'round') {
       pass('panel hook state adopted the served radius (slot moved off its default)')
     } else {

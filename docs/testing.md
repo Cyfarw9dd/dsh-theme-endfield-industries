@@ -164,7 +164,7 @@ node test/settings-locale.test.js   # 跟随语言设置（zh/en 词典对齐 + 
 **`settings-config-forms.test.js`** 守的是 0.1.7-rc.1 换掉整套 settings API 之后最容易「看起来正常、其实没保存」的几处：它用假 `configForms` 服务（fixture 的 `configFormsStub`，只有被 `serve()` 过的命名空间才报 `status:'ready'`）驱动真实 client，断言
 
 - **两半的 entry id 一致**：`client.js` 的 `PREFS_ENTRY` == `index.js` 的 `SETTINGS_ENTRY` == `cordis.patch.yml` 里那一行的 `id`（命名空间是 entry id，任一处对不上就全程读不到）；
-- **Host `Config` 真的可编辑**：24 个字段齐全、无多余字段、**每个字段都带 `.volatile()`** 且默认值等于 `FIELD_DEFAULTS`——漏一个 volatile 就是 0.1.7 版的「设置保存不了」（该断言在拿不到 schemastery 的环境里自动跳过，CI 无 DSH 时不会误报——**也正因为会跳过，它没能在唯一要紧的环境里发现问题**：本机 web profile 恰好就是「拿不到可用的 schemastery」这台机器，于是这一整段断言空跑，`Config` 缺失一路绿灯。字段契约与选择顺序现由 `settings-config-fallback.test.js` 无条件断言）；
+- **Host `Config` 真的可编辑**：25 个字段齐全、无多余字段、**每个字段都带 `.volatile()`** 且默认值等于 `FIELD_DEFAULTS`——漏一个 volatile 就是 0.1.7 版的「设置保存不了」（该断言在拿不到 schemastery 的环境里自动跳过，CI 无 DSH 时不会误报——**也正因为会跳过，它没能在唯一要紧的环境里发现问题**：本机 web profile 恰好就是「拿不到可用的 schemastery」这台机器，于是这一整段断言空跑，`Config` 缺失一路绿灯。字段契约与选择顺序现由 `settings-config-fallback.test.js` 无条件断言）；
 - **被 served 的表单会被绑定并采纳**（存档里的 `radius: round` 直接落到 `<body>` 的 class）；
 - **entry id 是探测出来的**：只 served `include:theme-endfield` 时写入也落在那个拼写上；
 - **拒写与未就绪都算 held**：`set()` 解析为 `false`、或命名空间尚未 served 时，编辑不改变文档、也不假装保存；一旦拒写解除（下一次快照）或命名空间进入 served，held 编辑被自动补写；
@@ -243,7 +243,9 @@ node test/font-scope.test.js   # 第三方挂件字体 + 主题自有表面字�
 node test/watermark-stacking.test.js
 ```
 
-四条结论都做了反向对照（故意改坏必须报错）：改回 `z-index:1` → 报 9945 px 越界；深色 alpha 调回 `0.16` → 报 1.558:1 过强；alpha 降到 `0.004` → 同时报「不可见」与「低于感知下限」。
+四条结论都做了反向对照（故意改坏必须报错）：改回 `z-index:1` → 报 9945 px 越界；深色 alpha 调回 `0.16` → 报过强；alpha 降到 `0.004` → 同时报「不可见」与「低于感知下限」。
+
+> 2026-10-25 度量改为 **changed pixels 的 p98**：水印现在是「带空档的大字带 + 空档里的徽标」，两层不再重叠；最亮像素（max）可能落在底纹/字形边缘，会虚高；p98 仍是满覆盖的墨，测到亮 1.423 / 暗 1.236，档位上限 1.43 / 1.32 不变，max 仍打印备查。
 
 这个测试的两个方法论坑（不能用命中测试判断 `pointer-events:none` 的层叠、两版渲染必须只差 alpha）见[验证方法论](engineering-notes.md#命中测试判断不了-pointer-events-none-的层叠)。
 

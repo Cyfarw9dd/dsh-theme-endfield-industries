@@ -90,6 +90,10 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
         const [enabled, setEnabled] = R.useState(isEnabled())
         const [wmOn, setWmOn] = R.useState(watermark.isOn())
         const [wmPersist, setWmPersist] = R.useState(watermark.isPersistOn())
+        const [wmHatch, setWmHatch] = R.useState(watermark.isHatchOn())
+        /* The emblem-language row stores 'en' / 'zh' (a select, not a boolean):
+           keep the literal so the panel shows which variant is picked. */
+        const [wmEmblem, setWmEmblem] = R.useState(watermark.isEmblemZh() ? 'zh' : 'en')
         const [loaderOn, setLoaderOn] = R.useState(loader.isOn())
         const [glass, setGlass] = R.useState(motionSync.readGlass())
         const [texture, setTexture] = R.useState(motionSync.readTexture())
@@ -154,6 +158,8 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
             setEnabled(isEnabled())
             setWmOn(watermark.isOn())
             setWmPersist(watermark.isPersistOn())
+            setWmHatch(watermark.isHatchOn())
+            setWmEmblem(watermark.isEmblemZh() ? 'zh' : 'en')
             setLoaderOn(loader.isOn())
             setNotifyOn(toasts.isOn())
             setNotifyDone(toasts.isDoneOn())
@@ -307,6 +313,23 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
           if (next === watermark.isPersistOn()) return
           prefs.set(watermark.PERSIST_KEY, next ? '1' : '0')
           setWmPersist(next)
+          watermark.sync()
+        }
+        /* 字标样式：solid（默认，加载屏平灰）/ hatch（官网 /operator 斜纹）。 */
+        const setWmStyleValue = (value) => {
+          if (value !== 'solid' && value !== 'hatch') return
+          if ((prefs.get(watermark.STYLE_KEY) || 'solid') === value) return
+          prefs.set(watermark.STYLE_KEY, value)
+          setWmHatch(value === 'hatch')
+          watermark.sync()
+        }
+        /* 徽标版本：en（默认，Yue-plus 英文锁标）/ zh（PRTS 归档图描摹的中文锁标）。
+           只换水印空档里那枚倒三角徽标的掩码，字标带不动。 */
+        const setWmEmblemValue = (value) => {
+          if (value !== 'en' && value !== 'zh') return
+          if ((prefs.get(watermark.EMBLEM_KEY) || 'en') === value) return
+          prefs.set(watermark.EMBLEM_KEY, value)
+          setWmEmblem(value)
           watermark.sync()
         }
         const toggleWmPersist = () => {
@@ -690,6 +713,38 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
                 value: wmOn ? '1' : '0', ariaLabel: t('watermarkRow'),
                 options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
                 onChange: setWmValue,
+              })
+            ]),
+            row('watermark-style', true, [
+              R.createElement('span', { style: labelStyle },
+                t('wmStyleRow'),
+                R.createElement('span', { style: hintStyle }, t('wmStyleHint'))
+              ),
+              endfieldSelect({
+                value: wmHatch ? 'hatch' : 'solid', ariaLabel: t('wmStyleRow'),
+                options: [
+                  { value: 'solid', label: t('wmStyleSolid') },
+                  { value: 'hatch', label: t('wmStyleHatch') },
+                ],
+                disabled: !wmOn,
+                title: wmOn ? '' : t('wmStyleNeedWm'),
+                onChange: setWmStyleValue,
+              })
+            ]),
+            row('watermark-emblem', true, [
+              R.createElement('span', { style: labelStyle },
+                t('wmEmblemRow'),
+                R.createElement('span', { style: hintStyle }, t('wmEmblemHint'))
+              ),
+              endfieldSelect({
+                value: wmEmblem, ariaLabel: t('wmEmblemRow'),
+                options: [
+                  { value: 'en', label: t('wmEmblemEn') },
+                  { value: 'zh', label: t('wmEmblemZh') },
+                ],
+                disabled: !wmOn,
+                title: wmOn ? '' : t('wmEmblemNeedWm'),
+                onChange: setWmEmblemValue,
               })
             ]),
             row('watermark-persist', true, [

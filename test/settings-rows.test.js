@@ -209,12 +209,12 @@ const buttons = nodes.filter((n) => n.type === 'button')
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-style', 'watermark-emblem', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 24) pass('panel has all 24 setting rows')
-else fail('expected 23 rows, found ' + rows.length)
+if (rows.length === 26) pass('panel has all 26 setting rows')
+else fail('expected 26 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group
    container — so an unlisted new row shows up as a mismatch instead of vanishing. */
@@ -373,6 +373,29 @@ else fail('面板仍含「试听」——音频动作按钮应统一为「预览
   const step2 = driveSelect(() => rendered(), '背景水印', '开启')
   if (step2 === 'ok' && prefStore.get('watermark') === '1') pass('背景水印 重新开启写入 watermark=1')
   else fail('背景水印 re-enable wrote ' + JSON.stringify(prefStore.get('watermark')) + ' [' + step2 + ']')
+}
+/* --- 徽标版本 (2026-10-25): the watermark gap's inverted-triangle Industries
+   emblem swaps between the English and Chinese lockups. The row must DEFAULT to
+   the shipped English look, write the documented `watermarkEmblem` field on a
+   change, flip its own trigger's visible value, and switch back. The stylesheet
+   answers the value through body[data-edge-wm-emblem='zh'] (asserted in
+   check.js / decor.css); here we only prove the panel wiring. --- */
+{
+  prefStore.setField('watermark', '1')
+  prefStore.setField('watermarkEmblem', 'en')
+  const trig = selectTriggerOf(rendered(), '徽标版本')
+  if (trig && textOf(trig).includes('英文版')) pass('徽标版本默认英文版（既有外观）')
+  else fail('徽标版本 trigger should read 英文版 by default: ' + (trig ? textOf(trig) : '(none)'))
+  const toZh = driveSelect(() => rendered(), '徽标版本', '中文版')
+  if (toZh === 'ok' && prefStore.get('watermarkEmblem') === 'zh') pass('徽标版本 下拉写入 watermarkEmblem=zh')
+  else fail('徽标版本 dropdown wrote ' + JSON.stringify(prefStore.get('watermarkEmblem')) + ', expected "zh" [' + toZh + ']')
+  const trigZh = selectTriggerOf(rendered(), '徽标版本')
+  if (trigZh && textOf(trigZh).includes('中文版')) pass('watermarkEmblem=zh 后触发器翻转为「中文版」')
+  else fail('watermarkEmblem=zh 后触发器仍显示: ' + (trigZh ? textOf(trigZh) : '(none)'))
+  const toEn = driveSelect(() => rendered(), '徽标版本', '英文版')
+  if (toEn === 'ok' && prefStore.get('watermarkEmblem') === 'en') pass('徽标版本 切回英文版写入 watermarkEmblem=en')
+  else fail('徽标版本 switch-back wrote ' + JSON.stringify(prefStore.get('watermarkEmblem')) + ' [' + toEn + ']')
+  prefStore.setField('watermarkEmblem', 'en')
 }
 if (!/(typeof\s+localStorage|localStorage\.(getItem|setItem|removeItem))/.test(src)) pass('client.js has no localStorage storage-API calls')
 else fail('client.js still calls the localStorage storage API — migration incomplete')

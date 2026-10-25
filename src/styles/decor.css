@@ -225,22 +225,126 @@
         }
       }
 
-      /* The watermark is the Endfield Industries LOGO ALONE as a VECTOR mask
-         (Yue-plus/endfield_icons' vectorization of the official Hypergryph
-         mark; see scripts/build-emblem.js for provenance and the minimize
-         pass). No DOM text, no CSS glyphs — translators have nothing to
-         rewrite, and being vector it is crisp at every zoom and pixel ratio
-         (the previous pipeline was a raster mask capped at its 755px source).
-         DEFAULT mask mode (alpha) is deliberate: the paths' own alpha channel
-         IS the shape, so the default black fill paints the mark with
-         currentColor and both colour schemes stay automatic. The viewBox is
-         square (512x512), hence the 1/1 aspect. */
+      /* The watermark is the Endfield Industries LOGO in the CLEAR GAP of a
+         repeated giant ENDFIELD / INDUSTRIES wordmark band — the official
+         loading screen's composition (the flat-grey wordmark repeats with a wide
+         gap between instances and the emblem sits IN that gap; it never lies on
+         the letters). Both layers
+         are VECTOR alpha masks — no DOM text, no CSS glyphs, so
+         translators have nothing to rewrite and vector stays crisp at every
+         zoom / DPR:
+           1. the ENDFIELD / INDUSTRIES wordmark (::before) — the official site's
+              ENDFIELD background lettering on /operator, with the theme's
+              INDUSTRIES second line in the same face, same type size (equal cap
+              height, the owner's call) and a TIGHT 40px/1200 lead (≈4.8% of cap,
+              the loading screen's dense stack). The loading plate has no two-line
+              lockup; the composition is this theme's, every glyph is the
+              wordmark's. The REPEAT is CSS: the TILE (lockup + clear gap) is tiled in x
+              across the column, so the band bleeds past both edges like the
+              reference (a ~1190px column shows a tail, the gap with the emblem,
+              and a head — asymmetric, never a mirrored block);
+           2. the Endfield Industries emblem (::after) — Yue-plus/endfield_icons'
+              vectorization of the official Hypergryph mark, sitting in the
+              tile's clear gap at 62% of the host (~1.25 × the band height), the
+              in-game plate's asymmetric placement, its barcode band over the line
+              gap. Both layers use the SAME alpha per
+              scheme (灰阶一致: font and logo read as one gray).
+
+         EDGE FALLOFF. The host itself carries a horizontal fade (transparent at
+         the left edge to 14%, clear to 90%, then out by 100%) — asymmetric, the
+         plate's giant text dissolving toward the frame; the emblem sits at 62%,
+         inside the clear zone.
+
+         The wordmark is not an image on the site either: it is CSS text in
+         Novecento Sans Wide Bold (the operator page fills it with a hatch; the
+         loading plate paints it FLAT grey — a 4x pixel check of a letter against
+         the adjacent sky shows the diagonal weave sits on both, i.e. it is the
+         plate's global texture, not the glyphs). That typeface is commercial, so
+         the glyph outlines were traced once and checked in
+         (assets/endfield-wordmark.svg; provenance in scripts/build-wordmark.js)
+         and the stylesheet owns the ink: flat currentColor at the same alpha as
+         the emblem, no hatch. Both colour schemes stay automatic, and no font
+         file is shipped.
+
+         BAND SIZE. --edge-wm-band-h is the band's height; the reference's giant
+         text is roughly a third of the frame, hence clamp(190px, 21vw, 340px)
+         (≈300px at 1440). One wordmark instance is bandH × 6171/1754 ≈ 3.5 ×
+         bandH wide; the tile adds a clear gap of 3000 mask units (≈1.7 × bandH)
+         so the 1.25 × bandH emblem fits inside the gap with room to spare.
+
+         GREY CONSISTENCY. The wordmark and the emblem are both currentColor at
+         the SAME alpha per scheme (--edge-wm-wordmark-alpha /
+         --edge-wm-emblem-alpha, kept equal) — the in-game plate's font and logo
+         read as one flat grey, and the owner asked for exactly that. The emblem
+         no longer needs the soft-blur lift it used to carry over the old raster
+         mask. Values are measured in the schemes' own rules below. */
+      [data-endfield-watermark] {
+        --edge-wm-band-h: clamp(190px, 21vw, 340px);
+        --edge-wm-logo-h: calc(var(--edge-wm-band-h) * 1.25);
+        /* Edge falloff (the in-game plate lets the giant text dissolve toward the
+           frame): asymmetric, harder on the left, gentler on the right, so the
+           composition never reads as a centred, mirrored block. The emblem sits
+           at 62% width, inside the clear zone. */
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 90%, transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 90%, transparent 100%);
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+      }
+      /* Hero placement: the host's height IS the band height, so the follow loop
+         (watermark.js) centres the whole composition on the headline; both
+         layers are absolutely placed inside it. Off the hero page the host fills
+         the conversation column and the band/emblem centre vertically. */
+      [data-endfield-watermark='hero'] {
+        height: var(--edge-wm-logo-h);
+      }
+      [data-endfield-watermark]::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: var(--edge-wm-band-h);
+        transform: translateY(-50%);
+        /* SOLID ink, not a hatch: the in-game plate draws the giant wordmark as
+           flat grey (the diagonal weave you see across the reference is the
+           plate's global texture overlay, not the glyphs — a 4x pixel check of a
+           letter vs the adjacent sky shows the same weave in both). Solid ink is
+           also what makes 「字体和 logo 灰阶一致」 literal: both layers are
+           currentColor at the SAME alpha, so they read as one grey. */
+        background: currentColor;
+        opacity: var(--edge-wm-wordmark-alpha, var(--edge-wm-alpha));
+        /* ONE mask: the repeating TILE, which contains the lockup plus a WIDE
+           CLEAR GAP between instances. The in-game plate does not stamp the logo
+           on the giant letters — the wordmark repeats with a gap and the emblem
+           sits in it (reference: the left instance ends, the gap carries the
+           emblem, the next instance begins). The tile's gap centre is at 62% of
+           the tile and mask-position is also 62%, so the gap lands exactly at
+           the emblem's 62% anchor at any host width. No knockout/compositing is
+           needed: there is no ink under the emblem to cut. */
+        -webkit-mask-image: var(--edge-wordmark);
+        mask-image: var(--edge-wordmark);
+        -webkit-mask-size: auto 100%;
+        mask-size: auto 100%;
+        -webkit-mask-repeat: repeat-x;
+        mask-repeat: repeat-x;
+        -webkit-mask-position: 62% center;
+        mask-position: 62% center;
+      }
+      /* The emblem sits in the tile's clear gap at 62% (not on the letters), its
+         barcode line over the line gap. ::after paints above ::before. */
       [data-endfield-watermark]::after {
         content: '';
-        display: block;
-        width: 13vw;
-        max-width: 240px;
+        position: absolute;
+        /* 62% of the host — the same fraction as the tile's gap centre, so the
+           emblem sits in the clear gap between wordmark instances (not on the
+           letters), like the in-game plate. */
+        left: 62%;
+        top: 50%;
+        width: var(--edge-wm-logo-h);
         aspect-ratio: 1 / 1;
+        transform: translate(-50%, -50%);
         background: currentColor;
         opacity: var(--edge-wm-emblem-alpha, var(--edge-wm-alpha));
         -webkit-mask-image: var(--edge-emblem);
@@ -252,9 +356,52 @@
         -webkit-mask-position: center;
         mask-position: center;
       }
-      /* Without mask support the logo cannot paint at all; the watermark
+      /* 02 背景 › 徽标版本 = 中文版：ONLY the inverted-triangle emblem in the
+         tile's clear gap swaps to the Chinese 「终末地工业」 lockup
+         (assets/endfield-industries-logo-zh.svg, traced locally from the
+         PRTS-archived bitmaps — provenance in scripts/build-emblem.js). The
+         wordmark band, the 62% anchor, the size and the grey alpha stay exactly
+         as they are; only the ::after mask changes. The two lockups' ink aspect
+         ratios are near-identical (1.131 vs 1.156), so the shared square box +
+         `contain` renders them at the same apparent size. Default is `en`
+         (the shipped look) — this selector is the only difference. */
+      body[data-edge-wm-emblem='zh'] [data-endfield-watermark]::after {
+        -webkit-mask-image: var(--edge-emblem-zh);
+        mask-image: var(--edge-emblem-zh);
+      }
+      /* Optional HATCHED big letters (settings › 背景 › 字标样式 = 斜纹): the
+         official operator page's own -45deg stop recipe, at the same band-
+         relative tile the site uses (bandH/87). The default stays the solid
+         loading-plate grey above; this rule only overrides ink + opacity.
+         The tile mask (gap included) is untouched. */
+      body[data-edge-wm-style='hatch'] [data-endfield-watermark]::before {
+        background: linear-gradient(-45deg,
+          transparent 0 20.5805%,
+          currentColor 0 29.4195%,
+          transparent 0 70.5805%,
+          currentColor 0 79.4195%,
+          transparent 0);
+        background-size: calc(var(--edge-wm-band-h) / 87) calc(var(--edge-wm-band-h) / 87);
+        background-repeat: repeat;
+        background-position: 0 0;
+        opacity: var(--edge-wm-hatch-alpha, var(--edge-wm-wordmark-alpha));
+      }
+      /* 亮色侧加深斜纹：官网 8.84% 的墨带在亮纸上覆盖率太低（观感只有 ~3%
+         的灰），和实心 logo 的灰阶差得远。亮色沿用同一 -45° 角度与周期，但
+         把墨带加宽到 30%+30%（60% 覆盖），在 p98 不超 1.43 的前提下把平均
+         灰阶拉近实心字；暗色仍用官网原配方（0.11 的细线在近黑底上是合适的）。 */
+      body[data-edge-wm-style='hatch']:not([data-ds-dark-theme]) [data-endfield-watermark]::before {
+        background-image: linear-gradient(-45deg,
+          transparent 0 5%,
+          currentColor 0 35%,
+          transparent 0 55%,
+          currentColor 0 85%,
+          transparent 0);
+      }
+      /* Without mask support neither mark can paint at all; the watermark
          degrades to nothing rather than to a wrong-looking mark. */
       @supports not ((mask-image: none) or (-webkit-mask-image: none)) {
+        [data-endfield-watermark]::before,
         [data-endfield-watermark]::after { content: none; }
       }
       /* ---------- new-session hero brand mark ------------------------------

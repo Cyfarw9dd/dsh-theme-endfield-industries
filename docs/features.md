@@ -8,7 +8,7 @@
 
 历史内存风格：这些开关最初存浏览器 `localStorage`。由于浏览器存储按「协议 + 主机 + 端口」的 origin 隔离，而 DSH Desktop 每次启动都在 127.0.0.1 绑定一个**随机临时端口**，端口一变 origin 就变，上次保存的设置永远读不到，表现为「重启后恢复默认」。已改用 DSH 官方的用户设置命名空间：
 
-- **DSH 0.1.7-rc.1（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，24 个字段全部 `.volatile()`——0.1.7 只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。
+- **DSH 0.1.7-rc.1（当前）**：**Host 端（index.js）** 导出 schemastery `Config`，25 个字段全部 `.volatile()`——0.1.7 只把 volatile 字段投影成可编辑表单；命名空间就是本插件在 `cordis.patch.yml` 里那一行的 profile entry id（`theme-endfield`）。**浏览器端（client.js）** 用 `ctx.configForms.get('theme-endfield')` 读/写/订阅，值由 DSH 的设置服务写进 profile patch `<profile>/cordis.patch.yml`。另外 Host 会调用 `ctx.settings.configure({ auto: false }, ctx.fiber)` 告诉 DSH 本插件自带设置页，不要再自动生成一份。
 - **≤ 0.1.5-rc.2（旧宿主，已不支持）**：`ctx.settings.register` + `ctx.settingsScope`（`<dshHome>/settings.yaml`）一代已随 **DSH 0.2.0 兼容下限**一并移除（peerDependencies 钉住）；没有 `configForms` 服务的页面（独立页、进程内测试）回落内存默认值，开关当次会话有效、不落盘。
 
 落盘位置由 DSH 决定（`$DSH_HOME` 或 `~/.dsh/...`），与浏览器 origin/端口无关，因此在 **dsh web（浏览器、固定/默认端口）** 和 **DSH Desktop（随机临时端口）** 两种运行方式下设置都能正确持久化——它们跑的都是 127.0.0.1 loopback 页面，DSH 会把连接解析为 `host` 持久化模式。
@@ -35,6 +35,8 @@
 | | 工业底纹 | 完整（官网 /operator） | `texture` |
 | 02 背景 | 背景水印 | 开 | `watermark` |
 | | 水印保持显示 | 关 | `watermarkPersist` |
+| | 字标样式 | 实心 | `watermarkStyle` |
+| | 徽标版本 | 英文版 | `watermarkEmblem` |
 | 03 动画 | 启动加载动画 | 关 | `loader` |
 | 05 通知 | 工业风通知 | 开 | `notify` |
 | | 任务完成通知 | 开 | `notifyDone` |
@@ -60,7 +62,7 @@
 
 ### 设置面板的统一下拉（所有有值行的唯一控件）
 
-2026-10 起，面板里**每一个「有值」的行**——动效、玻璃、底纹、圆角、水印及其保持、加载动画、通知主开关与三触发、音频主开关与各槽位、开始音判定、诊断日志——都用同一下拉控件（endfield-select）；开/关语义的行就是「开启/关闭」两个选项。不参与统一的是**动作与读数**行：预览（音频各槽位同用此词，槽位由行名说明，不再单用「试听」）、刷新按钮，音量滑杆，音效目录输入框，音源读出。动作按钮与下拉触发器**同高 32px**（宽度随内容），由 btnStyleFor 统一给出。
+2026-10 起，面板里**每一个「有值」的行**——动效、玻璃、底纹、圆角、水印及其保持/字标样式/徽标版本、加载动画、通知主开关与三触发、音频主开关与各槽位、开始音判定、诊断日志——都用同一下拉控件（endfield-select）；开/关语义的行就是「开启/关闭」两个选项。不参与统一的是**动作与读数**行：预览（音频各槽位同用此词，槽位由行名说明，不再单用「试听」）、刷新按钮，音量滑杆，音效目录输入框，音源读出。动作按钮与下拉触发器**同高 32px**（宽度随内容），由 btnStyleFor 统一给出。
 
 控件不是发明的：形制照抄官网 /operator 页的筛选下拉（官方 Dropdown 组件，量测对照表见 [design-language.md § 设置面板统一下拉](design-language.md#设置面板统一下拉)）——深色铭牌触发器（值 + 官方圆形箭头），卡片里每行只有文字，选中行亮起斜纹灰底与左缘紫/绿信号条（官方的值图块与行图标不做）。菜单卡片画在 --dsw-menu-surface-fill 上（主题已映射为不透明纸面），选项行 role=menuitemradio + aria-checked；Escape 与点外收起、选中即写值。入场只动 opacity + transform（.15s，reduce 下关闭）。验证：node test/settings-rows.test.js（驱动路径=真实点击）、node check.js 第 5 节（官方形制钉值）、node test/palette-contrast.test.js 10b 段（铭牌与选中行对比度）。
 
@@ -107,13 +109,20 @@
 
 ### 背景水印（默认开启）
 
-`ENDFIELD` 大字水印，默认只在**新建会话页**（hero）显示，居中跟随标题。
+复刻游戏加载屏的「大字 + logo」版式：官网 `/operator` 背景那行 `ENDFIELD` 大字 + 主题自己的 `INDUSTRIES` 第二行（同字体、**同字高**、紧凑行距、**实心灰**），横向**重复成一条大字带**（实例之间留出空档）；终末地工业徽标落在**空档里**，不压在字上（参考里 logo 就坐在重复字之间的空档）。默认只在**新建会话页**（hero）显示，居中跟随标题。
 
+- **不是图片，也不是文字，是两张 alpha 掩码**：`::before` 是两行字标（官网背景字的矢量描摹 + 主题补的第二行），按列宽 `repeat-x`（左右露出相邻实例的头/尾，像参考那样出血）；`::after` 是徽标（默认 Yue-plus 英文矢量版，可切 PRTS 描摹的中文版），落在 tile 的**空档中心**（62% 列宽，游戏内的非对称构图）。字带掩码本身是带空档的重复 tile（空档中心固定在 62%），logo 在空档里——参考里 logo 就是重复字之间的空档位置，因此不需要挖空，也没有两层墨叠在一起。页面里没有字形文本节点，翻译器无从改写。
+- 行距：40px / 1200（≈4.8% cap），加载屏那种紧凑堆叠；tile 的 `mask-position: 62%` 与 logo 同锚点，空档落在 logo 处；左右露出的字头/字尾不对称。
+- **边缘渐变**：水印宿主本身带一条水平 fade（左缘 0→14% 淡入、右缘 90→100% 淡出，左右不对称），像游戏里大字向画面边缘溶解；徽标在 62% 处、落在净空区内。
+- **两种字标样式，设置里可切换**：`设置 › 背景 › 字标样式` —— **实心**（默认，加载屏的平灰，`currentColor`）或**斜纹**（官网 `/operator` 自己的 `-45°` stop 配方，周期 `bandH/87`）；斜纹用独立的 `--edge-wm-hatch-alpha`（亮 `0.16` / 暗 `0.11`）：亮色侧墨带加宽到 **60% 覆盖**（同一 `-45°` 角度/周期）以贴近 logo 的灰阶，实测 p98 亮 `1.423:1` / 暗 `1.155:1`；暗色保持官网细线配方。
+- **徽标语言，设置里可切换**：`设置 › 背景 › 徽标版本` —— **英文版**（默认，Yue-plus 矢量，`ENDFIELD INDUSTRIES` 锁标）或**中文版**（`终末地工业` 锁标，本地由 PRTS 归档 PNG 描摹，来源/描摹参数见 [credits.md](credits.md)）。**只换空档里那枚倒三角徽标**（`::after` 的 `--edge-emblem-zh`），上方 `ENDFIELD / INDUSTRIES` 大字带、62% 锚点、尺寸与灰阶 alpha 都不动；两版锁标的画幅比 1.131 / 1.156，共用同一个方形盒 + `contain`，切换后视觉大小几乎不变。实现上是 body 属性 `data-edge-wm-emblem="zh"` 选掩码，不重挂节点。
+- **灰阶对齐**：亮色侧字标 `--edge-wm-wordmark-alpha` 是 `0.16`、徽标 `--edge-wm-emblem-alpha` 是 `0.13`——徽标线稿在同等 alpha 下读得更深，字标加深一档后两层实际墨色对齐（p98 `1.423:1`，仍在上限内）；暗色侧两层共用 `0.09`。游戏加载屏的字就是平灰（截图里的斜向纹理是画面全局纹理，4× 像素比对过字形与相邻天空）。
+- 尺寸：字带高 `clamp(190px, 21vw, 340px)`（1440 视口 ≈300px，约占屏高 1/3）；徽标宽 = 字带高 × 1.25（空档 ≈1.7× 字带高，logo 落在里面）。
 - `pointer-events: none`，不拦截点击与文本选择；
-- 强度按配色分别声明为 CSS 变量 `--edge-wm-alpha`（亮 `0.13` / 暗 `0.085`），配色切换时自动重解析；
+- 强度分两套 CSS 变量：字标 `--edge-wm-wordmark-alpha`（亮 `0.16` / 暗 `0.09`）与徽标 `--edge-wm-emblem-alpha`（亮 `0.13` / 暗 `0.09`）；亮色侧字标刻意深一档（见上），配色切换自动重解析。对比度取 changed pixels 的 **p98**（max 会被底纹/字形边缘的稀有像素抬高），实测亮 `1.423:1` / 暗 `1.236:1`，都在水印档位内。
 - 深色模式取更低的 alpha：在近黑底上**叠加**亮度，比在纸底上**减去**亮度显得响得多。
 
-**防浏览器误翻译**：字形由 CSS `content`（`::before`）绘制，元素本身没有任何 DOM 文本节点，逐文本节点遍历的翻译器看不到它；另加 `translate="no"`、`class="notranslate"`、`lang="en"`、`aria-hidden="true"`。
+**防浏览器误翻译**：字形是矢量掩码（不是 DOM 文本、也不是 CSS `content`），页面里没有任何可遍历的文本节点；另加 `translate="no"`、`class="notranslate"`、`lang="en"`、`aria-hidden="true"` 作为声明式保险。
 
 ### 水印保持显示（默认关闭，需先开启背景水印）
 

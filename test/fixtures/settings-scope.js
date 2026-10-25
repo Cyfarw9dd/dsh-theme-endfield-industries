@@ -56,6 +56,8 @@ const FIELD_DEFAULTS = {
 
   watermark: '1',
   watermarkPersist: '0',
+  watermarkStyle: 'solid',
+  watermarkEmblem: 'en',
   loader: '0',
   notify: '1',
   notifyDone: '1',
@@ -89,6 +91,8 @@ const KEY_TO_FIELD = {
 
   'dsh-theme-endfield-watermark': 'watermark',
   'dsh-theme-endfield-watermark-persist': 'watermarkPersist',
+  'dsh-theme-endfield-watermark-style': 'watermarkStyle',
+  'dsh-theme-endfield-watermark-emblem': 'watermarkEmblem',
   'dsh-theme-endfield-loader': 'loader',
   'dsh-theme-endfield-notify': 'notify',
   'dsh-theme-endfield-notify-done': 'notifyDone',

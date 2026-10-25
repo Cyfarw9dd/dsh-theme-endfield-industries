@@ -79,7 +79,7 @@ const body = cssText
   }
 }
 {
-  const fences = ['EDGE_TEX_BEGIN', 'EMBLEM_MASK_BEGIN', 'HERO_LOGO_BEGIN']
+  const fences = ['EDGE_TEX_BEGIN', 'EMBLEM_MASK_BEGIN', 'WORDMARK_MASK_BEGIN', 'HERO_LOGO_BEGIN']
   let last = -1
   let okFences = true
   for (const f of fences) {
@@ -87,8 +87,8 @@ const body = cssText
     if (i < 0 || i < last) { okFences = false; break }
     last = i
   }
-  if (okFences) pass('generated fences present and ordered (EDGE_TEX / EMBLEM_MASK / HERO_LOGO)')
-  else fail('generated.css fences missing or out of order — run the build-*-texture/emblem/logo scripts')
+  if (okFences) pass('generated fences present and ordered (EDGE_TEX / EMBLEM_MASK / WORDMARK_MASK / HERO_LOGO)')
+  else fail('generated.css fences missing or out of order — run the build-*-texture/emblem/wordmark/logo scripts')
 }
 /* two bare blocks keep the nesting depth the downstream sections were written
    against (the old template-literal locator opened two else-blocks here) */
@@ -258,14 +258,34 @@ const body = cssText
     } else {
       fail('the client source references dsh-theme-endfield-palette — a palette field that no stylesheet answers to')
     }
-    // The embedded emblem mask must be a real SVG data URI INSIDE a body{} rule:
+    // The embedded emblem masks must be real SVG data URIs INSIDE ONE body{} rule:
     // a bare top-level declaration is invalid CSS whose error recovery eats the
-    // next rule's selector (this exact bug shipped once — the contour layer
-    // lost position:absolute and pushed the page down).
-    if (/body\s*\{\s*--edge-emblem:\s*url\("data:image\/svg\+xml;base64,[A-Za-z0-9+/=]{100,}"\)\s*;\s*\}/.test(stripped)) {
-      pass('emblem mask SVG data URI is embedded inside a body rule (see scripts/build-emblem.js)')
+    // next rule's selector (this exact bug shipped once — the contour layer lost
+    // position:absolute and pushed the page down). TWO masks ship now (English
+    // + Chinese language variants of the lockup); a second top-level declaration
+    // would reintroduce the same parser-eats-the-next-rule failure.
+    if (/body\s*\{\s*--edge-emblem:\s*url\("data:image\/svg\+xml;base64,[A-Za-z0-9+/=]{100,}"\)\s*;\s*--edge-emblem-zh:\s*url\("data:image\/svg\+xml;base64,[A-Za-z0-9+/=]{100,}"\)\s*;\s*\}/.test(stripped)) {
+      pass('emblem masks (en + zh) are embedded inside ONE body rule (see scripts/build-emblem.js)')
     } else {
-      fail('--edge-emblem must be declared as: body { --edge-emblem: url("data:image/svg+xml;base64,...") } — run node scripts/build-emblem.js')
+      fail('--edge-emblem and --edge-emblem-zh must be declared in one body rule: body { --edge-emblem: url("data:image/svg+xml;base64,..."); --edge-emblem-zh: url(...); } — run node scripts/build-emblem.js')
+    }
+    // The emblem-language switch must be answered by the live sheet: the client
+    // writes body[data-edge-wm-emblem] and the stylesheet swaps the ::after mask
+    // to --edge-emblem-zh. A missing rule would make the settings row write a
+    // preference nothing paints (the same "switch that does nothing" class of
+    // bug the palette-key guard above catches).
+    if (/data-edge-wm-emblem/.test(sources.concatClientJs())
+      && /body\[data-edge-wm-emblem='zh'\]\s*\[data-endfield-watermark\]::after\s*\{[^}]*var\(--edge-emblem-zh\)/.test(stripped)) {
+      pass('emblem language switch: client writes data-edge-wm-emblem and the sheet selects --edge-emblem-zh')
+    } else {
+      fail('the emblem-language switch is incomplete: client must set body[data-edge-wm-emblem] and the sheet must answer body[data-edge-wm-emblem=\'zh\'] [data-endfield-watermark]::after with var(--edge-emblem-zh)')
+    }
+    // The wordmark mask is spliced by its own script and must keep the same
+    // body{}-rule shape (see scripts/build-wordmark.js).
+    if (/body\s*\{\s*--edge-wordmark:\s*url\("data:image\/svg\+xml;base64,[A-Za-z0-9+/=]{100,}"\)\s*;\s*\}/.test(stripped)) {
+      pass('wordmark mask SVG data URI is embedded inside a body rule (see scripts/build-wordmark.js)')
+    } else {
+      fail('--edge-wordmark must be declared as: body { --edge-wordmark: url("data:image/svg+xml;base64,...") } — run node scripts/build-wordmark.js')
     }
     // The hero brand mark carries TWO masks, and they must sit in ONE body{} rule
     // for the same reason: two top-level declarations would each destroy the rule

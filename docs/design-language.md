@@ -114,7 +114,7 @@
 
 > **装饰性表面的对比度描述的是「有多抢眼」，不是可读性。** 水印永远在正文之后，它的对比度数值用来控制干扰强度。经验下限约 `1.06:1`，低于此形同不存在。
 >
-> **水印是工业徽标的矢量单标**：[Yue-plus/endfield_icons](https://github.com/Yue-plus/endfield_icons) 对官方 Hypergryph 徽标（条码字标 + 倒三角）的矢量重制版，构建时剥离编辑器元数据后以 SVG data URI 内嵌为 CSS mask（`assets/endfield-industries.svg`，来源与 sha256 见 `scripts/build-emblem.js` 头注；采用该第三方来源已经仓库所有者显式批准）。**alpha 模式** mask：path 自身的 alpha 通道就是形状，默认黑填充即可用 `currentColor` 上色，亮暗两模式自动适配；矢量意味着任何缩放与 DPR 下都硬边清晰（此前的官方位图掩码受 755px 源图上限约束）。水印不含任何文字（ENDEFIELD 大字已移除），翻译器无从改写。声明必须在 `body { }` 规则内——顶层裸声明会让 CSS 解析器吞掉下一条规则的选择器（已用 check.js 断言钉死）。
+> **水印是「大字带 + 空档里的徽标」**（复刻游戏加载屏版式）：`ENDFIELD / INDUSTRIES` 两行字标（同字高、40px/1200 紧凑行距）横向重复成一条带，字带是带空档的重复 tile（空档中心 62%），工业徽标（1.25 × 字带高）落在**空档里**（不是压在字上，游戏内的非对称构图）；亮色侧字标刻意比徽标深一档（0.16 vs 0.13，徽标线稿在同等 alpha 下读得更深），暗色侧两层共用 0.09（**灰阶对齐**）；字标样式（实心 / 斜纹，斜纹＝官网 `-45°` 配方；亮色侧加密到接近 logo 的灰）可在设置里切换；空档里那枚徽标的**文字语言**（英文 `ENDFIELD INDUSTRIES` / 中文 `终末地工业`）也可切换，两版是同一套标识的不同语言锁标、只换 `::after` 的掩码，画幅比 1.131 / 1.156 近似所以大小不变；水印宿主带一条左右不对称的水平 fade（左 0→14%、右 90→100%），大字向画面边缘溶解。字标描摹自官网 `/operator` 背景字自身（官网用商业字体 Novecento Sans Wide Bold 以 CSS 文本绘制；字体不随包分发，只检查入一次渲染图与描摹结果，见 `scripts/build-wordmark.js`）；`INDUSTRIES` 行是主题用同字体、同字高补排的第二行，官网没有这版两行排版。徽标是 [Yue-plus/endfield_icons](https://github.com/Yue-plus/endfield_icons) 对官方标识的矢量重制（`assets/endfield-industries.svg`，来源与 sha256 见 `scripts/build-emblem.js` 头注；采用已获所有者批准）；中文版锁标 `assets/endfield-industries-logo-zh.svg` 是本地对 PRTS 归档位图的描摹（取用已获所有者批准，来源/描摹参数见 `docs/credits.md`）。两张都是 **alpha 模式** SVG mask，data URI 内嵌；**实心 `currentColor`** 填充 + 透明度由样式表给（加载屏的字是平灰，截图里的斜向纹理是画面全局纹理），亮暗自动适配，矢量任意缩放/DPR 硬边。页面无字形文本节点，翻译器无从改写。对比度按 changed pixels 的 **p98** 度量（max 是底纹/边缘的稀有像素）；声明必须写在 `body { }` 规则内（check.js 钉死）。
 
 ---
 

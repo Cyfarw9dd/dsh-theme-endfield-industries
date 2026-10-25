@@ -27,6 +27,10 @@ export const PREFS_FIELD_DEFAULTS = {
   motion: 'signal',
   watermark: '1',
   watermarkPersist: '0',
+  watermarkStyle: 'solid',
+  /* 水印空档里那枚倒三角徽标的语言：en（英文版，Yue-plus 矢量，默认＝既有外观）
+     / zh（中文版，PRTS 归档图本地描摹）。只换徽标，不动上方的字标带。 */
+  watermarkEmblem: 'en',
   loader: '0',
   /* 通知模块：主开关 + 三触发（默认随主开关开启）。 */
   notify: '1',
@@ -91,6 +95,8 @@ export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-motion': 'motion',
   'dsh-theme-endfield-watermark': 'watermark',
   'dsh-theme-endfield-watermark-persist': 'watermarkPersist',
+  'dsh-theme-endfield-watermark-style': 'watermarkStyle',
+  'dsh-theme-endfield-watermark-emblem': 'watermarkEmblem',
   'dsh-theme-endfield-loader': 'loader',
   'dsh-theme-endfield-notify': 'notify',
   'dsh-theme-endfield-notify-done': 'notifyDone',

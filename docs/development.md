@@ -34,7 +34,7 @@ CHROME_PATH=/usr/bin/chromium-browser npm test  # 全量（含真实渲染）
 | --- | --- | --- | --- |
 | `scripts/build-client.js` | `src/client/index.js` + `src/styles/*.css`（清单见 `scripts/lib/sources.js`） | 根 `client.js`（tsdown 单文件产物） | `--check`（在 npm run check / npm test 链首） |
 | `scripts/build-sounds.js` | `lib/slots.js` + `lib/tone.js` | `sounds/*.wav` | `--check`（在 npm test 链内） |
-| `scripts/build-emblem.js` | `assets/endfield-industries.svg` | `src/styles/generated.css` 的 EMBLEM_MASK 围栏区 | `--check`（在 npm test 链内） |
+| `scripts/build-emblem.js` | `assets/endfield-industries.svg`（英文版）+ `assets/endfield-industries-logo-zh.svg`（中文版，PRTS 归档图描摹） | `src/styles/generated.css` 的 EMBLEM_MASK 围栏区（一个 body 规则里的 `--edge-emblem` / `--edge-emblem-zh`） | `--check`（在 npm test 链内） |
 | `scripts/build-logo.js` | `assets/`（hero 徽标矢量） | `src/styles/generated.css` 的 HERO_LOGO 围栏区 | `--check`（在 npm test 链内） |
 | `scripts/build-texture.js` | `assets/`（官方纹理/箭头字节） | `src/styles/generated.css` 的 EDGE_TEX 围栏区 | `--check`（在 npm test 链内） |
 

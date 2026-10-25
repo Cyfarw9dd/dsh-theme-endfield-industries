@@ -39,7 +39,7 @@
 const BROWSER_SETTINGS_SCOPE_SNIPPET = `
 var __endfieldFieldDefaults = {
   enabled:'1', radius:'square', glass:'off', motion:'signal', watermark:'1',
-  watermarkPersist:'0', loader:'0', watermark:'0', watermarkPersist:'0',
+  watermarkPersist:'0', watermarkStyle:'solid', watermarkEmblem:'en', loader:'0',
   audioEnabled:'0', audioVolume:'100', audioBoot:'1', audioTurnStart:'1', audioTurnDone:'1',
   audioAttention:'1', audioTurnFail:'1', audioDebounceMs:'2500', audioSoundDir:'',
   audioHumanOnly:'1', audioDiag:'0'
@@ -50,6 +50,8 @@ var __endfieldKeyToField = {
   'dsh-theme-endfield-radius':'radius',
   'dsh-theme-endfield-watermark':'watermark',
   'dsh-theme-endfield-watermark-persist':'watermarkPersist',
+  'dsh-theme-endfield-watermark-style':'watermarkStyle',
+  'dsh-theme-endfield-watermark-emblem':'watermarkEmblem',
   'dsh-theme-endfield-loader':'loader', 'dsh-theme-endfield-watermark':'watermark',
   'dsh-theme-endfield-watermark-persist':'watermarkPersist',
   'dsh-theme-endfield-audio-enabled':'audioEnabled', 'dsh-theme-endfield-audio-volume':'audioVolume',

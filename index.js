@@ -114,6 +114,8 @@ const FIELD_DEFAULTS = {
   radius: 'square',         // 主题圆角 —— 直角
   watermark: '1',           // 背景水印 —— default on
   watermarkPersist: '0',    // 水印保持显示 —— default off
+  watermarkStyle: 'solid',  // 水印字标样式 —— solid(实心,加载屏平灰) / hatch(官网 /operator 斜纹)；默认实心
+  watermarkEmblem: 'en',    // 水印空档徽标语言 —— en(英文版, Yue-plus 矢量, 默认) / zh(中文版, PRTS 归档图描摹)；只换徽标不改字标带
   loader: '0',              // 启动加载动画 —— default off
   // --- 工业风通知 ---------------------------------------------------------
   notify: '1',              // 通知主开关 —— default on
