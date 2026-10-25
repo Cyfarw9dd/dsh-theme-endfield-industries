@@ -18,6 +18,7 @@ import { createAttentionWatch } from './notify/attention.js'
 import { createTurnWatch } from './notify/turn-watch.js'
 import { createMotionSync } from './motion/sync.js'
 import { createSettingsSection } from './ui/settings/section.js'
+import { createThemeScheme } from './prefs/scheme.js'
 import { THEME_TOKEN_OVERRIDES } from './ui/tokens.js'
 /**
  * dsh-theme-endfield — Edge Intelligence Theme (browser client bundle)
@@ -86,6 +87,11 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const theme = services.theme()
     if (theme === undefined) return
     if (typeof window !== 'undefined') window.__dshThemeEndfieldApplied = true
+    /* The app palette preference (light/dark/system) belongs to the theme
+       service and is shared with DSH's General › 外观 row; this bridge only
+       reads/writes/subscribes to it so the Endfield panel can offer the same
+       switch without storing a second copy. See prefs/scheme.js. */
+    const scheme = createThemeScheme({ theme, services })
 
     /* ---------- Durable preference store (replaces localStorage) ----------
        The entry is only the composition root now: prefs/store.js owns the
@@ -279,6 +285,7 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       services,
       prefs,
       themeApi: { isEnabled, mount, unmount, enabledKey: ENABLED_KEY },
+      scheme,
       motionSync,
       watermark,
       loader,

@@ -4,7 +4,9 @@
  * The theme consumes six upstream seams (see docs/compatibility.md §二): the
  * `theme` service, the settings transport (`configForms` — two generations, the
  * newer one also reachable as `ctx.configForms`), `sessions`, `locale`, `slots`,
- * and `ctx.effect` for run-scoped disposal. Keeping every lookup in one adapter
+ * and `ctx.effect` for run-scoped disposal — plus the theme service's
+ * `theme/change` event, which is forwarded here for the shared light/dark/system
+ * preference. Keeping every lookup in one adapter
  * means a DSH API change is a change here, not a hunt through 4k lines, and it
  * gives tests a seam to stub services without faking a whole cordis context.
  *
@@ -61,5 +63,21 @@ export function createServices(ctx) {
 
     /** Register a run-scoped disposer (the cordis contract). */
     effect: (fn) => ctx.effect(fn),
+
+    /** Subscribe to the theme service's `theme/change` event — the DSH palette
+     *  preference (light/dark/system) is SHARED with General › Appearance, so a
+     *  switch flipped over there must reach this theme's panel too. It is not a
+     *  service lookup but an event on the owning context; optional exactly like
+     *  the theme service itself (older hosts and the in-process test doubles
+     *  have no event bus), in which case nothing is registered. */
+    onThemeChange: (listener) => {
+      try {
+        if (typeof ctx.on !== 'function') return () => {}
+        const dispose = ctx.on('theme/change', listener)
+        return typeof dispose === 'function' ? dispose : () => {}
+      } catch (e) {
+        return () => {}
+      }
+    },
   }
 }

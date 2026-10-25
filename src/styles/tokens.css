@@ -177,7 +177,7 @@
                                                        altered single-storey
                                                        glyph)
            [data-endfield-watermark] the ENDFIELD wordmark
-           .endfield-settings      the 「终末地主题设置」 panel root
+           .endfield-settings      the 「终末地工业主题设置」 panel root
          Deliberately NOT on body: the app renders its UI root font from
          var(--dsw-font-family) on body, and a body font-family here would
          re-break every installed widget exactly as the old :root override did. */

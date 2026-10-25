@@ -13,7 +13,7 @@
  */
 export const ENDFIELD_NS = 'settings.theme-endfield'
 export const LOCALE_ZH = {
-  nav: '终末地主题设置',
+  nav: '终末地工业主题设置',
   /* The separator between a row label and its value. It is a DICTIONARY KEY, not
      a literal: Chinese uses the full-width '：' with no trailing space, English
      the ASCII ': '. Hardcoding the full-width form (as the first version did) put
@@ -27,6 +27,13 @@ export const LOCALE_ZH = {
   groupAnim: '动画',
   groupNotify: '通知',
   themeRow: '终末地主题',
+  /* 外观：与 DSH 通用设置 › 外观 是同一个 preference（浅色/深色/跟随系统），
+     两处实时同步；文案与通用设置那一行同名，避免用户以为是两个开关。 */
+  schemeRow: '外观',
+  schemeHint: '与「通用设置 › 外观」是同一个开关：这里切了那边同步，反之亦然',
+  schemeLight: '浅色',
+  schemeDark: '深色',
+  schemeSystem: '跟随系统',
   radiusRow: '主题圆角',
   radiusRound: '圆角',
   radiusSquare: '微倒角',
@@ -125,7 +132,7 @@ export const LOCALE_ZH = {
   audioRefresh: '刷新状态',
 }
 export const LOCALE_EN = {
-  nav: 'Endfield Theme',
+  nav: 'Endfield Industries Theme Settings',
   sep: ': ',
   /* Capitalised: these are VALUES in a "Label: Value" readout, not sentence
      fragments, and the screenshot showed lowercase reading like a typo there. */
@@ -136,6 +143,13 @@ export const LOCALE_EN = {
   groupAnim: 'ANIMATION',
   groupNotify: 'NOTIFY',
   themeRow: 'Endfield theme',
+  /* Same preference as General › Appearance (light/dark/system), synced live in
+     both directions; same label so it reads as one switch in two places. */
+  schemeRow: 'Appearance',
+  schemeHint: 'The same switch as General › Appearance: a change here updates it there, and vice versa',
+  schemeLight: 'Light',
+  schemeDark: 'Dark',
+  schemeSystem: 'System',
   radiusRow: 'Corners',
   radiusRound: 'Rounded',
   radiusSquare: 'Micro-round',

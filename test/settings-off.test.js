@@ -1,5 +1,5 @@
 /**
- * settings-off.test.js — with the theme switched OFF, the 「终末地主题设置」 panel
+ * settings-off.test.js — with the theme switched OFF, the 「终末地工业主题设置」 panel
  * must stay readable.
  *
  * The panel is the one place a user can turn the theme back on, so it must

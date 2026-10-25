@@ -2,7 +2,7 @@
 
 设置项的行为、默认值、字段名与边界情况。设计取值见 [design-language.md](design-language.md)，实现细节见 [engineering-notes.md](engineering-notes.md)。
 
-设置入口：**设置 › 终末地主题设置**。全部文案跟随 DSH 的语言设置（中/英）即时切换，无需刷新。
+设置入口：**设置 › 终末地工业主题设置**。全部文案跟随 DSH 的语言设置（中/英）即时切换，无需刷新。
 
 ## 持久化方式（不再用 localStorage）
 
@@ -13,11 +13,11 @@
 
 落盘位置由 DSH 决定（`$DSH_HOME` 或 `~/.dsh/...`），与浏览器 origin/端口无关，因此在 **dsh web（浏览器、固定/默认端口）** 和 **DSH Desktop（随机临时端口）** 两种运行方式下设置都能正确持久化——它们跑的都是 127.0.0.1 loopback 页面，DSH 会把连接解析为 `host` 持久化模式。
 
-> **升级提示**：0.1.7-rc.1 废弃了 `settings.yaml`（启动时改名为 `settings.yaml.imported`），且其内置迁移只认少数几个段落名，旧的 `dsh-theme-endfield` 段落不在其中——**升级后请在「设置 › 终末地主题设置」里重设一次**。旧值仍可在 `settings.yaml.imported` 中手工对照。详见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)。
+> **升级提示**：0.1.7-rc.1 废弃了 `settings.yaml`（启动时改名为 `settings.yaml.imported`），且其内置迁移只认少数几个段落名，旧的 `dsh-theme-endfield` 段落不在其中——**升级后请在「设置 › 终末地工业主题设置」里重设一次**。旧值仍可在 `settings.yaml.imported` 中手工对照。详见 [engineering-notes.md § DSH 0.1.7-rc.1 换掉了整套 settings API](engineering-notes.md#dsh-017-rc1-换掉了整套-settings-api-v110-已跟进)。
 
 ### 暗色档位（下拉：舒适/微暖工业灰/官网中性，默认舒适）
 
-2026-10-24 起，暗色模式的底色梯度做成三档可切（设置 › 终末地主题设置 › 01 主题），**切换即时生效、不需要刷新**：实现是 tokens.css 的 `--edge-dark-*` 八变量梯度 + `body[data-endfield-dark]` 属性，tokens.js 覆盖表暗色列全部 `var()` 引用（与 brand-primary 同机制，palette-resolve.test.js 钉住）。取值与对比度全表见 [notes/dark-palette-research.md](notes/dark-palette-research.md)：**舒适**＝C 档（默认，VS Code 长读档，正文 12.04:1，底 `#1c1c1b`）；**微暖工业灰**＝B 档（14.50:1，底 `#161615`，与亮色暖纸墨成对）；**官网中性**＝A 档（13.78:1，底 `#191919` 与官网主灰同值）。旧的 `#101110` 绿味暗色（17.30:1）随本功能移除。亮色侧不受影响。
+2026-10-24 起，暗色模式的底色梯度做成三档可切（设置 › 终末地工业主题设置 › 01 主题），**切换即时生效、不需要刷新**：实现是 tokens.css 的 `--edge-dark-*` 八变量梯度 + `body[data-endfield-dark]` 属性，tokens.js 覆盖表暗色列全部 `var()` 引用（与 brand-primary 同机制，palette-resolve.test.js 钉住）。取值与对比度全表见 [notes/dark-palette-research.md](notes/dark-palette-research.md)：**舒适**＝C 档（默认，VS Code 长读档，正文 12.04:1，底 `#1c1c1b`）；**微暖工业灰**＝B 档（14.50:1，底 `#161615`，与亮色暖纸墨成对）；**官网中性**＝A 档（13.78:1，底 `#191919` 与官网主灰同值）。旧的 `#101110` 绿味暗色（17.30:1）随本功能移除。亮色侧不受影响。
 
 下表「字段」（缩写）就是存储里的字段名：0.1.7-rc.1 起是 profile patch 里 Config 的 volatile 路径，旧世代是 `settings.yaml` 段落里的键，两者同名（都等价于旧 localStorage 键名的尾部）。
 
@@ -28,6 +28,7 @@
 | 组 | 开关 | 默认 | 命名空间字段 |
 | --- | --- | --- | --- |
 | 01 主题 | 终末地主题 | 开 | `enabled`（旧键 `dsh-theme-endfield-enabled`）|
+| | 外观 | 浅色 | `ui-theme.preference`（DSH 主题服务，非本插件字段；与「通用设置 › 外观」共享）|
 | | 主题圆角 | 微倒角 | `radius` |
 | | 磨砂玻璃 | 关 | `glass` |
 | | 按钮动效 | 开启 | `motion` |
@@ -65,6 +66,17 @@
 2026-10 起，面板里**每一个「有值」的行**——动效、玻璃、底纹、圆角、水印及其保持/字标样式/徽标版本、加载动画、通知主开关与三触发、音频主开关与各槽位、开始音判定、诊断日志——都用同一下拉控件（endfield-select）；开/关语义的行就是「开启/关闭」两个选项。不参与统一的是**动作与读数**行：预览（音频各槽位同用此词，槽位由行名说明，不再单用「试听」）、刷新按钮，音量滑杆，音效目录输入框，音源读出。动作按钮与下拉触发器**同高 32px**（宽度随内容），由 btnStyleFor 统一给出。
 
 控件不是发明的：形制照抄官网 /operator 页的筛选下拉（官方 Dropdown 组件，量测对照表见 [design-language.md § 设置面板统一下拉](design-language.md#设置面板统一下拉)）——深色铭牌触发器（值 + 官方圆形箭头），卡片里每行只有文字，选中行亮起斜纹灰底与左缘紫/绿信号条（官方的值图块与行图标不做）。菜单卡片画在 --dsw-menu-surface-fill 上（主题已映射为不透明纸面），选项行 role=menuitemradio + aria-checked；Escape 与点外收起、选中即写值。入场只动 opacity + transform（.15s，reduce 下关闭）。验证：node test/settings-rows.test.js（驱动路径=真实点击）、node check.js 第 5 节（官方形制钉值）、node test/palette-contrast.test.js 10b 段（铭牌与选中行对比度）。
+
+### 外观（浅色 / 深色 / 跟随系统，与通用设置共享）
+
+2026-10-25 起，01 主题分组里紧跟总开关的一行是**外观**：浅色 / 深色 / 跟随系统三档下拉。它不是一个新开关，而是把 DSH 自己的主题偏好（`ui-theme.preference`）搬进了本主题的设置页——**同一个 preference 可以在两个地方切**：
+
+- **通用设置 › 外观**（DSH 自带那一行，浅色/深色/跟随系统三块）；
+- **终末地工业主题设置 › 01 主题 › 外观**（本行）。
+
+两处写的是同一个值，谁切了另一边都**即时同步**（不是「重新打开设置才更新」）：浏览器半 `src/client/prefs/scheme.js` 只做三件事——`theme.getTheme().preference` 读、`theme.setTheme(value)` 写（持久化仍由 DSH 主题服务自己负责，不进本插件的 `theme-endfield` 字段）、`services.onThemeChange` 订阅 `theme/change`。因此没有「本插件又存一份」的分叉，`跟随系统` 也能原样表达；面板卸载时订阅随 `ctx.effect` / React cleanup 一起释放。主题服务缺失（独立页、旧宿主、进程内测试）时读回退浅色、写入被拒绝，不会抛错。
+
+验证：`node test/settings-rows.test.js`（行存在、默认浅色、三档都写进 theme 服务）、`node test/settings-config-forms.test.js` 第 13 节（通用设置侧改值经 `theme/change` 实时更新本行；本行不往 `theme-endfield` 表单写）。
 
 ### 终末地主题（总开关）
 

@@ -214,20 +214,39 @@ function bootClient(options) {
   if (loaded === null) throw new Error('client.js never registered with __ModuleLoader__')
 
   const mod = loaded.factory(() => null)
+  /* The app palette preference is read from the theme service, NOT from a form
+     field (General › 外观 writes the same value). Tests that exercise the 外观
+     row pass a themed stub carrying getTheme/setTheme; every other scenario is
+     fine with the no-op stub, whose missing methods make the row fall back to
+     浅色 without throwing. */
+  const themeListeners = []
+  const theme = opts.theme || { overrideTokens: () => () => {} }
   const ctx = {
     get(n) {
-      if (n === 'theme') return { overrideTokens: () => () => {} }
+      if (n === 'theme') return theme
       if (n === 'slots') return slots
       if (n === 'configForms') return opts.configForms
       return undefined
     },
     effect(fn) { const d = fn(); if (typeof d === 'function') disposers.push(d); return () => {} },
+    on(name, listener) {
+      if (name !== 'theme/change') return () => {}
+      themeListeners.push(listener)
+      return () => {
+        const i = themeListeners.indexOf(listener)
+        if (i >= 0) themeListeners.splice(i, 1)
+      }
+    },
   }
   mod.apply(ctx)
 
   return {
     ctx,
     classList,
+    theme,
+    /** Listeners the panel registered on `theme/change` (what General › 外观
+        flipping the preference would notify). */
+    themeListeners,
     /** Render the panel, running any pending effects exactly once after the
         first render (the mount pass), like React does. Effects are only run when
         they were registered by THIS render, so a re-render cannot re-subscribe. */
@@ -316,6 +335,23 @@ function panelRadiusSelect(client) {
       },
     },
   }
+}
+/** Drive any unified dropdown by its row label, the way a user does. Returns
+    'ok' or the failing step (same contract as panelRadiusWrite). */
+function panelSelectWrite(client, ariaLabel, optionText) {
+  const t1 = client.render()
+  if (!t1) return 'tree'
+  const trigger = walk(t1).find((n) => n.type === 'button' && n.props
+    && n.props['aria-label'] === ariaLabel && n.props['aria-haspopup'] === 'menu')
+  if (!trigger) return 'trigger'
+  trigger.props.onClick()
+  const t2 = client.render()
+  const menu = walk(t2).find((n) => n.props && n.props.role === 'menu' && n.props['aria-label'] === ariaLabel)
+  if (!menu) return 'menu'
+  const option = walk(menu).find((n) => n.props && n.props.role === 'menuitemradio' && textOf(n) === optionText)
+  if (!option) return 'option:' + optionText
+  option.props.onClick()
+  return 'ok'
 }
 
 async function main() {
@@ -689,10 +725,11 @@ async function main() {
     // bug ("the panel's state never moved off its boot defaults") and it cannot
     // be confused by anything in the render helper.
     const hooks = client.hooks()
-    /* 0-indexed: the 9th useState is `mode` (radius: enabled, wmOn, wmPersist,
-       wmHatch, wmEmblem, loader, glass, texture, darkTier, mode). Keep this list
-       in step with the panel's useState order in src/client/ui/settings/section.js. */
-    const radiusSlot = hooks[9]
+    /* 0-indexed: the 10th useState is `mode` (radius: enabled, scheme, wmOn,
+       wmPersist, wmHatch, wmEmblem, loader, glass, texture, darkTier, mode).
+       Keep this list in step with the panel's useState order in
+       src/client/ui/settings/section.js. */
+    const radiusSlot = hooks[10]
     if (radiusSlot === 'round') {
       pass('panel hook state adopted the served radius (slot moved off its default)')
     } else {
@@ -910,6 +947,57 @@ async function main() {
       pass('(' + (Object.keys(expect).length - checked) + ' of ' + Object.keys(expect).length
         + ' rows produced no write against this stub — not asserted)')
     }
+  }
+  /* =======================================================================
+     13. 外观 — ONE palette preference, TWO places to switch it.
+
+     Dark mode is switchable from DSH's General › 外观 row and from this
+     theme's own section. Both must write the SAME theme-service preference
+     (never a second stored field), and flipping it in either place must update
+     the other live: this row subscribes to theme/change, so General settings
+     does not leave it stale until the dialog is re-opened. The theme stub here
+     reproduces the service contract (getTheme / setTheme + theme/change).
+     ======================================================================= */
+  {
+    let client = null
+    const theme = {
+      preference: 'light',
+      overrideTokens: () => () => {},
+      getTheme() { return { preference: this.preference } },
+      setTheme(id) {
+        const next = id === 'light' || id === 'dark' || id === 'system' ? id : 'light'
+        if (next === this.preference) return
+        this.preference = next
+        /* Same emission path a General-settings click takes. */
+        for (const listener of (client ? client.themeListeners.slice() : [])) listener({ preference: next })
+      },
+    }
+    const stub = configFormsStub({ 'theme-endfield': {} }, { served: ['theme-endfield'] })
+    client = bootClient({ configForms: stub.service, theme })
+
+    const trig = panelSelectTrigger(client, '外观')
+    if (trig && textOf(trig).includes('浅色')) pass('外观 row reads the theme service preference (浅色 by default)')
+    else fail('外观 row should read the theme preference, got: ' + (trig ? textOf(trig) : '(no trigger)'))
+
+    const toDark = panelSelectWrite(client, '外观', '深色')
+    if (toDark === 'ok' && theme.preference === 'dark') pass('外观 row writes 深色 through theme.setTheme')
+    else fail('外观 row did not write the theme preference: ' + JSON.stringify(theme.preference) + ' [' + toDark + ']')
+    if (stub.writes.length === 0) pass('外观 row persists through the theme service, not this plugin\'s form namespace')
+    else fail('外观 row wrote into the theme-endfield Config form: ' + JSON.stringify(stub.writes))
+
+    /* The other direction: DSH's General › 外观 row calls the same setTheme().
+       The panel is already mounted, so only the subscription can move it. */
+    theme.preference = 'system'
+    for (const listener of client.themeListeners.slice()) listener({ preference: 'system' })
+    const afterGeneral = panelSelectTrigger(client, '外观')
+    if (afterGeneral && textOf(afterGeneral).includes('跟随系统')) {
+      pass('flipping the preference in General settings updates the Endfield row live (theme/change)')
+    } else {
+      fail('the Endfield 外观 row stayed stale after theme/change: '
+        + (afterGeneral ? textOf(afterGeneral) : '(no trigger)'))
+    }
+    if (client.themeListeners.length > 0) pass('panel subscribed to theme/change while mounted')
+    else fail('panel never subscribed to theme/change — General settings changes would not reach it')
   }
 }
 

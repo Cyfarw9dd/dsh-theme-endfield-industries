@@ -1,5 +1,5 @@
 /**
- * settings-rows.test.js — prove the 「终末地主题设置」 panel actually renders.
+ * settings-rows.test.js — prove the 「终末地工业主题设置」 panel actually renders.
  *
  * The settings section is the ONLY way a user reaches these switches, and it is a
  * React component built with React.createElement inside the theme. A mistake there
@@ -166,14 +166,27 @@ try {
 if (loaded === null) { fail('module never registered with __ModuleLoader__'); process.exit(1) }
 
 const mod = loaded.factory(() => null)
+/* The app palette preference (外观) is NOT one of this plugin's form fields: it
+   lives in the DSH theme service, shared with General › 外观. The stub mirrors
+   getTheme/setTheme and records what the panel writes, so the row's wiring is
+   provable here. The two-way live sync (theme/change → this row) is covered in
+   settings-config-forms.test.js, whose React fake runs mount effects — this
+   file's stub deliberately has none. */
+let themePreference = 'light'
+const themeStub = {
+  overrideTokens: () => () => {},
+  getTheme: () => ({ preference: themePreference }),
+  setTheme: (id) => { themePreference = id },
+}
 const ctx = {
   get: (n) => {
-    if (n === 'theme') return { overrideTokens: () => () => {} }
+    if (n === 'theme') return themeStub
     if (n === 'slots') return slots
     if (n === 'configForms') return prefStore.service
     return undefined
   },
   effect: () => {},
+  on: () => () => {},
 }
 // Enable the theme so mount() runs, mirroring a real session.
 prefStore.setField('enabled', '1')
@@ -209,12 +222,12 @@ const buttons = nodes.filter((n) => n.type === 'button')
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-style', 'watermark-emblem', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'scheme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-style', 'watermark-emblem', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 26) pass('panel has all 26 setting rows')
-else fail('expected 26 rows, found ' + rows.length)
+if (rows.length === 27) pass('panel has all 27 setting rows')
+else fail('expected 27 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group
    container — so an unlisted new row shows up as a mismatch instead of vanishing. */
@@ -359,6 +372,35 @@ else fail('面板仍含「试听」——音频动作按钮应统一为「预览
     else fail('旧方案名 ' + legacy + ' 读成了关: ' + (trigL ? textOf(trigL) : '(none)'))
   }
   prefStore.setField('motion', 'signal')
+}
+
+/* --- 外观 (2026-10-25): the SAME light/dark/system preference as DSH General ›
+   外观, so dark mode is switchable from both places. The row reads the theme
+   service (not a form field) and writes through theme.setTheme(); the value the
+   service holds is the single source of truth. Two-way live sync is asserted in
+   settings-config-forms.test.js, where the React fake runs the mount effect. --- */
+{
+  /* Every value row's aria-label comes from the dictionary, so the row is found
+     by the same 外观 label DSH uses — asserting the copy as well as the wiring. */
+  const trig = selectTriggerOf(rendered(), '外观')
+  if (trig && textOf(trig).includes('浅色')) pass('外观行默认浅色（读 theme 服务的 preference）')
+  else fail('外观 trigger should read 浅色 by default: ' + (trig ? textOf(trig) : '(none)'))
+  if (all.includes('通用设置')) pass('外观行的说明文案注明与「通用设置 › 外观」是同一个开关')
+  else fail('外观行缺少「通用设置」说明——用户会以为两处是两个不同的开关')
+  const toDark = driveSelect(() => rendered(), '外观', '深色')
+  if (toDark === 'ok' && themePreference === 'dark') pass('外观行选深色写入 theme.setTheme("dark")')
+  else fail('外观行选深色没有写进 theme 服务：preference=' + JSON.stringify(themePreference) + ' [' + toDark + ']')
+  const trigDark = selectTriggerOf(rendered(), '外观')
+  if (trigDark && textOf(trigDark).includes('深色')) pass('theme.setTheme("dark") 后触发器翻转为「深色」')
+  else fail('切到深色后触发器仍显示: ' + (trigDark ? textOf(trigDark) : '(none)'))
+  /* 跟随系统 is the third choice General settings offers; a boolean switch could
+     not represent it, which is why this row mirrors the three-way preference. */
+  const toSystem = driveSelect(() => rendered(), '外观', '跟随系统')
+  if (toSystem === 'ok' && themePreference === 'system') pass('外观行提供「跟随系统」并写入 theme.setTheme("system")')
+  else fail('跟随系统选项没有写进 theme 服务：preference=' + JSON.stringify(themePreference) + ' [' + toSystem + ']')
+  const back = driveSelect(() => rendered(), '外观', '浅色')
+  if (back === 'ok' && themePreference === 'light') pass('外观行切回浅色写入 theme.setTheme("light")')
+  else fail('外观行切回浅色失败：preference=' + JSON.stringify(themePreference) + ' [' + back + ']')
 }
 
 /* --- dropdown writes must land on the documented namespace fields --- */

@@ -5,14 +5,16 @@
  * Extracted from the entry (see TODO.md「入口瘦身」第 4 项). Everything the
  * panel touches arrives by injection: the services adapter (locale/slots/
  * effect), the preference store, the master-switch trio (isEnabled/mount/
- * unmount) and every feature surface it writes through (motionSync, watermark,
- * loader, toasts, attention, audio). The panel is otherwise verbatim the code
- * that lived in the entry — including its useState ORDER, which
- * test/settings-config-forms.test.js pins by index (hooks[4] === glass).
+ * unmount), the app palette bridge (scheme: light/dark/system, shared with
+ * DSH's General › 外观 row) and every feature surface it writes through
+ * (motionSync, watermark, loader, toasts, attention, audio). The panel is
+ * otherwise verbatim the code that lived in the entry — including its useState
+ * ORDER, which test/settings-config-forms.test.js pins by index
+ * (hooks[10] === radius mode after the 外观 row was inserted second).
  */
 import { ENDFIELD_NS, LOCALE_ZH, LOCALE_EN } from './dictionaries.js'
 
-export function createSettingsSection({ services, prefs, themeApi, motionSync, watermark, loader, toasts, attention, audio, react }) {
+export function createSettingsSection({ services, prefs, themeApi, scheme, motionSync, watermark, loader, toasts, attention, audio, react }) {
   /* A React-less render is a SILENT blank page (nav row present, body empty)
      — the exact shape of the 2026-10 blank-panel regression, which shipped
      unnoticed precisely because nothing was printed. Warn once per run
@@ -88,6 +90,9 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
           return null
         }
         const [enabled, setEnabled] = R.useState(isEnabled())
+        /* The app palette preference lives in the DSH theme service, not in this
+           plugin's settings section: General › 外观 writes the same value. */
+        const [schemeMode, setSchemeMode] = R.useState(scheme.read())
         const [wmOn, setWmOn] = R.useState(watermark.isOn())
         const [wmPersist, setWmPersist] = R.useState(watermark.isPersistOn())
         const [wmHatch, setWmHatch] = R.useState(watermark.isHatchOn())
@@ -156,6 +161,7 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
              than the one the initializers used. */
           const resyncPanelFromPrefs = () => {
             setEnabled(isEnabled())
+            setSchemeMode(scheme.read())
             setWmOn(watermark.isOn())
             setWmPersist(watermark.isPersistOn())
             setWmHatch(watermark.isHatchOn())
@@ -194,6 +200,11 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
             resyncPanelFromPrefs()
             return unsubscribe
           }, [])
+          /* 外观 is the ONE row that another settings surface also writes: DSH's
+             General › Appearance row calls the same theme.setTheme(). Without
+             this live subscription the Endfield row would keep showing whatever
+             was current when the panel mounted until it was re-opened. */
+          R.useEffect(() => scheme.subscribe(setSchemeMode), [])
           // One read per panel mount: the host is the only authority on which
           // file each slot resolved to, and re-reading on every render would
           // hammer the route while the user drags the volume slider. Guarded
@@ -291,6 +302,15 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
              would stay dead until the next page load. (The reconciler
              installed below covers the same cases on the next section echo;
              this keeps the panel's own click path immediate.) */
+        }
+        /* 外观：读写 DSH theme 服务里的那一个 preference（与通用设置 › 外观
+           同一个），不写本插件的表单；成功与否以服务的回读为准，订阅在挂载
+           时接上，另一处切了这里跟着动。 */
+        const setSchemeOption = (value) => {
+          if (scheme.OPTIONS.indexOf(value) < 0) return
+          if (value === scheme.read()) return
+          if (!scheme.write(value)) return
+          setSchemeMode(scheme.read())
         }
         const toggleWm = () => {
           const next = !watermark.isOn()
@@ -639,7 +659,7 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
         }
 
         return R.createElement('div', { className: 'endfield-settings', style: pageStyle }, [
-          /* --- 01 主题：总开关在最前，随后是配色与圆角 --- */
+          /* --- 01 主题：总开关在最前，随后是外观（与通用设置共享）、动效与材质 --- */
           R.createElement('div', { key: 'group-theme' }, [
             groupTitle('01', 'groupTheme', true),
             row('theme', false, [
@@ -648,6 +668,21 @@ export function createSettingsSection({ services, prefs, themeApi, motionSync, w
                 value: enabled ? '1' : '0', ariaLabel: t('themeRow'),
                 options: [{ value: '1', label: t('on') }, { value: '0', label: t('off') }],
                 onChange: setThemeValue,
+              })
+            ]),
+            /* 外观 = the same light/dark/system preference as DSH General ›
+               外观, so dark mode is switchable from either place. */
+            row('scheme', false, [
+              R.createElement('span', { style: labelStyle }, t('schemeRow'),
+                R.createElement('span', { style: hintStyle }, t('schemeHint'))),
+              endfieldSelect({
+                value: schemeMode, ariaLabel: t('schemeRow'),
+                options: [
+                  { value: 'light', label: t('schemeLight') },
+                  { value: 'dark', label: t('schemeDark') },
+                  { value: 'system', label: t('schemeSystem') },
+                ],
+                onChange: setSchemeOption,
               })
             ]),
             row('motion', false, [
