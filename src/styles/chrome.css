@@ -441,17 +441,24 @@
         /* 点击切换动效（2026-10-15 用户指定，官方三路并行渐变里可迁移的两路）：
            文字色 + 滑移各 .2s ease（官方时长/缓动对）。洗面与箭头已经由
            ::before 的 opacity 过渡承担，分隔线交叉淡入由 ::after 承担。
-           text-indent 是布局属性——原则上只动合成器属性，这里是**所有者
-           指定的已登记例外**（测量记录见 engineering-notes「页签切换动画的
-           布局代价」）：重排范围是页签一行两个小按钮，切换风暴（8.3 次/秒
-           持续 4 秒）下 Layout 7.9 ms/s ≈ 每帧 0.13ms、每次切换总布局 ≈0.95ms
-           摊在 200ms 的 12 帧上；基线（无过渡）1.2 ms/s。动画只在类翻转时
-           发生、指针扫过不触发，自然切换频率（秒级一次）摊薄后 <0.1 ms/s。
            !important 压过全局 button{transition:none}。 */
-        transition: color .2s ease, text-indent .2s ease !important;
+        transition: color .2s ease !important;
       }
-      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] {
-        text-indent: -13px;
+      /* 滑移挂在 LABEL 上，**不再挂在按钮上**（2026-10-25 修复「激活页签
+         只剩一个字」）。上游把页签文字包在 span._tabLabel 里：
+         `display:block; max-width:88px; overflow:hidden`。而 `text-indent`
+         是**可继承属性**——上一版写在按钮上的 −13px 原样继承进 label，
+         label 又 overflow:hidden，激活态文字被自己的盒子裁掉首字
+         （「对话」只剩「话」）；更糟的是 label 的固有宽度跟着 text-indent
+         缩水（26px → 13px），按钮宽度 70px → 57px，切换时整条页签跳版。
+         官方对文字 span 用的就是 transform（见动效调研 E3）；应用现在给了
+         可命名的 label 节点，所以同样用 transform 位移：合成器属性、零布局，
+         既保住官方滑移，也不产生裁剪与宽度变化。 */
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabLabel'] {
+        transition: transform .2s ease;
+      }
+      [class$='_centerCol'] [class$='_tabs'] [class$='_tabActive'] [class$='_tabLabel'] {
+        transform: translateX(-13px);
       }
       /* 分隔线底座：每个页签的 ::after 都预建线盒（1.5×18、border-l1），
          常态 opacity 0——app 原生选中底线（.tabActive::after 的 accent 底
@@ -522,11 +529,14 @@
         right: -18.75px;
         opacity: 1;
       }
-      /* 减效降级：切换动画全部关闭（含 text-indent 滑移与两条伪元素的淡入），
+      /* 减效降级：切换动画全部关闭（含 label 滑移与两条伪元素的淡入），
          只保留瞬时状态翻转——本主题自加（官网无此降级，已登记分歧）。 */
       @media (prefers-reduced-motion: reduce) {
         [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
           transition: none !important;
+        }
+        [class$='_centerCol'] [class$='_tabs'] [class$='_tabLabel'] {
+          transition: none;
         }
         [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before,
         [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
@@ -535,7 +545,7 @@
       }
       /* 暗色无洗面/箭头：近黑底的等档白洗落在噪声地板（评审实测），文字提亮
          承担悬停；分隔线保留（结构元素，border-l1 暗档 #343633 对墨底 1.55:1，
-         装饰区间内）。text-indent 暗色保留——无箭头时它是激活态的轻量位移信号。 */
+         装饰区间内）。label 滑移暗色保留——无箭头时它是激活态的轻量位移信号。 */
       body[data-ds-dark-theme] [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         display: none;
       }

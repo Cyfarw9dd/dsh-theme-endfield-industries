@@ -649,13 +649,13 @@ fO69Vq_addButton / _3nPmjq_addButton    （旧 `:not()` 排除的两个）
 
 headless 会挂起 / 合并 rAF，导致无论怎么设虚拟时钟都只采到 **n=1**，而没有分布支撑的数字不算测量。`contour-perf.test.js` 因此按函数名把算法源码从 `client.js` 里**原样切出**后在紧循环里计时，并丢弃前两次采样（冷启动含 JIT 预热，否则会把启动成本报成稳态成本）。
 
-### 页签切换动画的布局代价（2026-10-15 实测，登记例外）
+### 页签切换动画：从 text-indent（已退役）到 label transform
 
-「只动合成器属性」是本主题的注册硬规则，页签切换的文字滑移是**所有者指定的例外**：
-官方 SubpageTab 的滑移作用在文字 span 的 `transform` 上，而本应用的页签文字是
-**裸文本节点**（无法 transform），唯一的滑移手段是 `text-indent`——一个布局属性。
-例外成立的依据是测量（`.scratch` 一次性脚本，方法同 hover-check 夹具：真实上游
-页签 CSS + 真实 client.js，120ms 一次类翻转 × 4 秒切换风暴，CDP
+「只动合成器属性」是本主题的注册硬规则。2026-10-15 页签切换的文字滑移曾是**所有者
+指定的例外**：当时判断官方 SubpageTab 的滑移作用在文字 span 的 `transform` 上，而
+本应用的页签文字是**裸文本节点**（无法 transform），唯一滑移手段是 `text-indent`——
+一个布局属性。例外成立的依据是测量（`.scratch` 一次性脚本，方法同 hover-check 夹具：
+真实上游页签 CSS + 真实 client.js，120ms 一次类翻转 × 4 秒切换风暴，CDP
 `Performance.getMetrics` 前后差）：
 
 | 配置 | Layout | RecalcStyle | LayoutCount |
@@ -669,6 +669,16 @@ headless 会挂起 / 合并 rAF，导致无论怎么设虚拟时钟都只采到 
 预算场景）完全不触发，静态守卫扫描的动效段也不含此规则。同一风暴里洗面/箭头/
 分隔线的 opacity 过渡零布局代价（基线与带过渡两版的 RecalcStyle 差值即
 text-indent 的逐帧样式重算）。`prefers-reduced-motion` 下整组过渡关闭。
+
+**2026-10-25 退役：旧判断有一半是错的，而且导致用户可见 bug。** 应用确实给了文字
+一个节点——`button._tab > span._tabLabel`（`display:block; max-width:88px;
+overflow:hidden`）——只是 `text-indent` **可继承**，写在按钮上的 −13px 会继承进
+label；label 的 `overflow:hidden` 于是把激活态首字裁掉（「对话」只剩「话」）。相同
+机制还让 label 的固有宽度跟着缩水（26→13px），按钮宽度 70→57px，切换时页签条跳版。
+现在滑移直接作用在 label 的 `transform: translateX(-13px)` 上：官方同款、合成器
+属性、零布局，裁剪与跳版同时消失。`test/hover-check.js` 固化三条回归断言（label
+首字不被裁剪、激活/未选页签等宽、滑移动画走 transform），并用注入式变异验证过。
+上表保留为「为什么当时接受了例外」的历史记录。
 
 ### 测试桩挂在全局上，会喂饱被测代码里不该走通的查找分支
 

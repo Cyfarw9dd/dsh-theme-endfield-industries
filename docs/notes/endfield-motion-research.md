@@ -809,10 +809,15 @@ bundle（official-v4 已于 10-01 调研后重新哈希，本节按当日清单�
 之所以有处安放，是因为每个页签自带 `0 3rem` 恒定水平 padding（盘子恒宽、文字
 居中），激活时文字 transform 左移 −1.75rem 腾位。主题按官方/主题体量比 ≈ 0.46
 （文字 28px/13px）折算：`padding: 0 22px 9px`（全页签恒定，无跳版）、滑移用静态
-`text-indent: -13px`（**文字节点无法 transform**，官方的平滑左移动不了，硬切与
-官方气质相容）、箭头 ⌀16px 纸白圆 + 灰山形作为洗面 `::before` 的背景图层
+`text-indent: -13px`（**当时判断「文字节点无法 transform」**，官方的平滑左移动不了，
+硬切与官方气质相容）、箭头 ⌀16px 纸白圆 + 灰山形作为洗面 `::before` 的背景图层
 （随 opacity 渐显，不占第三个伪元素）。布局验算（gap 36px）：相邻盘子边缘隔
 12px，分隔线居中两侧各 ≈6px，箭头与文字净距 27px。
+
+> **2026-10-25 更正**：上面的「文字节点无法 transform」是错的——上游文字包在
+> `span._tabLabel`（`overflow:hidden`）里，可 transform；而 `text-indent` 会继承进
+> 该 span 并裁掉激活态首字。滑移已改为 label 的 `transform: translateX(-13px)`，
+> 详见 [engineering-notes「页签切换动画」](../engineering-notes.md)。
 
 **竖分隔线的绘制归属**（官方是独立 DOM 元素 `.SubpageTab_divider`，主题只能借
 伪元素）：激活页签的 `::after` 被底线清除规则占用（不可画线），所以每条沟线由

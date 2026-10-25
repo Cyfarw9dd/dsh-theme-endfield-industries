@@ -124,9 +124,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   </div>
   <div class="panel pI_x6G_centerCol">
     <!-- The app's real tab rules (ui-conversation), verbatim, including the
-         active underline ::after the theme must clear. The SELECTED tab keeps
-         the app's class order 'wSkVaW_tab wSkVaW_tabActive' — the compound
-         suffix is exactly what silently killed the first :is()-less version. -->
+         active underline ::after the theme must clear AND the label span
+         (overflow:hidden) the theme's slide must not clip. The SELECTED tab
+         keeps the app's class order 'wSkVaW_tab wSkVaW_tabActive' — the
+         compound suffix is exactly what silently killed the first
+         :is()-less version. -->
     <style>
       .wSkVaW_tabs{gap:36px;margin-top:10px;padding-left:8px;display:flex;position:relative}
       .wSkVaW_tab{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;
@@ -134,16 +136,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       .wSkVaW_tab:after{content:"";background:0 0;border-radius:2px;height:2px;position:absolute;bottom:-1px;left:0;right:0}
       .wSkVaW_tabActive{color:var(--dsw-alias-state-business-primary)}
       .wSkVaW_tabActive:after{background:var(--dsw-alias-state-business-primary)}
+      .wSkVaW_tabLabel{text-overflow:ellipsis;white-space:nowrap;max-width:88px;display:block;overflow:hidden}
     </style>
     <div class="wSkVaW_tabs">
-      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSel">对话</button>
-      <button class="wSkVaW_tab" id="tabIdle">轨迹</button>
+      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSel"><span class="wSkVaW_tabLabel" id="labSel">对话</span></button>
+      <button class="wSkVaW_tab" id="tabIdle"><span class="wSkVaW_tabLabel" id="labIdle">轨迹</span></button>
     </div>
     <!-- Reversed activeness: exercises the OTHER divider rule (first tab idle
          while its next sibling is active draws the RIGHT gutter via :has(+…)). -->
     <div class="wSkVaW_tabs" style="margin-top:24px">
-      <button class="wSkVaW_tab" id="tabIdleFirst">对话</button>
-      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSelSecond">轨迹</button>
+      <button class="wSkVaW_tab" id="tabIdleFirst"><span class="wSkVaW_tabLabel" id="labIdleFirst">对话</span></button>
+      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSelSecond"><span class="wSkVaW_tabLabel" id="labSelSecond">轨迹</span></button>
     </div>
   </div>
   <script>window.__ModuleLoader__={load:(m)=>{window.__MOD__=m}}</script>
@@ -169,6 +172,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       return {color:cs.color, rgb:(cs.color.match(/\\d+/g)||[]).slice(0,3).map(Number)} }
     window.__accent__=()=>getComputedStyle(document.body).getPropertyValue('--edge-accent').trim()
     window.__pseudo__=(id,which,prop)=>getComputedStyle(document.getElementById(id),which)[prop]
+    /* The slide lives on the label span (the app's real markup), so measure
+       there: translateX from the computed matrix, and the glyph box against the
+       span's own border box to catch the overflow:hidden clip regression. */
+    window.__translate__=(id)=>{ const t=getComputedStyle(document.getElementById(id)).transform
+      if(t==='none') return 0
+      const m=t.match(/matrix\\(([^)]+)\\)/); return m?parseFloat(m[1].split(',')[4]):0 }
+    window.__clip__=(id)=>{ const el=document.getElementById(id)
+      const lr=el.getBoundingClientRect(), r=document.createRange(); r.selectNodeContents(el)
+      const tr=r.getBoundingClientRect()
+      return {left:+(lr.left-tr.left).toFixed(2), right:+(tr.right-lr.right).toFixed(2),
+        textW:+tr.width.toFixed(2), boxW:+lr.width.toFixed(2)} }
   </script></body></html>`)
 
   /* Font-rendering flags plus the 4x device scale are what make this check
@@ -348,9 +362,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const selPad = await evaluate("getComputedStyle(document.getElementById('tabSel')).paddingLeft")
     if (selPad === '22px') pass('页签结构 = 官方恒定水平 padding（0 22px 9px）  [' + selPad + ']')
     else fail('页签水平 padding 不对（应 22px）  [' + selPad + ']')
+    /* The slide must live on the app's label span, NOT as inherited text-indent
+       on the button: text-indent inherits into .tabLabel (whose overflow:hidden
+       then eats the first glyph — the shipped "对话"→"话" bug), and it shrinks
+       the label's intrinsic width (26→13px), which shrinks the button too. */
     const selIndent = await evaluate("getComputedStyle(document.getElementById('tabSel')).textIndent")
-    if (selIndent === '-13px') pass('激活文字滑移 = 官方 −1.75rem 按 0.46 折算  [' + selIndent + ']')
-    else fail('激活滑移不对（应 -13px）  [' + selIndent + ']')
+    const labIndent = await evaluate("getComputedStyle(document.getElementById('labSel')).textIndent")
+    if (selIndent === '0px' && labIndent === '0px') pass('文字滑移不靠可继承的 text-indent（按钮/label 均为 0）')
+    else fail('text-indent 又回到页签上（会继承进 label 并裁剪首字）  [' + selIndent + ' / ' + labIndent + ']')
+    const selShift = await evaluate("window.__translate__('labSel')")
+    if (selShift === -13) pass('激活文字滑移 = label transform translateX(−13px)（官方 −1.75rem ×0.46）  [' + selShift + ']')
+    else fail('激活滑移不对（label 应在 −13px）  [' + selShift + ']')
+    const idleShift = await evaluate("window.__translate__('labIdle')")
+    if (idleShift === 0) pass('未选页签 label 不位移  [' + idleShift + ']')
+    else fail('未选页签 label 被位移  [' + idleShift + ']')
+    const selClip = JSON.parse(await evaluate("JSON.stringify(window.__clip__('labSel'))"))
+    if (selClip.left <= 0.01 && selClip.right <= 0.01) pass('激活 label 无裁剪：首字完整（「对话」盒 ' + selClip.boxW + 'px = 文字 ' + selClip.textW + 'px）  [溢出 L' + selClip.left + ' R' + selClip.right + ']')
+    else fail('激活 label 仍被 overflow:hidden 裁剪（首字丢失）  [溢出 L' + selClip.left + ' R' + selClip.right + ']')
+    const selRectW = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabSel'))")).w
+    const idleRectW = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabIdle'))")).w
+    if (Math.abs(selRectW - idleRectW) < 0.5) pass('激活/未选页签等宽（无切换跳版）  [' + selRectW.toFixed(1) + ' vs ' + idleRectW.toFixed(1) + ']')
+    else fail('激活页签宽度与未选不等（text-indent 缩宽回归？）  [' + selRectW.toFixed(1) + ' vs ' + idleRectW.toFixed(1) + ']')
     const selArrow = await evaluate("window.__pseudo__('tabSel','::before','backgroundImage')")
     if (/data:image\/svg\+xml/.test(selArrow) && /%23f5f5f0/.test(selArrow)) pass('激活 = 官方圆形箭头图层（纸白圆 ⌀16）')
     else fail('激活箭头图层缺失  [' + String(selArrow).slice(0, 60) + ']')
@@ -381,31 +413,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     else fail('选中标签悬停反馈不对  [' + selHoverWash + ' @' + beforeSelHover + ']')
     await parkPointer()
     /* ---- click-switch choreography: the official .2s fades actually RUN ----
-       The slide is text-indent (a layout property; owner-registered exception,
-       measured in engineering-notes). Prove the transitions execute: flip the
-       active class, sample mid-flight (~90ms into the 200ms), assert the values
-       are BETWEEN rest and target — a missing transition would land exactly on
-       the endpoint, a dead rule on the start point. Then settle and confirm the
-       endpoints, flip back, and check the reduced-motion guard flips instantly. */
+       The slide is a compositor-only translateX on the label span (README of the
+       fix: chrome.css 「滑移挂在 LABEL 上」). Prove the transitions execute: flip
+       the active class, sample mid-flight (~90ms into the 200ms), assert the
+       values are BETWEEN rest and target — a missing transition would land
+       exactly on the endpoint, a dead rule on the start point. Then settle and
+       confirm the endpoints, flip back, and check the reduced-motion guard flips
+       instantly. */
     const transDecl = await evaluate("getComputedStyle(document.getElementById('tabIdle')).transitionProperty")
-    if (/text-indent/.test(transDecl) && /color/.test(transDecl)) pass('切换过渡声明 = color + text-indent（官方 .2s ease 对）  [' + transDecl + ']')
-    else fail('切换过渡声明缺失  [' + transDecl + ']')
+    const labTransDecl = await evaluate("getComputedStyle(document.getElementById('labIdle')).transitionProperty")
+    if (/color/.test(transDecl) && /transform/.test(labTransDecl)) pass('切换过渡声明 = 页签 color + label transform（官方 .2s ease 对）  [' + transDecl + ' / ' + labTransDecl + ']')
+    else fail('切换过渡声明缺失或仍驱动布局属性  [' + transDecl + ' / ' + labTransDecl + ']')
     await evaluate("document.getElementById('tabSel').classList.remove('wSkVaW_tabActive');document.getElementById('tabIdle').classList.add('wSkVaW_tabActive')")
     await sleep(90)
-    const midIndent = parseFloat(await evaluate("getComputedStyle(document.getElementById('tabIdle')).textIndent"))
+    const midIndent = parseFloat(await evaluate("window.__translate__('labIdle')"))
     const midWash = parseFloat(await evaluate("window.__pseudo__('tabIdle','::before','opacity')"))
     const midDiv = parseFloat(await evaluate("window.__pseudo__('tabSel','::after','opacity')"))
-    if (midIndent < -0.5 && midIndent > -12.5) pass('切换中程：文字滑移进行中  [text-indent ' + midIndent.toFixed(1) + 'px ∈ (−13,0)]')
+    if (midIndent < -0.5 && midIndent > -12.5) pass('切换中程：文字滑移进行中  [translateX ' + midIndent.toFixed(1) + 'px ∈ (−13,0)]')
     else fail('滑移未动画化（中程采样 ' + midIndent.toFixed(1) + 'px 应在 −13 与 0 之间）')
     if (midWash > 0.02 && midWash < 0.98) pass('切换中程：洗面+箭头淡入进行中  [opacity ' + midWash.toFixed(2) + ']')
     else fail('洗面淡入未动画化  [opacity ' + midWash.toFixed(2) + ']')
     if (midDiv > 0.02 && midDiv < 0.98) pass('切换中程：分隔线交叉淡入进行中  [opacity ' + midDiv.toFixed(2) + ']')
     else fail('分隔线淡入未动画化  [opacity ' + midDiv.toFixed(2) + ']')
     await sleep(400)
-    const endIndent = await evaluate("getComputedStyle(document.getElementById('tabIdle')).textIndent")
+    const endIndent = await evaluate("window.__translate__('labIdle')")
     const endWash = await evaluate("window.__pseudo__('tabIdle','::before','opacity')")
-    if (endIndent === '-13px' && endWash === '1') pass('切换终点落位  [indent ' + endIndent + ' · wash ' + endWash + ']')
-    else fail('切换终点不对  [indent ' + endIndent + ' · wash ' + endWash + ']')
+    if (endIndent === -13 && endWash === '1') pass('切换终点落位  [translateX ' + endIndent + ' · wash ' + endWash + ']')
+    else fail('切换终点不对  [translateX ' + endIndent + ' · wash ' + endWash + ']')
     /* flip back (tabSel active again), then reduced-motion must cut the animation */
     await evaluate("document.getElementById('tabIdle').classList.remove('wSkVaW_tabActive');document.getElementById('tabSel').classList.add('wSkVaW_tabActive')")
     await sleep(400)
@@ -413,8 +447,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     await sleep(60)
     await evaluate("document.getElementById('tabSel').classList.remove('wSkVaW_tabActive');document.getElementById('tabIdle').classList.add('wSkVaW_tabActive')")
     await sleep(60)
-    const rmIndent = await evaluate("getComputedStyle(document.getElementById('tabIdle')).textIndent")
-    if (rmIndent === '-13px') pass('减效降级：滑移瞬时落位（无动画）  [' + rmIndent + ']')
+    const rmIndent = await evaluate("window.__translate__('labIdle')")
+    if (rmIndent === -13) pass('减效降级：滑移瞬时落位（无动画）  [' + rmIndent + ']')
     else fail('减效降级下仍有滑移动画  [' + rmIndent + ']')
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: '' }] })
     /* restore the original activeness for the dark assertions below */
