@@ -221,6 +221,38 @@
       body:not(.theme-endfield-round) [class*='Scrollbar'] {
         border-radius: var(--edge-radius-sm) !important;
       }
+      /* 行形条带保持直角（2026-10-26）。上面的微倒角阶梯给每个带 class 的
+         元素上 4px，文件对比的「行」恰好就是带 class 的盒子，而一行只有 22px
+         高。上游把新增/删除行的行号槽标成
+         `.add .number:first-child{box-shadow:inset 3px 0 0 var(--diff-marker)}`：
+         3px 竖条比它继承到的 4px 角半径还窄。圆角裁的是 border-box 里的阴影：
+         竖条本身保持 3px 宽，但它在每行的首/末设备行沿 4px 圆弧横向内折——
+         起点内移（dpr 1.5 实测 3–6 设备像素，视行顶与设备像素网格的对齐而定），
+         于是一整片 diff 读起来是「一列两端折角的短条/圆角小片」，而不是一条
+         一条的直边行（行底矩形、split 视图的列/格发丝线是同一处缺陷）。
+         取数（所有者 2026-10-26 截图实测）：新增底 #e6f4e7、行号槽 #edf7ed、
+         标记符 #01a241，正是 DSH 默认主题的
+         --dsw-alias-file-diff-added-{bg,gutter,marker}；行距/槽位比与 FileDiff
+         统一网格 3.5em 3.5em 1.2em minmax(0,1fr) 对得上。
+         锚点全用上游 data 属性：diff body 的 [data-review-view]、每行的
+         [data-diff-line]、split 列的 [data-diff-side]，哈希无关（selector-guard
+         钉住）。[data-review-view] 内部没有任何可交互元素——重试 Button 在
+         兄弟节点 `_status` 里（error 态直接替代 body，两者不共存），所以 0
+         圆角够不到控件，周边控件的阶梯照旧。上游 FileDiff.module.css 一个
+         border-radius 都不声明，圆角模式下这些行本来就是直角，这条例外因此
+         不用碰圆角模式。特异性：行/后代选择器是 (0,3,1)，高于阶梯 `[class]`
+         的 (0,2,1)；只有裸的 [data-review-view] 那条与阶梯同档 (0,2,1)，靠
+         排在阶梯之后按源码顺序取胜（实测 diff body 也从 4px 归 0，所以不能删）。
+         边界（本次不改）：轨迹视图的提示词 diff（@deepseek-ai/dsh-client-ui-
+         trajectory 的 `.Y0dWHa_promptDiffLine*`，display:block + 淡底）有同样的
+         「每行一个圆角块」现象，但属于另一个界面/组件、也无人上报；真要修时
+         它的钩子形状是 [class*='_promptDiffLine']。 */
+      body:not(.theme-endfield-round) [data-review-view],
+      body:not(.theme-endfield-round) [data-review-view] [data-diff-side],
+      body:not(.theme-endfield-round) [data-review-view] [data-diff-line],
+      body:not(.theme-endfield-round) [data-review-view] [data-diff-line] * {
+        border-radius: 0 !important;
+      }
       /* ---------- 浮动提示气泡（Tooltip 原语）的墨字、描边与阴影 ----------
          底色/键帽底在令牌层（overrideTokens：应用把 alias 令牌写成 body 的
          行内样式，样式表规则压不过，必须注册层）。这里补令牌管不到的三件：

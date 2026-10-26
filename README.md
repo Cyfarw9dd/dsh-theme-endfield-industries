@@ -58,9 +58,9 @@ All docs are written in Chinese.
 | [docs/design-language.md](docs/design-language.md) | Theme | Palette, token mapping and contrast rules |
 | [docs/endfield-ui-research.md](docs/endfield-ui-research.md) | Theme | Official-site UI research: color frequencies, interaction-grammar evidence, logo asset inventory |
 | [docs/features.md](docs/features.md) | Theme | Feature behavior, defaults, storage keys and edge cases |
-| [docs/testing.md](docs/testing.md) | Theme | Verification scripts and test-suite notes |
+| [docs/testing.md](docs/testing.md) | Theme | Verification scripts, test-suite notes and evidence-reporting discipline |
 | [docs/engineering-notes.md](docs/engineering-notes.md) | Theme | Deep engineering notes: implementation decisions and measured data |
-| [docs/development.md](docs/development.md) | Theme | Development and release workflow |
+| [docs/development.md](docs/development.md) | Theme | Development and release workflow: feedback triage order, execution-cost rules |
 | [docs/git.md](docs/git.md) | Theme | Git commit strategy and Conventional Commits conventions |
 | [docs/cookbook/](docs/cookbook/) | Cookbook | How-to topics: [audio notifications](docs/cookbook/audio-notifications.md) · [frosted glass](docs/cookbook/glass.md) · [DSH version tracking](docs/cookbook/dsh-version-tracking.md) |
 | [docs/notes/](docs/notes/) | Archive | One-off records ([PR description](docs/notes/PR-description.md), [official motion research](docs/notes/endfield-motion-research.md), [dark palette research](docs/notes/dark-palette-research.md), [button radius research](docs/notes/button-radius-research.md)) |

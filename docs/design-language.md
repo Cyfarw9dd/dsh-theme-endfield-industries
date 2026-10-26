@@ -14,6 +14,8 @@
 2. **微倒角（2026-10-24 起对齐官网）。** 官网全部可点矩形控件带 2–8px **恒定**微倒角（主力 4px），状态从不动角；体系实测与档位见 [notes/button-radius-research.md](notes/button-radius-research.md)，令牌为 `--edge-radius` / `-sm` / `-card`。形状本身是圆的（状态点、头像、加载圈）保留圆形，「圆角全局恒定」准则不变——直角时代它是「一律 0」，现在是「按档恒定」。
 3. **数字等宽。** 开启 `tnum`，让表格、耗时、百分比在跳动时不产生横向抖动。
 
+**微倒角的落点是可点矩形控件与卡片**（按钮、输入框、菜单、提示气泡、内容卡）。**行形条带保持直角**：文件对比（deliverables FileDiff）的一行是 22px 高的满宽条带，新增/删除标记是上游用 `box-shadow: inset 3px 0 0` 画的 3px 左缘竖条——竖条比它继承到的 4px 角半径还窄，圆角裁的是阴影：竖条保持 3px 宽，但两端沿 4px 圆弧横向内折（首行起点内移），整片 diff 就读成「一列两端折角的圆角小片」。主题以 `[data-review-view]` / `[data-diff-line]` / `[data-diff-side]` 三个上游 data 属性为界把这段圆角归零（锚点全非哈希；规则见 [src/styles/chrome.css](../src/styles/chrome.css) 的「行形条带保持直角」，像素证据见 [testing.md](testing.md#选择器与主题化落点)）。上游 FileDiff.module.css 本身不声明任何圆角，所以圆角模式不受这条例外影响。
+
 ---
 
 ## 二、色板
