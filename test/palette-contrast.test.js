@@ -20,7 +20,7 @@ const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 /* 水墨 alpha 与上限从同一真值口读取（fixtures/theme-values.js），不在此复述 */
-const { WM, WM_CEILING } = require('./fixtures/theme-values.js')
+const { WM, WM_CEILING, HATCH_COVERAGE } = require('./fixtures/theme-values.js')
 
 const ROOT = path.resolve(__dirname, '..')
 const src = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
@@ -420,6 +420,13 @@ for (const [name, block] of Object.entries(palettes)) {
     if (!tiers.has(block)) { tiers.set(block, {}); order.push(block) }
     if (!(m[1].slice(12) in tiers.get(block))) tiers.get(block)[m[1].slice(12)] = m[2].toLowerCase()
   }
+  /* 2026-10-25 owner 要求「暗色水印与亮色同档可见」：暗色墨量的下限取亮色
+     最细的一层（徽标 1.31:1）——只守 1.06 的感知下限不够，0.09 时的暗色
+     水印 1.24:1 通过了旧下限，却正是 owner 说的「看不太清」。 */
+  const LIGHT_INK = '#101110'
+  const lightRatioOf = (alpha) => ratio(over(hex(LIGHT_INK), LIGHT_BGS['bg-base'], alpha), LIGHT_BGS['bg-base'])
+  const LIGHT_EMBLEM_RATIO = lightRatioOf(WM.light.emblem)
+  const WM_DARK_FLOOR = Math.max(1.06, LIGHT_EMBLEM_RATIO - 0.01)
   if (order.length !== 3 || tiers.get('soft').base !== '#1c1c1b' || tiers.get('warm').base !== '#161615' || tiers.get('neutral').base !== '#191919') {
     fail('暗色三档 · 梯度块解析失败（' + order.join('/') + '，soft=' + (tiers.get('soft') || {}).base + '）')
   } else for (const t of order) {
@@ -437,17 +444,26 @@ for (const [name, block] of Object.entries(palettes)) {
     if (rB1 >= 1.06 && rB1 <= 1.6) pass('暗色三档 · ' + t + ' 描边L1×底 ' + rB1.toFixed(2) + ':1（装饰区间）')
     else fail('暗色三档 · ' + t + ' 描边L1 ' + rB1.toFixed(2) + ':1 出区间')
     /* 水印墨逐档（徽标 currentColor=label-primary × --edge-wm-emblem-alpha，
-       字母 × --edge-wm-alpha）：0.105→0.095 就是为了在最亮 C 档底上压回
-       1.32 上限（tokens.css 注释承诺 0.095 时各档落在 1.26–1.31）——此前
-       该承诺只有注释没有测试，浏览器套件的 1.32 检查又跑在退役最深底上，
-       结构上抓不到那个回归。此处静态合成逐档钉死。 */
+       字母 × --edge-wm-alpha）。2026-10-25：owner 报暗色「看不清」，暗色从
+       0.09 提到 0.13、上限与亮色统一为 1.43；静态合成逐档钉死，别让
+       「改 alpha 忘了重算」再溜进去。 */
     const wmPair = (inkHex, alpha, what) => {
       const r = ratio(over(hex(inkHex), hex(L.base), alpha), hex(L.base))
-      if (r >= 1.06 && r <= WM_CEILING.dark) pass('暗色三档 · ' + t + ' 水印' + what + '×底 ' + r.toFixed(2) + ':1（1.06–' + WM_CEILING.dark + '）')
-      else fail('暗色三档 · ' + t + ' 水印' + what + ' ' + r.toFixed(2) + ':1 出带（alpha 或梯度改动需重算）')
+      if (r >= WM_DARK_FLOOR && r <= WM_CEILING.dark) pass('暗色三档 · ' + t + ' 水印' + what + '×底 ' + r.toFixed(2) + ':1（' + WM_DARK_FLOOR.toFixed(2) + '–' + WM_CEILING.dark + '）')
+      else fail('暗色三档 · ' + t + ' 水印' + what + ' ' + r.toFixed(2) + ':1 出带（' + WM_DARK_FLOOR.toFixed(2) + '–' + WM_CEILING.dark + '，alpha 或梯度改动需重算）')
     }
     wmPair(L['label-primary'], WM.dark.emblem, '徽标墨')
     wmPair(L['label-primary'], WM.dark.letters, '字母墨')
+    /* 斜纹要按「平均墨量」量，不能只看线像素：旧暗色用官网 17.68% 细线配方，
+       线像素 p98 达标，平均合成却只有 ~1.04:1——owner 实际看到的就是这个
+       「看不清」。覆盖率从样式表渐变实测（HATCH_COVERAGE）；暗色平均墨量还
+       必须与亮色同档（两侧同一配方，差 >0.03 就是又走偏了）。 */
+    const hatchInk = over(hex(L['label-primary']), hex(L.base), WM.dark.hatch * HATCH_COVERAGE)
+    const rHatch = ratio(hatchInk, hex(L.base))
+    const lightHatch = ratio(over(hex('#101110'), LIGHT_BGS['bg-base'], WM.light.hatch * HATCH_COVERAGE), LIGHT_BGS['bg-base'])
+    if (HATCH_COVERAGE < 0.5) fail('斜纹墨覆盖率只有 ' + Math.round(HATCH_COVERAGE * 100) + '%（加宽配方丢失，暗色会退回「看不清」的细线）')
+    else if (rHatch >= lightHatch - 0.03 && rHatch <= WM_CEILING.dark) pass('暗色三档 · ' + t + ' 斜纹平均墨 ' + rHatch.toFixed(2) + ':1（亮色 ' + lightHatch.toFixed(2) + '，覆盖率 ' + Math.round(HATCH_COVERAGE * 100) + '%）')
+    else fail('暗色三档 · ' + t + ' 斜纹平均墨 ' + rHatch.toFixed(2) + ':1 与亮色 ' + lightHatch.toFixed(2) + ':1 不同档或出带（覆盖率 ' + HATCH_COVERAGE + '，alpha ' + WM.dark.hatch + '）')
   }
 }
 

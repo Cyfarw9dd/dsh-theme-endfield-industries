@@ -157,6 +157,74 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
   else fail('纹理段出现外链资源：' + external.slice(0, 2).join(', '))
 }
 
+/* ---------- 2b. the two official WAVE layers are LIGHT-ONLY ----------
+   2026-10-25 owner decision (twice refined): the top-right stepped wave's ink
+   is #1a1a1a, i.e. the dark base itself (invisible), and the middle tape-wave
+   (light #e6e6e6 ink) reads too loud on the dark base. Inverting is not the
+   official dark grammar, so the dark standard stack simply omits BOTH wave
+   images and keeps grid + hatch + top glow. Guards:
+   (1) the light stack still paints both official images; (2) the dark stack
+       carries neither wave layer; (3) because background-* lists are matched
+       to layers BY ORDER, the dark rule must also restate its own size/
+       position/repeat — otherwise the surviving glow inherits the first
+       light-layer slot; (4) the retired `--edge-tex-wave-dark` stays retired. */
+{
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const stackOf = (re, mustMatch) => [...noComments.matchAll(re)]
+    .map((m) => m[1])
+    .find((body) => /background-image:/.test(body) && (!mustMatch || mustMatch.test(body)))
+  const lightStack = stackOf(/body\[data-endfield-texture='standard'\][^{]*\{([^}]*)\}/g, /--edge-tex-(wave|tape)/)
+  const darkStack = stackOf(/body\[data-ds-dark-theme\]\[data-endfield-texture='standard'\][^{]*\{([^}]*)\}/g)
+  if (lightStack && /var\(--edge-tex-wave\)/.test(lightStack) && /var\(--edge-tex-tape\)/.test(lightStack)) pass('亮色 standard 档仍画官方两张波纹图（右上 + 中下）')
+  else fail('亮色 standard 档丢了波浪图层（--edge-tex-wave / --edge-tex-tape）')
+  if (darkStack && !/--edge-tex-wave/.test(darkStack) && !/--edge-tex-tape/.test(darkStack)) pass('暗色 standard 档不画任何波纹图（owner 决定：暗色只留网格/斜纹/光晕）')
+  else fail('暗色 standard 档仍在画波纹（右上或中下）—— owner 要求暗色移除这两张图')
+  if (darkStack && /background-position:\s*50% 0/.test(darkStack) && /background-size:\s*100% 100%/.test(darkStack)) pass('暗色 standard 档重新声明了自己的 background-size/position（防层序错位）')
+  else fail('暗色 standard 档没有重声明 background-size/position：background-* 按层序取值的列表会错位')
+  if (!/--edge-tex-wave-dark/.test(css)) pass('暗色波浪孪生变量已退休（无死素材、无死字节）')
+  else fail('--edge-tex-wave-dark 仍在样式表里：那层已被移除，孪生素材应一并删除')
+
+  /* The remaining light layer is still measured from its EMBEDDED bytes: dark
+     ink for a light surface, strongest stroke inside the decorative band. */
+  const dataUri = (prop) => {
+    const m = new RegExp(prop + ':\\s*url\\("data:image/png;base64,([A-Za-z0-9+/=]+)"\\)').exec(css)
+    return m ? m[1] : null
+  }
+  const paletteOf = (b64) => {
+    if (!b64) return null
+    const buf = Buffer.from(b64, 'base64')
+    let off = 8, plte = null, trns = null
+    while (off + 12 <= buf.length) {
+      const len = buf.readUInt32BE(off)
+      const type = buf.toString('ascii', off + 4, off + 8)
+      const data = buf.subarray(off + 8, off + 8 + len)
+      if (type === 'PLTE') plte = data
+      if (type === 'tRNS') trns = data
+      if (type === 'IEND') break
+      off += 12 + len
+    }
+    if (!plte || plte.length < 6) return null
+    const entries = []
+    for (let i = 0; i < plte.length; i += 3) {
+      const index = i / 3
+      const a = trns && index < trns.length ? trns[index] / 255 : 1
+      entries.push({ ink: [plte[i], plte[i + 1], plte[i + 2]], alpha: a })
+    }
+    return entries
+  }
+  const entries = paletteOf(dataUri('--edge-tex-wave'))
+  if (!entries) {
+    fail('无法从生成的 CSS 里解出波浪 PNG 的调色板（--edge-tex-wave）')
+  } else {
+    if (entries.every((e) => Math.max(...e.ink) <= 0x40)) pass('亮色波浪是深墨（官方 #1a1a1a）')
+    else fail('亮色波浪的墨色不再是深墨：' + JSON.stringify(entries.slice(0, 4)))
+    let worst = 0
+    for (const e of entries) if (e.alpha > 0) worst = Math.max(worst, ratio(over(e.ink, hex('#e8e8e2'), e.alpha), hex('#e8e8e2')))
+    if (worst >= 1.06 && worst <= 1.6) pass('亮色 右上波浪 墨 ' + worst.toFixed(2) + ':1（1.06–1.6）')
+    else fail('亮色右上波浪 ' + worst.toFixed(2) + ':1 出装饰区间')
+  }
+}
+
 /* ---------- 3. decoration band, measured per scheme ---------- */
 {
   /* The texture paints translucent ink over the surface. Read the ink and the

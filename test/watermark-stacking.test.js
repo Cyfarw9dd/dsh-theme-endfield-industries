@@ -87,9 +87,8 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body,#root{height:100%;margin:0}
   :root{
     /* 真值化（fixtures/theme-values.js）：旧字面量是退役的 #101110 系暗色，
-       1.32 上限一直跑在全梯度最深的底上——而 0.105→0.095 修的是最亮 C 档
-       超限，最深底根本测不出那个回归。现在暗色跑在默认 soft 档（最亮、
-       最险的档），最坏情形由 palette-contrast 的逐档静态断言钉住。 */
+       最深底根本测不出最亮档的超限。现在暗色跑在默认 soft 档（最亮、最险
+       的档），逐档静态断言在 palette-contrast 里。 */
     --dsw-alias-bg-base:${DARK ? TOKENS.bgBase.dark : TOKENS.bgBase.light};
     --dsw-alias-bg-layer-1:${DARK ? TOKENS.bgLayer1.dark : TOKENS.bgLayer1.light};
     --dsw-alias-bg-layer-3:${DARK ? TOKENS.bgLayer3.dark : TOKENS.bgLayer3.light};
@@ -493,23 +492,22 @@ if (c.outBox < 2000) {
 }
 
 /* Legibility band. The mark is decoration behind content: too strong and it
-   clutters the UI (the reported complaint), too weak and the feature is
-   pointless. Contrast states that independently of the scheme's own colours.
-   The ceiling is per-scheme because adding luminance to a near-black page reads
-   louder than subtracting it from cream at the same ratio -- which is exactly
-   why dark mode carries the lower alpha.
+   clutters the UI, too weak and the feature is pointless. Contrast states that
+   independently of the scheme's own colours. Both schemes now share the same
+   1.43:1 ceiling: on 2026-10-25 the owner reported the dark mark as unreadable
+   ("看不太清") at 0.09, so the dark ink was raised to 0.13 (measured 1.39–1.40
+   over the ladder) and the per-scheme ceiling collapsed to one value. The 1.06
+   floor is unchanged — below it the mark reads as absent.
 
    2026-10-25 metric change (120k-px solid band, emblem in its clear gap): the sampler
    used to read the single MOST-CHANGED pixel, which for the old solid mark was
    a full-coverage stroke. On the band it can be a texture/edge pixel crossing the emblem
    contour -- a rare pixel, not the weight the eye reads -- and it
-   reported 1.94:1 while each layer alone sits in the band (wordmark 0.16 ->
-   1.42:1, emblem 0.16 -> 1.42:1 over cream). The assertion now reads the 98th
-   percentile of changed pixels: p95 = p98 in these renders, i.e. still a
-   full-coverage ink pixel, not antialiasing, but not the rare double-ink one.
-   Measured p98: light 1.311 (ceiling 1.43), dark 1.236 (ceiling 1.32). The max
-   pixel is logged. Ceilings unchanged. */
-const CEIL = DARK ? 1.32 : 1.43
+   reported 1.94:1 while each layer alone sits in the band. The assertion now
+   reads the 98th percentile of changed pixels: p95 = p98 in these renders,
+   i.e. still a full-coverage ink pixel, not antialiasing, but not the rare
+   double-ink one. The max pixel is logged. */
+const CEIL = 1.43
 if (c.ratio !== null && c.ratio !== undefined) {
   if (c.ratio > CEIL) {
     fail(scheme + '-mode watermark contrast is ' + c.ratio + ':1 -- too strong'

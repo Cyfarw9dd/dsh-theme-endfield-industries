@@ -153,12 +153,18 @@
         background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
       }
       body[data-ds-dark-theme][data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
+        /* 暗色**不画官方那两张波纹图**（owner 决定，2026-10-25）：右上角阶梯
+           波纹的墨是 #1a1a1a、与暗色底同值（不可见）；中下部波纹带的浅灰墨在
+           暗底上又太抢。强行反相不是官网的暗色语法，所以暗色的 standard 档只
+           保留网格、底部斜纹与顶部光晕——这一层的声明因此比亮色少。
+           尺寸/位置/重复必须一起覆盖：background-* 列表按层顺序取值，少了
+           两层后沿用亮色那份列表会把光晕挪到第 1 层的位置。 */
         background-image:
-          var(--edge-tex-wave),
-          linear-gradient(180deg, var(--dsw-alias-bg-base, #101110) 0, transparent 3.5rem),
-          var(--edge-tex-tape),
           radial-gradient(120% 55% at 50% 0%,
             rgba(var(--edge-accent-rgb, 126, 126, 126), var(--edge-glow-dark, 0.04)), transparent 70%);
+        background-size: 100% 100%;
+        background-position: 50% 0;
+        background-repeat: no-repeat;
       }
 
       /* 三色信号线：官方 decoLine。原文是绝对停靠（90deg,#ff00f0 11.25rem,
@@ -373,30 +379,23 @@
          official operator page's own -45deg stop recipe, at the same band-
          relative tile the site uses (bandH/87). The default stays the solid
          loading-plate grey above; this rule only overrides ink + opacity.
-         The tile mask (gap included) is untouched. */
+         The tile mask (gap included) is untouched.
+
+         2026-10-25（owner：暗色下水印看不清）：官网 8.84% 的细线墨带在两种
+         底色上平均灰阶都太低（暗色实测平均 ~1.04:1，几乎等于不存在），因此
+         **两种配色统一加宽到 30%+30%＝60% 覆盖**（同一 -45° 角度与周期），
+         只靠各自的 --edge-wm-hatch-alpha 拉开明暗强度。 */
       body[data-edge-wm-style='hatch'] [data-endfield-watermark]::before {
         background: linear-gradient(-45deg,
-          transparent 0 20.5805%,
-          currentColor 0 29.4195%,
-          transparent 0 70.5805%,
-          currentColor 0 79.4195%,
-          transparent 0);
-        background-size: calc(var(--edge-wm-band-h) / 87) calc(var(--edge-wm-band-h) / 87);
-        background-repeat: repeat;
-        background-position: 0 0;
-        opacity: var(--edge-wm-hatch-alpha, var(--edge-wm-wordmark-alpha));
-      }
-      /* 亮色侧加深斜纹：官网 8.84% 的墨带在亮纸上覆盖率太低（观感只有 ~3%
-         的灰），和实心 logo 的灰阶差得远。亮色沿用同一 -45° 角度与周期，但
-         把墨带加宽到 30%+30%（60% 覆盖），在 p98 不超 1.43 的前提下把平均
-         灰阶拉近实心字；暗色仍用官网原配方（0.11 的细线在近黑底上是合适的）。 */
-      body[data-edge-wm-style='hatch']:not([data-ds-dark-theme]) [data-endfield-watermark]::before {
-        background-image: linear-gradient(-45deg,
           transparent 0 5%,
           currentColor 0 35%,
           transparent 0 55%,
           currentColor 0 85%,
           transparent 0);
+        background-size: calc(var(--edge-wm-band-h) / 87) calc(var(--edge-wm-band-h) / 87);
+        background-repeat: repeat;
+        background-position: 0 0;
+        opacity: var(--edge-wm-hatch-alpha, var(--edge-wm-wordmark-alpha));
       }
       /* Without mask support neither mark can paint at all; the watermark
          degrades to nothing rather than to a wrong-looking mark. */

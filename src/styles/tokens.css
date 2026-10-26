@@ -234,45 +234,48 @@
          background (the mark is always BEHIND text, so this measures how loudly
          the decoration competes for attention, never foreground readability):
 
-              alpha | dark #101110  | light #e8e8e2
+              alpha | dark #101110  | light #e8e8e2   (historic, retired base)
               0.07  | 1.171 : 1     | 1.152 : 1
               0.085 | 1.215 : 1     | 1.186 : 1
               0.10  | 1.278 : 1     | 1.225 : 1
-              0.13  | 1.406 : 1     | 1.310 : 1   <- previous dark value
-              0.16  | 1.541 : 1     | 1.398 : 1   <- previous persist value
+              0.13  | 1.406 : 1     | 1.310 : 1
+              0.16  | 1.541 : 1     | 1.398 : 1
 
-         Dark mode is the reported problem: adding luminance to a near-black page
-         makes the wordmark read far louder than the same alpha subtracted from
-         cream, and at 0.13/0.16 it visibly cluttered the UI. Dark therefore drops
-         to 0.085 (1.215:1) — still clearly present, no longer competing. Light
-         keeps more strength (0.13) because cream needs it to register at all;
-         1.310:1 there looks quieter than 1.215:1 on black.
-         Floor is ~1.06:1, below which the mark reads as absent. */
+         2026-10-25: the dark alphas are re-measured on the CURRENT dark ladder
+         (soft #1c1c1b / warm #161615 / neutral #191919, label-primary ink) in
+         palette-contrast.test.js. Owner report: at 0.09 the wordmark and emblem
+         read as absent ("看不太清"), so the dark ceiling was unified with the
+         light one at 1.43:1; 0.13 yields ~1.39–1.40 on all three tiers. The
+         ~1.06:1 floor still applies — below it the mark reads as absent. */
       body {
         --edge-wm-alpha: 0.13;
         /* 2026-10-25：亮色侧字标比徽标深一档——徽标的线稿在 0.13 下读起来
            比大面积实心字更深，字标提到 0.16 后两层实际墨色对齐（owner：
            「加深亮色下大字的灰阶，和 logo 保持一致」）。p98 实测 1.423:1，
-           仍在上限 1.43 内；暗色侧两层仍共用 0.09（见下）。 */
+           仍在上限 1.43 内；暗色侧两层共用 0.13（见下）。 */
         --edge-wm-emblem-alpha: 0.13;
         --edge-wm-wordmark-alpha: 0.16;
-        /* 斜纹：亮色侧用加密的 60% 覆盖墨带（见 decor.css），0.16 时平均灰阶
-           与 logo 对齐（实测字/徽标平均 221.9 / 221.4），p98 1.423:1。暗色
-           仍用官网细线配方（0.11）。 */
+        /* 斜纹：两侧都用加密的 60% 覆盖墨带（见 decor.css），0.16 时平均灰阶
+           与 logo 对齐（实测字/徽标平均 221.9 / 221.4），p98 1.423:1。 */
         --edge-wm-hatch-alpha: 0.16;
       }
       body[data-ds-dark-theme] {
-        --edge-wm-alpha: 0.085;
-        /* 2026-10-25：徽标与字标共用同一个 alpha（灰阶一致，复刻加载屏里
-           「字和 logo 同一层灰」的关系）。0.09 与字标相同；p98 实测 1.236:1，
-           仍压在暗色上限 1.32 内。 */
-        --edge-wm-emblem-alpha: 0.09;
-        /* Dark needs less: adding luminance to near-black reads louder. 0.09 is
-           shared by BOTH layers (the owner's 灰阶一致: font and logo read as one
-           gray), and the p98 run against the dark ceiling (1.32:1) measures
-           1.236. */
-        --edge-wm-wordmark-alpha: 0.09;
-        --edge-wm-hatch-alpha: 0.11;
+        --edge-wm-alpha: 0.13;
+        /* 2026-10-25（owner 实测「ENDFIELD INDUSTRIES 和倒三角 logo 看不太清，
+           需要强化」）：暗色两层从 0.09 提到 0.13，与亮色徽标同档。合成 p98
+           三档落在 1.39–1.40:1，因此暗色上限与亮色统一为 1.43（此前 1.32）。
+           灰阶一致（字标＝徽标）保留——owner 要的是「字和 logo 同一层灰」。 */
+        --edge-wm-emblem-alpha: 0.13;
+        /* Dark needs less than cream for the same perceived weight, but 0.09
+           measured 1.236:1 and read as absent in the owner's dark mode. 0.13 is
+           shared by BOTH layers (灰阶一致) and measures ~1.39 over the dark
+           ladder, inside the unified 1.43 decorative ceiling. */
+        --edge-wm-wordmark-alpha: 0.13;
+        /* 斜纹：2026-10-25 起暗色与亮色共用 60% 加宽墨带（见 decor.css）。
+           旧值 0.11 走官网 17.68% 细线配方，平均合成只有 ~1.04:1——owner 报
+           「看不清」的直接原因。0.14 × 60% 覆盖时平均 ~1.22:1、线像素 p98
+           ~1.43:1，与亮色斜纹（0.16）观感对齐。 */
+        --edge-wm-hatch-alpha: 0.14;
       }
       /* ---------- 暗色三档梯度（2026-10-24，所有者定 C 为默认并做成设置行）----------
          tokens.js 覆盖表的暗色列全部以 var() 引用这九个变量（含 raised 抬高层：layer-3/键帽/选择器族），body 属性

@@ -88,12 +88,41 @@ const WM = {}
     if (!block) die('水印 alpha 块（' + mode + '）')
     const letters = /--edge-wm-alpha:\s*([0-9.]+)/.exec(block)
     const emblem = /--edge-wm-emblem-alpha:\s*([0-9.]+)/.exec(block)
-    if (!letters || !emblem) die('水印 alpha 值（' + mode + '）')
-    WM[mode] = { letters: parseFloat(letters[1]), emblem: parseFloat(emblem[1]) }
+    const hatch = /--edge-wm-hatch-alpha:\s*([0-9.]+)/.exec(block)
+    if (!letters || !emblem || !hatch) die('水印 alpha 值（' + mode + '）')
+    WM[mode] = { letters: parseFloat(letters[1]), emblem: parseFloat(emblem[1]), hatch: parseFloat(hatch[1]) }
   }
 }
 
-/* 水印上限（watermark-stacking 的可读性带，与 tokens.css 注释同源） */
-const WM_CEILING = { light: 1.43, dark: 1.32 }
+/* 斜纹墨带的覆盖率：从样式表里那条加宽的 -45° 渐变实测（不再靠人肉同步）。
+   渐变的 stop 形如 `transparent 0 5%, currentColor 0 35%, ...`；每段宽度 =
+   下一个 stop 的起点 − 本段起点，currentColor 段的宽度之和就是墨覆盖率。
+   2026-10-25 起亮/暗共用同一条加宽配方（60%）。 */
+const HATCH_COVERAGE = (() => {
+  const rule = /body\[data-edge-wm-style='hatch'\] \[data-endfield-watermark\]::before\s*\{([^}]*)\}/.exec(noComments)
+  if (!rule) die('斜纹字标规则')
+  const grad = /linear-gradient\(([^;]*)\)/.exec(rule[1])
+  if (!grad) die('斜纹字标的 linear-gradient')
+  /* 双位置 stop（`currentColor 0 35%`）的起点会被前一段的终点夹住——CSS
+     渐变就是这样合成的（`0` 不是真实起点，是「从上一段结束处开始」）。
+     第一版按字面起点算，把 60% 算成了 35%。 */
+  const stops = [...grad[1].matchAll(/(transparent|currentColor)\s+0\s+([0-9.]+)%/g)]
+    .map((m) => ({ ink: m[1] === 'currentColor', end: parseFloat(m[2]) }))
+  if (stops.length < 2) die('斜纹渐变的 stop')
+  let coverage = 0
+  let cursor = 0
+  for (const stop of stops) {
+    const end = Math.max(stop.end, cursor)
+    if (stop.ink) coverage += (end - cursor) / 100
+    cursor = end
+  }
+  if (!(coverage > 0 && coverage <= 1)) die('斜纹墨覆盖率解出 ' + coverage)
+  return coverage
+})()
 
-module.exports = { TIERS, LADDERS, resolveDark, jsTokenPair, RADIUS, WM, WM_CEILING, css, clientSrc }
+/* 水印上限（watermark-stacking 的可读性带，与 tokens.css 注释同源）。
+   2026-10-25 起亮/暗统一 1.43：暗色 0.09 实测「看不清」，owner 要求强化，
+   0.13 合成后三档 1.39–1.40。 */
+const WM_CEILING = { light: 1.43, dark: 1.43 }
+
+module.exports = { TIERS, LADDERS, resolveDark, jsTokenPair, RADIUS, WM, WM_CEILING, HATCH_COVERAGE, css, clientSrc }
