@@ -954,7 +954,12 @@
 		};
 		const syncWatermarkVisibility = () => {
 			applyWatermarkStyle();
-			if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected && typeof document !== "undefined" && watermarkEl.getAttribute("data-endfield-watermark") === "persist" && isEnabled() && isWatermarkOn() && isWatermarkPersistOn() && document.querySelector("[class$=\"_root\"][data-phase=\"hero\"]") === null) return;
+			let hostStillNatural = false;
+			if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected && typeof document !== "undefined" && watermarkHost.hasAttribute("data-phase")) {
+				const columns = document.querySelectorAll("[class$=\"_root\"][data-phase]");
+				hostStillNatural = columns.length === 1 && columns[0] === watermarkHost;
+			} else if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected && typeof document !== "undefined" && document.querySelectorAll("[class$=\"_root\"][data-phase]").length === 0) hostStillNatural = true;
+			if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected && hostStillNatural && typeof document !== "undefined" && watermarkEl.getAttribute("data-endfield-watermark") === "persist" && isEnabled() && isWatermarkOn() && isWatermarkPersistOn() && document.querySelector("[class$=\"_root\"][data-phase=\"hero\"]") === null) return;
 			const target = isEnabled() && isWatermarkOn() ? mountPointFor() : null;
 			const shouldShow = target !== null && target.parent !== null && (target.mode === "hero" || isWatermarkPersistOn());
 			if (shouldShow && watermarkEl) {

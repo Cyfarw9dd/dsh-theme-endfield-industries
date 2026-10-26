@@ -243,7 +243,30 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
        check failing here falls through to the full decision, so every real
        transition — theme off, hero appearing, host detached, persist flipped
        off — is still caught on the same batch. */
+    /* The host must also still be the one a full decision would pick. The
+        persist fallback re-parents the mark: leaving a page that has no
+        conversation column (e.g. the plugin panel) unmounts the column and the
+        mark moves into the app FRAME; coming BACK mounts a fresh column, and a
+        fast path that only checked host.isConnected would leave the mark
+        stranded in the frame — where the column's own opaque background paints
+        over its z-index:-1 forever (2026-10-26: that was a real bug; the mark
+        only came back after the switch was toggled off/on, the one path that
+        re-ran the full decision). So: a column host must be the document's
+        ONLY column candidate, and a frame/body host requires that no column
+        candidate exists at all. querySelectorAll is cheap; the rect reads stay
+        on the fall-through path only, so streaming still costs no layout. */
+    let hostStillNatural = false
     if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
+      && typeof document !== 'undefined' && watermarkHost.hasAttribute('data-phase')) {
+      const columns = document.querySelectorAll('[class$="_root"][data-phase]')
+      hostStillNatural = columns.length === 1 && columns[0] === watermarkHost
+    } else if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
+      && typeof document !== 'undefined'
+      && document.querySelectorAll('[class$="_root"][data-phase]').length === 0) {
+      hostStillNatural = true
+    }
+    if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
+      && hostStillNatural
       && typeof document !== 'undefined'
       && watermarkEl.getAttribute('data-endfield-watermark') === 'persist'
       && isEnabled() && isWatermarkOn() && isWatermarkPersistOn()
