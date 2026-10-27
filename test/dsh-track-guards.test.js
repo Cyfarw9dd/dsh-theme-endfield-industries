@@ -136,6 +136,16 @@ eq(pkg.version === state.dshVersion, false,
   'package.json ' + pkg.version + ' ≠ 记录的 DSH ' + state.dshVersion + '（版本号归主题，对齐进元数据）')
 eq(typeof pkg.engines?.dsh, 'string', 'engines.dsh 声明宿主区间（生态惯例：wallpaper-engine/cost-meter 同款）')
 
+/* ---------- 5. 漂移探针的自设锚点豁免（2026-10-26/27 radar #25/#26 误红） ----------
+ * 水印 band 往 body 写 data-edge-wm-*（76a7a75），探针没豁免该前缀，把它们当
+ * 上游契约去安装树里找 → 0.2.1-rc.4 验证连续两轮误红。断言改在真实源码文本上：
+ * 两个自设前缀 + data-plugin 缺一不可。 */
+const probeSrc = fs.readFileSync(path.join(ROOT, '.github', 'scripts', 'dsh-drift-probe.js'), 'utf8')
+const ownAnchor = probeSrc.split('const OWN_DATA_ANCHOR =')[1]?.split('\n').slice(0, 2).join('\n') ?? ''
+eq(ownAnchor.includes("startsWith('data-endfield-')"), true, '探针豁免自设前缀 data-endfield-')
+eq(ownAnchor.includes("startsWith('data-edge-')"), true, '探针豁免自设前缀 data-edge-')
+eq(ownAnchor.includes("=== 'data-plugin'"), true, '探针豁免自设属性 data-plugin')
+
 if (failures > 0) {
   console.error('')
   console.error(failures + ' 项失败')

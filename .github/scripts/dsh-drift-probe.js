@@ -11,8 +11,8 @@
  *   1. 从主题自己的 client.js 里**提取**它实际依赖的三类契约：
  *      - CSS module 语义后缀钩子  [class$='_x'] / [class*='_x'] / [class^='_x']
  *      - 上游设计令牌             var(--dsw-*)
- *      - 上游 data-* 锚点         [data-*]（data-endfield-* / data-plugin 是主题
- *                                 自设的，不算上游契约，自动排除）
+ *      - 上游 data-* 锚点         [data-*]（data-endfield-* / data-edge-* /
+ *                                 data-plugin 是主题自设的，不算上游契约，自动排除）
  *      提取而非手抄清单：清单永远与真实使用的钩子同步，不会腐化。
  *   2. 在安装树（node_modules/@deepseek-ai）里逐个验证仍然存在。
  *      匹配语义跟随选择器算符：$（尾匹配）按「`_x` 后不接标识符字符」的词边界，
@@ -65,9 +65,13 @@ const RETIRED = new Map([
     'DSH 0.2.0 移除 hero 的 headlineText；两个 null 安全探测器为 0.1.x 宿主保留'],
 ])
 
-/* ---------- 主题自设（非上游契约）的 data 属性 ---------- */
+/* ---------- 主题自设（非上游契约）的 data 属性 ----------
+ * 前缀 data-edge-* 与 data-endfield-* 同源：主题写在自己 DOM（含 body）上的
+ * 状态属性。事故：水印 band（76a7a75）往 body 写 data-edge-wm-emblem/style，
+ * 探针把两者当上游契约去安装树里找，0.2.1-rc.4 验证连续两轮误红（2026-10-26/27，
+ * radar #25/#26）。新增自设属性前缀时同步这里，别让雷达再背误报。 */
 const OWN_DATA_ANCHOR = (name) =>
-  name.startsWith('data-endfield-') || name === 'data-plugin'
+  name.startsWith('data-endfield-') || name.startsWith('data-edge-') || name === 'data-plugin'
 
 const src = fs.readFileSync(CLIENT, 'utf8')
 
