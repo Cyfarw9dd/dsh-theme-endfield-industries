@@ -4,7 +4,7 @@ name: 发版
 #   1. 校验：输入版本号合法、与 package.json 一致、远端 tag 不存在
 #   2. 全量门禁：test:ci 清单逐项跑（build-client --check / check.js / selftest / 全部测试）
 #   3. 自带验证戳：按 .github/dsh-track.json 记录的版本安装 @deepseek-ai/dsh，
-#      契约漂移探针在这个树上重新绿一遍——发的不是「雷达 6 小时前说没事」，
+#      契约漂移探针在这个树上重新绿一遍——发的不是「雷达上一轮说没事」，
 #      而是「发版这一刻对实测版本重新绿过」
 #   4. tag v<版本> + GitHub Release（notes 引用实测 DSH 版本与上版以来的提交）
 #   5. npm publish 预留：inputs.publish_npm=true 且配好 NPM_TOKEN 才执行

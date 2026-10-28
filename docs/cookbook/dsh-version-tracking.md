@@ -8,7 +8,7 @@
 
 | 部件 | 位置 | 职责 |
 | --- | --- | --- |
-| 兼容雷达 | `.github/workflows/dsh-track.yml` | 每 6 小时（cron `23 */6 * * *`，UTC）+ 手动触发；探测→验证→落记录/报警，**不发版** |
+| 兼容雷达 | `.github/workflows/dsh-track.yml` | 每天一次（cron `37 1 * * *`，UTC 01:37 ≈ 北京上午；2026-10-28 由每 6 小时降频——上游几天才发一版，高频只剩空调用与误报暴露面）+ 手动触发；探测→验证→落记录/报警，**不发版** |
 | 版本探测 | `.github/scripts/dsh-track.js --check` | 查 npm **官方源**的 `@deepseek-ai/dsh` dist-tags（registry 不是 npmjs.org 即拒绝）；对比记录文件输出 JSON |
 | 漂移探针 | `.github/scripts/dsh-drift-probe.js` | 从 client.js **自动提取**三类上游契约，在目标版安装树里逐项验证 |
 | 验证记录 | `.github/dsh-track.json` | `dshVersion` 语义是「**已通过验证**的最后版本」；验证失败不落盘 |
@@ -76,7 +76,7 @@ node .github/scripts/dsh-drift-probe.js <某份 node_modules/@deepseek-ai>
 
 ## 验证失败时
 
-- **不发版**：记录文件不更新，下一次运行（最多 6 小时后）自动重试同一版本——
+- **不发版**：记录文件不更新，下一次运行（每天一轮，降频前最多 6 小时）自动重试同一版本——
   主题修复后无需人工干预即自动补发
 - **报警，不开 issue**（2026-10-18 所有者指定；仓库 Issues 功能处于关闭状态）：
   report 任务以红色结束并打 `::error` 注解（任务页红条 + GitHub 失败通知都带它，
@@ -90,7 +90,7 @@ node .github/scripts/dsh-drift-probe.js <某份 node_modules/@deepseek-ai>
 
 ## 运行与运维
 
-- 两个 workflow 都只在默认分支生效；推送后雷达完全自动（每 6 小时一轮）
+- 两个 workflow 都只在默认分支生效；推送后雷达完全自动（每天一轮，发现延迟最多约一天 + cron 排队）
 - 想验证未进通道的版本（如 alpha）：手动运行「DSH 兼容雷达」，`dsh_version`
   填目标版本——手动入口不受降级保护约束（人的显式决定），但同样只落记录不发版
 - 想发版：按上一节操作 release.yml；tag 命名 `v<主题 semver>`（镜像时代的

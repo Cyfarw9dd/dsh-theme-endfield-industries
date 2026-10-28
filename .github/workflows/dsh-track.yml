@@ -11,8 +11,10 @@ name: DSH 兼容雷达
 
 on:
   schedule:
-    # 每 6 小时一次，错开整点（GitHub 整点 cron 拥堵）。UTC 时间。
-    - cron: '23 */6 * * *'
+    # 每天一次（2026-10-28 由每 6 小时降频：上游 next 通道几天才发一版，
+    # 高频只剩空调用与 npm/runner 抖动带来的误报暴露面）。UTC 01:37 =
+    # 北京上午 9:37，早上看结果；分钟错开整点（GitHub 整点 cron 拥堵）。
+    - cron: '37 1 * * *'
   workflow_dispatch:
     inputs:
       dsh_version:
