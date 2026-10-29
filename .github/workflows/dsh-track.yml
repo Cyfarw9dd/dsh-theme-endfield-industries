@@ -1,4 +1,4 @@
-name: DSH 兼容雷达
+name: DSH Compatibility Radar
 
 # 纯信号，不发版：监测 @deepseek-ai/dsh（npm 官方源）的 latest / next 通道，
 #   1. 有「比记录更新」的版本 → 安装它，跑契约漂移探针 + 完整测试套件（validate）
@@ -11,10 +11,12 @@ name: DSH 兼容雷达
 
 on:
   schedule:
-    # 每天一次（2026-10-28 由每 6 小时降频：上游 next 通道几天才发一版，
-    # 高频只剩空调用与 npm/runner 抖动带来的误报暴露面）。UTC 01:37 =
-    # 北京上午 9:37，早上看结果；分钟错开整点（GitHub 整点 cron 拥堵）。
-    - cron: '37 1 * * *'
+    # 每 3 天一次（2026-10-28 定档：上游 next 通道几天才发一版，高频只剩
+    # 空调用与 npm/runner 抖动带来的误报暴露面）。UTC 01:37 = 北京上午 9:37，
+    # 早上看结果；分钟错开整点（GitHub 整点 cron 拥堵）。
+    # day-of-month 步进按 1,4,7...31 取值，月末 31→次日 1 会出现一次约
+    # 2 天的短间隔（更早跑，不会更晚），无害。
+    - cron: '37 1 */3 * *'
   workflow_dispatch:
     inputs:
       dsh_version:

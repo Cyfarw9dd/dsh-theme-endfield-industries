@@ -103,7 +103,7 @@
    ```
    这让未来的维护者能快速定位哪些接口需要在新版本上验证。
 
-3. **维持 selector-guard 测试**：每当 upstream 发布新版本，跑一遍 `npm test`——如果 CSS module 后缀改了，选择器守卫是第一个报警的。这一步已自动化：[DSH 版本追踪](cookbook/dsh-version-tracking.md) 工作流每天定时（2026-10-28 起每天一次，此前每 6 小时）监测 npm 官方源的 latest/next 通道，新版本自动触发「漂移探针 + 完整套件」，全绿只落验证记录（发版走手动管线），有红报警不开 issue（2026-10-18 起所有者指定）。
+3. **维持 selector-guard 测试**：每当 upstream 发布新版本，跑一遍 `npm test`——如果 CSS module 后缀改了，选择器守卫是第一个报警的。这一步已自动化：[DSH 版本追踪](cookbook/dsh-version-tracking.md) 工作流（DSH Compatibility Radar）每 3 天定时（2026-10-28 定档，此前每 6 小时）监测 npm 官方源的 latest/next 通道，新版本自动触发「漂移探针 + 完整套件」，全绿只落验证记录（发版走手动管线），有红报警不开 issue（2026-10-18 起所有者指定）。
 
 4. **当 DSH 稳定到 1.0**：考虑给 peer 范围加上限（`>=0.1.0 <2.0.0`），并在破坏性变更时发布新版本。
 
