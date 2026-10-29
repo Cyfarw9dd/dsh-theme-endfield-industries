@@ -51,7 +51,7 @@
   `services.effect(() => () => prefs.dispose())` 收尾。读键表的测试
   （settings-namespace / settings-config-forms / texture）直接对源文件断言
 - **装饰面已拆成 decor/ 模块**：`src/client/decor/watermark.js`（水印双开关、
-  hero/persist 两种挂载与堆叠、逐帧跟随循环）、`hero-logo.js`（新会话品牌标）、
+  会话页挂载与堆叠；hero 跟随循环已于 2026-10-29 删除）、`hero-logo.js`（新会话品牌标）、
   `loader.js`（启动加载屏：双时钟 + 保险丝 + 一次 per 页面加载契约，含
   `prefs.onSettled` 引导读）、`body-observer.js`（水印与 hero 共用的那**一个**
   body MutationObserver——一个观察器、两层）。依赖显式注入：`prefs` + 主开关

@@ -21,6 +21,10 @@
  *      the mark in it — without any switch being touched in between.
  *   4. The fast path still holds when the page is genuinely unchanged: the
  *      mark node is not recreated and does not churn between hosts.
+ *   5. THE PAGE THAT MUST STAY CLEAN (2026-10-29): the new-session page
+ *      (data-phase="hero") gets NO mark at all — not in its column, not in the
+ *      frame fallback — even with both switches on, and leaving it for a
+ *      conversation must bring the mark back.
  *
  * Usage: node test/watermark-rehost.test.js
  */
@@ -191,6 +195,31 @@ const inFrame = doc.querySelector('[data-endfield-watermark]')
 watermark.sync()
 if (inFrame === null || inFrame.parentNode !== frame) fail('5. frame-hosted mark did not stay put on a column-less page')
 else pass('5. no column -> mark stays in the frame across repeated sync()')
+/* 6. THE NEW-SESSION PAGE STAYS CLEAN (2026-10-29). With the switches still on,
+   mounting a hero column must remove the mark — the hero page must not carry the
+   wordmark band or the emblem in ANY host, including the frame fallback. */
+const heroCol = doc.createElement('div', 'xS3_root')
+heroCol.setAttribute('data-phase', 'hero')
+heroCol.rect = { width: 600, height: 800, top: 0, left: 0 }
+centerCol.appendChild(heroCol)
+watermark.sync()
+if (doc.querySelector('[data-endfield-watermark]') !== null) {
+  fail('6. the watermark mounted on the new-session page (host ' + doc.querySelector('[data-endfield-watermark]').parentNode.tagName + ') — the hero screen must stay clean')
+} else {
+  pass('6. new-session page -> no watermark anywhere, switches untouched')
+}
+
+/* 7. ...and leaving the new-session page for a conversation mounts it again. */
+centerCol.removeChild(heroCol)
+const columnC = doc.createElement('div', 'xS4_root')
+columnC.setAttribute('data-phase', 'active')
+columnC.rect = { width: 600, height: 800, top: 0, left: 0 }
+centerCol.appendChild(columnC)
+watermark.sync()
+mark = doc.querySelector('[data-endfield-watermark]')
+if (mark === null) fail('7. watermark did not come back after leaving the new-session page')
+else if (mark.parentNode !== columnC) fail('7. watermark host after the new-session page is ' + mark.parentNode.tagName + ', expected the conversation column')
+else pass('7. conversation after the new-session page -> mark re-hosted')
 
 if (failures === 0) console.log('watermark-rehost: all checks passed')
 else { console.error('watermark-rehost: ' + failures + ' failure(s)'); process.exit(1) }

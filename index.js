@@ -112,8 +112,8 @@ const FIELD_DEFAULTS = {
   darkTier: 'soft',         // 暗色档位 —— soft(舒适,VS Code 档)/warm(微暖)/neutral(官网中性)；默认 soft（2026-10-24 所有者定）
   motion: 'signal',          // 按钮动效 —— 合并设计（'signal'=开 / 'off'=关；旧方案名读取时并轨为开）
   radius: 'square',         // 主题圆角 —— 直角
-  watermark: '1',           // 背景水印 —— default on
-  watermarkPersist: '0',    // 水印保持显示 —— default off
+  watermark: '1',           // 背景水印总开关 —— default on（新建会话页从 2026-10-29 起不画水印）
+  watermarkPersist: '0',    // 会话页水印 —— default off；新建会话页不显示后，这是唯一会画出水印的开关
   watermarkStyle: 'solid',  // 水印字标样式 —— solid(实心,加载屏平灰) / hatch(官网 /operator 斜纹)；默认实心
   watermarkEmblem: 'en',    // 水印空档徽标语言 —— en(英文版, Yue-plus 矢量, 默认) / zh(中文版, PRTS 归档图描摹)；只换徽标不改字标带
   loader: '0',              // 启动加载动画 —— default off

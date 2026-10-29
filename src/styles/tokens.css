@@ -188,18 +188,18 @@
         font-feature-settings: "tnum" 1, "ss01" 1;
         font-variant-ligatures: no-common-ligatures;
       }
-      /* The watermark — hero AND persist modes alike (2026-10-24: hero used to
-         be a body-level child) — is a z-index:-1 child of the conversation
-         column. Two properties are needed on that column, and only while the mark is mounted
-         there (the :has() guard makes this a no-op whenever the feature is off):
+      /* The watermark (2026-10-29: the conversation column is its only placement
+         now — the new-session page no longer carries it) is a z-index:-1 child
+         of the conversation column. Two properties are needed on that column, and
+         only while the mark is mounted there (the :has() guard makes this a no-op
+         whenever the feature is off):
            isolation: isolate — without a stacking context, z-index:-1 escapes to the
              nearest ancestor context and paints behind the column's own opaque
              background, i.e. invisible.
            position: relative — the column ships as position:static, so an absolutely
              positioned child would resolve against the app frame instead and spill
              across the sidebar. This makes the column the containing block so
-             inset:0 means "exactly this column" — and the hero follow loop's
-              host-relative math resolves against it too.
+             inset:0 means "exactly this column".
          Every absolute descendant the app itself renders (header:after, tab:after,
          heroGlow, the overlay composer seat) already has a positioned ancestor
          nearer than this column, so their containing blocks are unchanged. */

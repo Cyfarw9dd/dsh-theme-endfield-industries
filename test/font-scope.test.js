@@ -99,12 +99,13 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
   .wSkVaW_composerStack{display:flex;flex-direction:column;gap:6px}
   .wSkVaW_composerHero{width:100%;z-index:1;align-self:center;position:relative;padding-bottom:32px}
   .pXSMma_root{display:flex;justify-content:center;align-items:center;min-width:0;padding:0 24px}
-  /* 0.1.2-rc.1 renamed the hero headline export to '*_headlineText' (the suffix the
-     theme's watermark positioning matches). */
+  /* The conversation skeleton (the watermark's only placement since 2026-10-29;
+     the new-session page no longer mounts it), with a headline row kept because
+     the live page renders one. */
   .AvZvRG_headlineText{color:var(--dsw-alias-label-primary);font-size:26px;line-height:32px}
 </style></head><body><div id="root">
   <div class="pI_x6G_frame">
-    <div class="pI_x6G_centerCol"><div class="wSkVaW_root" data-phase="hero">
+    <div class="pI_x6G_centerCol"><div class="wSkVaW_root" data-phase="active">
       <div class="wSkVaW_scrollBody"><div class="wSkVaW_viewArea">
         <div class="wSkVaW_composerStack wSkVaW_composerHero">
           <div class="pXSMma_root"><div class="pXSMma_stack">
@@ -119,7 +120,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <script src="./client.js"></script>
 <script>
 ${BROWSER_SETTINGS_SCOPE_SNIPPET}
-  var __prefs = __endfieldSettingsScope({ enabled:'1', loader:'1', watermark:'1' })
+  var __prefs = __endfieldSettingsScope({ enabled:'1', loader:'1', watermark:'1', watermarkPersist:'1' })
   var mod = window.__MOD__.factory(function () { return null })
   mod.apply({
     get: function (n) {
@@ -142,8 +143,9 @@ ${BROWSER_SETTINGS_SCOPE_SNIPPET}
   widget.appendChild(digits)
   document.getElementById('root').appendChild(widget)
 
-  /* The watermark mounts on the same frame as the hero page above; the plate is
-     already in the DOM synchronously (see runLoader), so both can be read here. */
+  /* The watermark mounts on the conversation page above (both switches on); the
+     plate is already in the DOM synchronously (see runLoader), so both can be
+     read here. */
   requestAnimationFrame(function () {
     var root = getComputedStyle(document.documentElement)
     var bodyCs = getComputedStyle(document.body)

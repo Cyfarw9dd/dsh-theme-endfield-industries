@@ -67,11 +67,12 @@
          **水印不再需要例外（2026-10-24）**：hero 水印曾是 body 级子元素——隔离根
          会让整个根子树（含 z:20 的下拉框）变成一个 z:auto 单元、被 body 级水印按
          DOM 顺序压过，所以这里曾用 :not(:has(> [data-endfield-watermark])) 在
-         hero 页跳过隔离，代价是 hero 页没有网格/斜纹。现在水印两种模式都挂在
-         列内（z:-1，见 decor/watermark.js 与 tokens.css 的 :has 隔离规则），
-         层叠全部收进列这一个上下文：水印 (-1) < composerHero (1) < 下拉框 (20)，
-         hero 页与会话页同享完整底纹。回归由 test/watermark-stacking.test.js 的
-         像素比对看守。 */
+         hero 页跳过隔离，代价是 hero 页没有网格/斜纹。水印改为挂在列内
+         （z:-1，见 decor/watermark.js 与 tokens.css 的 :has 隔离规则）后，层叠
+         全部收进列这一个上下文：水印 (-1) < composerHero (1) < 下拉框 (20)。
+         2026-10-29 起新建会话页不再挂水印（hero 页彻底干净），这条列级隔离规则
+         仍保留——底纹叠加层自身也依赖它。回归由 test/watermark-stacking.test.js
+         的像素比对看守。 */
       body[data-endfield-texture='subtle'] [class$='_centerCol'] [class$='_root'][data-phase],
       body[data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
         position: relative;
@@ -153,18 +154,27 @@
         background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
       }
       body[data-ds-dark-theme][data-endfield-texture='standard'] [class$='_centerCol'] [class$='_root'][data-phase] {
-        /* 暗色**不画官方那两张波纹图**（owner 决定，2026-10-25）：右上角阶梯
-           波纹的墨是 #1a1a1a、与暗色底同值（不可见）；中下部波纹带的浅灰墨在
-           暗底上又太抢。强行反相不是官网的暗色语法，所以暗色的 standard 档只
-           保留网格、底部斜纹与顶部光晕——这一层的声明因此比亮色少。
-           尺寸/位置/重复必须一起覆盖：background-* 列表按层顺序取值，少了
-           两层后沿用亮色那份列表会把光晕挪到第 1 层的位置。 */
+        /* 暗色只画**右上角那一道等高线**（波纹），中下部的波纹带仍不画。
+           历史：2026-10-25 owner 决定暗色两张官方波纹图全不画——右上角阶梯
+           波纹的墨是 #1a1a1a（与暗色底同值，不可见），中下部波纹带的浅灰墨在
+           暗底上又太抢。2026-10-29 owner 要回右上角那一块（「暗色背景下缺少
+           右上角红框圈出的等高线底纹」），于是用官方图的**调色板反相孪生**
+           --edge-tex-wave-dark（scripts/build-texture.js 从同一份官方字节派
+           生，只翻 PLTE：墨 #1a1a1a→#e5e5e5，逐像素 alpha 原样，即官网
+           invert(1) 的数据版）。中下部波纹带保持不画（没有被要求，且在暗底
+           仍然偏抢）。尺寸/位置/重复仍必须整组覆盖：background-* 列表按层
+           顺序取值，层数变了却沿用亮色那份列表会把光晕挪错层。 */
         background-image:
+          var(--edge-tex-wave-dark),
           radial-gradient(120% 55% at 50% 0%,
             rgba(var(--edge-accent-rgb, 126, 126, 126), var(--edge-glow-dark, 0.04)), transparent 70%);
-        background-size: 100% 100%;
-        background-position: 50% 0;
-        background-repeat: no-repeat;
+        background-size:
+          39.1875rem 26.3125rem,
+          100% 100%;
+        background-position:
+          100% 0,
+          50% 0;
+        background-repeat: no-repeat, no-repeat;
       }
 
       /* 三色信号线：官方 decoLine。原文是绝对停靠（90deg,#ff00f0 11.25rem,
@@ -298,13 +308,11 @@
         -webkit-mask-size: 100% 100%;
         mask-size: 100% 100%;
       }
-      /* Hero placement: the host's height IS the band height, so the follow loop
-         (watermark.js) centres the whole composition on the headline; both
-         layers are absolutely placed inside it. Off the hero page the host fills
-         the conversation column and the band/emblem centre vertically. */
-      [data-endfield-watermark='hero'] {
-        height: var(--edge-wm-logo-h);
-      }
+      /* One placement only (2026-10-29): the host fills the conversation column
+         (or the app frame) and the band/emblem centre vertically. The hero
+         placement — host height = band height, a follow loop centring the whole
+         composition on the headline — is gone: the new-session page no longer
+         carries the mark at all (decor/watermark.js suppresses it there). */
       [data-endfield-watermark]::before {
         content: '';
         position: absolute;
@@ -423,6 +431,13 @@
          artwork's own triple (decoded from assets/hero-logo-3-summer.png) rather
          than asserting AA on the light scheme.
 
+         2026-10-29（owner：「红框里的标示可以浅一点，暗色主题下」）：亮色那边同一
+         套原色只是淡印（字标 1.22:1），暗色那边却像贴上去的贴纸（字标对默认
+         soft 底 #1c1c1b 实测 11.38:1），所有者要它「浅一点」。所以暗色下把整枚
+         标识以 80% 合成在页面上（见下面的 body[data-ds-dark-theme] 规则）：颜色
+         一个都不改——品牌保真断言仍然成立——只压低它与暗底的相对重量，实测
+         字标 11.38 → 7.69:1、黄块 12.94 → 8.69:1，仍是页面上最亮的那件东西。
+
          The hatching is a gradient, not fifty traced bars, and its geometry is
          MEASURED off the artwork rather than eyeballed: the stripe boundaries are
          one rigid line family x + 1.73y = const, period 28.20px along x, 39.7% of
@@ -475,6 +490,22 @@
         background-color: var(--edge-hero-logo-ink);
         -webkit-mask-image: var(--edge-hero-logo-ink-mask);
         mask-image: var(--edge-hero-logo-ink-mask);
+      }
+      /* Dark-only softness (the 2026-10-29 owner note above): the mark is
+         composited at 80% over the dark plate, so the artwork keeps its own
+         colours and only its WEIGHT comes down. Measured over the default soft
+         plate (#1c1c1b, Y 0.0116): the wordmark composites to #aeaeaf
+         (7.69:1, was 11.38) and the yellow body to #d2b91d (8.69:1, was 12.94);
+         the hatch follows. Light is untouched — there the same artwork is already
+         a 1.22:1 pale print. prefers-contrast: more restores full strength:
+         decoration yields to accessibility, the same call the texture layers and
+         the watermark make. The test reads the 80% back out of this sheet and
+         recomputes the composites, so the numbers above cannot drift. */
+      body[data-ds-dark-theme] [data-endfield-hero-logo] {
+        opacity: .8;
+      }
+      @media (prefers-contrast: more) {
+        body[data-ds-dark-theme] [data-endfield-hero-logo] { opacity: 1; }
       }
       /* Without mask support both layers would paint as solid rectangles; the mark
          degrades to nothing instead (the same call the watermark makes). */

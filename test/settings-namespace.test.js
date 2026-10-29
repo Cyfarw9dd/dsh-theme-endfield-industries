@@ -45,6 +45,18 @@ const { formStub, FIELD_DEFAULTS, KEY_TO_FIELD, fieldName } =
 const HOST = require(path.join(__dirname, '..', 'index.js'))
 
 const ROOT = path.resolve(__dirname, '..')
+/* The watermark row's option labels are copy, not schema: read them from the
+   real zh dictionary instead of restating them here. A stale literal failed
+   this test the moment the row was renamed (2026-10-29: 保持显示/仅新建页 ->
+   显示/隐藏), while the code it drives was still correct. */
+const dictSrc = fs.readFileSync(path.join(ROOT, 'src', 'client', 'ui', 'settings', 'dictionaries.js'), 'utf8')
+const zhLabel = (key) => {
+  const m = new RegExp('\\b' + key + "\\s*:\\s*'([^']*)'").exec(dictSrc)
+  if (m === null) throw new Error('settings-namespace: dictionary key ' + key + ' not found')
+  return m[1]
+}
+const WM_PERSIST_ON = zhLabel('wmPersistOn')
+const WM_PERSIST_OFF = zhLabel('wmPersistOff')
 const rawSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
 /* Source-level regexes read the pre-bundle client source (see config-forms). */
 /* The key vocabulary moved to its own module (prefs/keys.js); read it there. */
@@ -274,12 +286,12 @@ const rowTrigger = (tree, key) => {
 const wmPersistValue = (tree) => {
   const trig = rowTrigger(tree, 'watermark-persist')
   if (!trig) return null
-  return textOf(trig).includes('保持显示') ? '1' : '0'
+  return textOf(trig).includes(WM_PERSIST_ON) ? '1' : '0'
 }
 /** The option label a stored literal renders as, per row. */
 const optionTextFor = (rowKey, value) => {
   if (rowKey === 'radius') return value === 'round' ? '圆角' : '微倒角'
-  if (rowKey === 'watermark-persist') return value === '1' ? '保持显示' : '仅新建页'
+  if (rowKey === 'watermark-persist') return value === '1' ? WM_PERSIST_ON : WM_PERSIST_OFF
   return value === '1' ? '开启' : '关闭'
 }
 /** Drive a row's dropdown by flipping it: open the menu, click the option that
@@ -426,7 +438,7 @@ if (compoundCovered.length === COMPOUND.length) {
   if (!beforeTrig) { fail('no watermark-persist dropdown trigger rendered'); process.exit(1) }
   /* Derive the direction off the panel itself: the trigger's current text is
      the state it is IN, so the change is to the other option. */
-  const nextValue = textOf(beforeTrig).includes('保持显示') ? '0' : '1'
+  const nextValue = textOf(beforeTrig).includes(WM_PERSIST_ON) ? '0' : '1'
   const step = driveRowSelect(() => render(), 'watermark-persist', optionTextFor('watermark-persist', nextValue))
   if (step !== 'ok') { fail('watermark-persist dropdown could not be driven: ' + step) }
   if (wire.length === 0) pass('未就绪时改回默认值：没有出线写入')

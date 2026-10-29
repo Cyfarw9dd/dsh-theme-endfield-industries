@@ -20,6 +20,10 @@
  *      ratios (1.25 / 1.12 / 1.22:1 on cream) are printed as the recorded
  *      consequence. The failure it catches is a colour drifting into an invented
  *      value, or a scheme quietly keeping an override nobody asked for.
+ *      SINCE 2026-10-29 the dark scheme also composites the mark at a reduced
+ *      opacity (owner: the mark should read lighter there), so the same block
+ *      asserts the dark COMPOSITE over the real page colour stays inside the band
+ *      recorded in decor.css, and that light keeps full strength.
  *   4. THE PAGE IT MUST NOT APPEAR ON. An active conversation gets no mark.
  *
  * Usage: node test/hero-logo.test.js     (needs CHROME_PATH; see docs/testing.md)
@@ -33,7 +37,7 @@ const { BROWSER_SETTINGS_SCOPE_SNIPPET } = require(path.join(__dirname, 'fixture
 /* Fixture surfaces come from the real token source (fixtures/theme-values.js):
    the old literals were the retired #101110 darks, so every dark-side ratio
    below was measured against a base the theme no longer paints. */
-const { jsTokenPair } = require('./fixtures/theme-values.js')
+const { jsTokenPair, css: THEME_CSS } = require('./fixtures/theme-values.js')
 const TOKENS = {
   bgBase: jsTokenPair('--dsw-alias-bg-base'),
   bgLayer1: jsTokenPair('--dsw-alias-bg-layer-1'),
@@ -217,6 +221,7 @@ const page = (dark, generation, hero) => `<!doctype html><html><head><meta chars
       out.body=cs.getPropertyValue('--edge-hero-logo-body').trim()
       out.hatch=cs.getPropertyValue('--edge-hero-logo-hatch').trim()
       out.paper=getComputedStyle(document.body).backgroundColor
+      out.opacity=Number(cs.opacity)
     }
     document.title='HEROLOGO '+JSON.stringify(out)
   },500)
@@ -302,6 +307,46 @@ for (const [name] of scenarios) {
   const paper = parse(r.paper)
   const cr = (v) => ratio(parse(v), paper).toFixed(2) + ':1'
   console.log('      ' + name + ' on ' + r.paper + ': body ' + cr(r.body) + ' · hatch ' + cr(r.hatch) + ' · ink ' + cr(r.ink) + ' (logotype, no bar)')
+}
+/* ---------- 2b. dark-only softness: WHAT IS COMPOSITED, not what is declared ----------
+   2026-10-29 the owner asked for the mark to sit lighter in the dark theme (「红框里
+   的标示可以浅一点」). The fix is deliberately NOT a colour change — the declared
+   triple above stays the artwork's own on both schemes — it is one dark-only
+   opacity, so this block asserts the two things that decision actually owns:
+     · the opacity is read back from the sheet (never restated), full strength on
+       light, and the accessibility preference puts it back to 1;
+     · the COMPOSITE over the real page colour lands in the band the CSS note
+       records (wordmark 7.69:1, body 8.69:1): high enough to stay the loudest
+       thing on the page, low enough that dark stops reading like a pasted sticker. */
+const DARK_MARK_OPACITY = (() => {
+  const m = /body\[data-ds-dark-theme\] \[data-endfield-hero-logo\]\s*\{\s*opacity:\s*([0-9.]+)\s*;?\s*\}/.exec(THEME_CSS)
+  if (m === null) throw new Error('decor.css no longer carries the dark-only mark opacity — restore it before trusting this test')
+  return Number(m[1])
+})()
+/* The prefers-contrast override must be a literal 1: a scheme that dims decoration
+   but ignores the accessibility preference is exactly the regression this catches. */
+if (/@media\s*\(prefers-contrast:\s*more\)\s*\{[^}]*body\[data-ds-dark-theme\]\s*\[data-endfield-hero-logo\]\s*\{\s*opacity:\s*1\s*;?\s*\}/.test(THEME_CSS)) {
+  pass('prefers-contrast: more restores the mark to full strength')
+} else {
+  fail('prefers-contrast: more does not restore the dark mark (decor must yield to accessibility)')
+}
+pass('dark mark opacity read from decor.css: ' + DARK_MARK_OPACITY)
+const composite = (fg, bg, a) => fg.map((v, i) => Math.round(v * a + bg[i] * (1 - a)))
+for (const [name] of scenarios) {
+  const r = results[name]
+  if (!r.present) continue
+  const expected = name.startsWith('dark') ? DARK_MARK_OPACITY : 1
+  if (Math.abs(r.opacity - expected) <= 0.01) pass(name + ': mark opacity ' + r.opacity + (expected === 1 ? ' (full strength)' : ' (dark-only softening)'))
+  else fail(name + ': mark opacity is ' + r.opacity + ', expected ' + expected)
+  if (!name.startsWith('dark')) continue
+  const paper = parse(r.paper)
+  const over = (v) => composite(parse(v), paper, r.opacity)
+  const inkRatio = ratio(over(r.ink), paper)
+  const bodyRatio = ratio(over(r.body), paper)
+  if (inkRatio >= 7 && inkRatio <= 9.5) pass(name + ': wordmark composite ' + inkRatio.toFixed(2) + ':1 sits in the recorded 7–9.5 band (was 11.38 at full strength)')
+  else fail(name + ': wordmark composite ' + inkRatio.toFixed(2) + ':1 left the recorded band — retune the opacity in decor.css and the note with it')
+  if (bodyRatio >= 7 && bodyRatio <= 10) pass(name + ': yellow body composite ' + bodyRatio.toFixed(2) + ':1 sits in the recorded 7–10 band (was 12.94 at full strength)')
+  else fail(name + ': yellow body composite ' + bodyRatio.toFixed(2) + ':1 left the recorded band — retune the opacity in decor.css and the note with it')
 }
 
 /* ---------- 3. nothing on an active conversation ---------- */

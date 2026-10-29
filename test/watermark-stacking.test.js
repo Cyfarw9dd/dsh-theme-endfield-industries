@@ -15,16 +15,19 @@
  * stacking context. A z-index tie is broken by DOM order and the watermark is
  * appended last, so it won every tie against the whole composer subtree.
  *
- * ── The mount, as of 2026-10-24 ──────────────────────────────────────────────
- * The hero mark no longer lives at <body>: it mounts INSIDE the hero column
- * (the [class$='_root'][data-phase] element) at z-index:-1, on a column that
- * gets isolation:isolate + position:relative from the :has() rule in
- * tokens.css. The dropdown then beats it INSIDE the column's own stacking
- * context (mark -1 < composerHero 1 < menu 20) — and the industrial-texture
- * overlays can isolate the same column, which a body-level mark made
- * impossible (it forced a watermark exception that shipped the hero page
- * without grid/hatch). The test asserts the mount itself too: parent = the
- * hero column, z-index = -1.
+ * ── The mount, as of 2026-10-29 ──────────────────────────────────────────────
+ * The mark lives INSIDE the conversation column (the
+ * [class$='_root'][data-phase] element) at z-index:-1, on a column that gets
+ * isolation:isolate + position:relative from the :has() rule in tokens.css.
+ * The dropdown then beats it INSIDE the column's own stacking context
+ * (mark -1 < composerHero 1 < menu 20) — and the industrial-texture overlays
+ * can isolate the same column, which a body-level mark made impossible.
+ * (2026-10-24: the same reasoning applied to the hero placement; 2026-10-29 the
+ * owner removed the mark from the new-session page entirely, so the conversation
+ * column is now the only placement and this fixture models that page. The
+ * hero-absence rule is asserted in watermark-rehost.test.js, not here.)
+ * The test asserts the mount itself too: parent = the conversation column,
+ * mode = persist, z-index = -1.
  *
  * ── Why this test compares PIXELS and not elementsFromPoint ──────────────────
  * The first version of this file hit-tested with document.elementsFromPoint().
@@ -125,9 +128,8 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
     min-width:0;padding:0 24px}
   .pXSMma_stack{width:100%;max-width:var(--dsh-composer-card-max-width);
     display:flex;flex-direction:column;gap:12px}
-  /* 0.1.2-rc.1 merged the hero INTO ConversationRoot (data-phase) and renamed the
-     headline export to '*_headlineText'; the theme's findVisibleHeadline() matches
-     that suffix, so the fixture must carry it for the mark to be positioned. */
+  /* A headline row, kept because the live conversation skeleton renders one;
+     the mark no longer measures it (the follow loop died with the hero placement). */
   .AvZvRG_headlineText{color:var(--dsw-alias-label-primary);display:grid;
     grid-template-columns:34px auto auto;justify-content:center;
     align-items:center;column-gap:10px;font-size:26px;font-weight:500;
@@ -154,7 +156,7 @@ const mk = (alpha) => `<!doctype html><html><head><meta charset="utf-8"><style>
 </style></head><body><div id="root">
   <div class="pI_x6G_frame">
     <div class="pI_x6G_sidebarCol"></div>
-    <div class="pI_x6G_centerCol"><div class="wSkVaW_root" data-phase="hero">
+    <div class="pI_x6G_centerCol"><div class="wSkVaW_root" data-phase="active">
       <div class="wSkVaW_scrollBody"><div class="wSkVaW_viewArea">
         <div class="wSkVaW_composerStack wSkVaW_composerHero">
           <div class="pXSMma_root"><div class="pXSMma_stack">
@@ -429,22 +431,23 @@ console.log('')
 
 if (!g.mounted) fail('watermark never mounted -- the mock does not reproduce the page')
 else pass('watermark mounted in ' + g.mode + ' mode')
-/* The mount itself is part of the contract: a body-level hero mark would force
-   the texture stylesheet back into skipping hero isolation (no grid/hatch on
-   the hero page), so pin parent + z-index here. */
-if (g.mode !== 'hero') {
-  fail('expected hero mode on the hero fixture, got ' + g.mode)
+/* The mount itself is part of the contract: a body-level mark can never sit
+   between the column's background and its content, so pin parent + z-index here.
+   Since 2026-10-29 the conversation column is the ONLY placement (the
+   new-session page carries no mark at all), so the fixture is an active page. */
+if (g.mode !== 'persist') {
+  fail('expected persist mode on the conversation fixture, got ' + g.mode)
 } else {
-  pass('hero mode active')
+  pass('persist mode active (the only placement left)')
 }
 if (g.parent === 'body' || !/_root$/.test(String(g.parent))) {
-  fail('hero watermark mounts at ' + g.parent + ' — it must live INSIDE the hero'
-    + '\n      column (a body-level mark forces the texture stylesheet to skip hero isolation)')
+  fail('watermark mounts at ' + g.parent + ' — it must live INSIDE the conversation'
+    + '\n      column (a body-level mark cannot sit between the column background and its content)')
 } else {
-  pass('mark mounted inside the hero column (' + g.parent + ')')
+  pass('mark mounted inside the conversation column (' + g.parent + ')')
 }
 if (g.zIndex !== '-1') {
-  fail('hero watermark z-index is ' + g.zIndex + ', expected -1 (in-column stacking)')
+  fail('watermark z-index is ' + g.zIndex + ', expected -1 (in-column stacking)')
 } else {
   pass('mark stacks at z-index -1 inside the isolated column')
 }

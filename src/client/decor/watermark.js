@@ -2,26 +2,24 @@
  * decor/watermark.js — the background ENDFIELD wordmark (settings-toggleable).
  *
  * Extracted from the entry (see TODO.md「入口瘦身」): this module owns the
- * mark's two switches, its two placements and its per-frame follow loop. The
- * entry injects the store (`prefs`), the master-switch reader (`isEnabled`)
- * and the app-frame finder (`findAppFrame`, a direct reference — the factory
- * is composed after that declaration, so no TDZ); everything else (keys,
- * readers, state, timers) lives here.
+ * mark's two switches, its one placement and its mount lifecycle. The entry
+ * injects the store (`prefs`), the master-switch reader (`isEnabled`) and the
+ * app-frame finder (`findAppFrame`); everything else (keys, readers, state)
+ * lives here.
  *
- * Two independent switches:
- *   WATERMARK_KEY  — the watermark itself (default ON), shown on the hero page.
- *   WATERMARK_PERSIST_KEY — "keep showing it off the hero page" (default OFF),
- *     which also paints it on an active conversation / settings / any other page.
- * On the hero page the mark is centred on the headline. Off the hero page there
- * is no headline to follow, so it is centred in the conversation column instead.
- * Both modes mount INSIDE the column they decorate at z-index -1 (2026-10-24:
- * the hero placement used to be a <body> child, which forced the texture
- * stylesheet to skip the hero column's isolation and shipped the hero page
- * without the grid/hatch overlays — history in the note on s.zIndex in
- * styleWatermark()). Both placements must stay strictly BEHIND the app's own
- * chrome; that is locked down by test/watermark-stacking.test.js, which
- * compares real screenshots because a pointer-events:none layer cannot be
- * hit-tested.
+ * 2026-10-29（owner：「去掉点击新会话打开的首页中的 ENDFIELD INDUSTRIES 大字和
+ * 终末地的倒三角 logo，仅在新会话主界面不显示」）：新建会话页不再承载水印。
+ * hero 那一套（贴在标题行的圆框大字带 + 每帧跟随标题的 follow loop）整体删除，
+ * 于是水印只剩**一个**挂载位置：任何不是新建会话页的页面（会话列；没有会话列时
+ * 退到应用外框）。因为剩下的宿主都是「已经有内容」的页面，水印永远以 z-index:-1
+ * 位于正文之下，两个宿主属性（isolation:isolate / position:relative）仍由
+ * tokens.css 的 :has() 规则按需给上；本层 pointer-events:none，没法用命中测试
+ * 断言，所以回归仍由 test/watermark-stacking.test.js 的像素比对看守。
+ *
+ * 两个开关仍是两个：
+ *   WATERMARK_KEY — 背景水印总开关（默认开）。
+ *   WATERMARK_PERSIST_KEY — 「会话页水印」（默认关）。新建会话页已经永远不画
+ *     水印，所以这个开关现在决定的是：水印到底出不出现。
  */
 export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   const WATERMARK_KEY = 'dsh-theme-endfield-watermark'
@@ -29,7 +27,7 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   const WATERMARK_STYLE_KEY = 'dsh-theme-endfield-watermark-style'
   const WATERMARK_EMBLEM_KEY = 'dsh-theme-endfield-watermark-emblem'
   const isWatermarkOn = () => prefs.get(WATERMARK_KEY) !== '0'
-  // Default OFF: the hero-only behaviour stays the shipped default.
+  // Default OFF: the watermark is opt-in on the pages that can still carry it.
   const isWatermarkPersistOn = () => prefs.get(WATERMARK_PERSIST_KEY) === '1'
   /* 'hatch' = the official /operator hatch on the big letters; default 'solid'
      (the loading plate's flat grey). Applied as a body attribute; the stylesheet
@@ -56,100 +54,44 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
     if (r.width === 0 || r.height === 0) return null
     return hero
   }
-  const isHeroVisible = () => findHeroRoot() !== null
-  /** The visible conversation column — the persist-mode anchor and mount parent. */
+  /** The visible conversation column — the ONLY placement anchor left. The
+   *  new-session column (`data-phase="hero"`) is not one any more. */
   const findConversationRoot = () => {
     if (typeof document === 'undefined') return null
     const all = document.querySelectorAll('[class$="_root"][data-phase]')
     for (const el of all) {
+      if (el.getAttribute('data-phase') === 'hero') continue
       const r = el.getBoundingClientRect()
       if (r.width > 0 && r.height > 0) return el
     }
     return null
   }
-  const findVisibleHeadline = () => {
-    if (typeof document === 'undefined') return null
-    const all = document.querySelectorAll('[class$="_headlineText"]')
-    for (const h of all) {
-      const r = h.getBoundingClientRect()
-      if (r.width > 0 && r.height > 0) return h
-    }
-    return null
-  }
   let watermarkEl = null
-  let watermarkRaf = null
   let watermarkHost = null
-  /* Where the mark belongs for the current page, and how it must stack there.
-     Both modes mount INSIDE the element they decorate (2026-10-24: hero used to
-     be a <body> child at z-index 0 — a body-level mark can never sit BETWEEN
-     the column's background and its content, which forced the texture
-     stylesheet to skip the hero column's isolation and ship the hero page
-     without grid/hatch; in-column at z-index -1 the whole question dissolves):
-       hero    -> the hero column root, centred on the headline (follow loop).
-       persist -> the conversation column, filling it, BEHIND the message text.
-     Returning the parent alongside the mode keeps the two decisions in one place,
-     so remount happens exactly when either the parent or the stacking changes. */
+  /* Where the mark belongs for the current page. `null` means "nowhere", and
+     the new-session page is deliberately that: 2026-10-29 the owner asked for
+     the hero page to stop carrying the wordmark and the emblem, so a hero
+     column suppresses the mark even when both switches are on.
+     Otherwise mount INSIDE the element the mark decorates (2026-10-24: a
+     body-level mark can never sit BETWEEN a column's background and its
+     content) — the conversation column, or the app frame when no conversation
+     column is on screen (a full-page settings view). */
   const mountPointFor = () => {
-    const hero = findHeroRoot()
-    if (hero !== null) return { mode: 'hero', parent: hero }
+    if (findHeroRoot() !== null) return null
     const conv = findConversationRoot()
-    if (conv !== null) return { mode: 'persist', parent: conv }
-    // No conversation column on screen (e.g. a full-page settings view). A body
-    // child at z-index:-1 paints BELOW the body/frame's own opaque backgrounds
-    // there and never shows, so prefer the app FRAME: while the mark is mounted
-    // in it the stylesheet gives the frame isolation:isolate (the same pair of
-    // properties the conversation column gets above), so -1 stays above the
-    // frame background and strictly below the page content. body is only the
-    // last resort for a page that has no frame at all. findAppFrame arrives by
+    if (conv !== null) return { parent: conv }
+    // No conversation column on screen. A body child at z-index:-1 paints BELOW
+    // the body/frame's own opaque backgrounds there and never shows, so prefer
+    // the app FRAME: while the mark is mounted in it the stylesheet gives the
+    // frame isolation:isolate (tokens.css), so -1 stays above the frame
+    // background and strictly below the page content. body is only the last
+    // resort for a page that has no frame at all. findAppFrame arrives by
     // injection, and is only ever called from here at runtime, never during the
     // factory pass.
     const frame = findAppFrame()
-    return { mode: 'persist', parent: frame !== null ? frame : document.body }
+    return { parent: frame !== null ? frame : document.body }
   }
-  const positionWatermark = () => {
-    if (!watermarkEl) return
-    if (watermarkEl.getAttribute('data-endfield-watermark') === 'persist') {
-      // Centred in its own positioned parent — no per-frame measurement needed.
-      return
-    }
-    const headline = findVisibleHeadline()
-    if (!headline) return
-    const r = headline.getBoundingClientRect()
-    if (r.width === 0 || r.height === 0) return
-    /* The mark is an absolutely positioned child of the hero column, so the
-       centre it aims at is the HOST's centre, not the viewport's (the old body
-       mount was a viewport-wide strip and used innerWidth/2 here). Both rects
-       are viewport coordinates, so the difference is host-relative and
-       scroll-stable: when the column scrolls, headline and host move together
-       and the written values simply stop changing. */
-    const host = watermarkEl.parentElement
-    if (!host) return
-    const hr = host.getBoundingClientRect()
-    const cy = r.top + r.height / 2
-    const cx = r.left + r.width / 2
-    /* Half the BAND's measured height, not a formula: the host's height is the
-       band height in hero mode (the stylesheet sizes both absolutely-placed
-       layers), so a fixed constant would drift the moment the band changes.
-       The hero loop already measures the headline every frame, so one more rect
-       read is the only cost. */
-    const half = watermarkEl.getBoundingClientRect().height / 2
-    const top = (cy - half - hr.top) + 'px'
-    const tx = 'translateX(' + (cx - (hr.left + hr.width / 2)) + 'px)'
-    // Only write when the value actually changed, so a stable layout costs nothing.
-    if (watermarkEl.style.top !== top) watermarkEl.style.top = top
-    if (watermarkEl.style.transform !== tx) watermarkEl.style.transform = tx
-  }
-  const watermarkRafLoop = () => {
-    // Only the hero placement is measured per frame; persist mode is pure CSS, so
-    // the loop must stop when the mode changes rather than spin for nothing.
-    if (!watermarkEl || watermarkEl.getAttribute('data-endfield-watermark') !== 'hero') {
-      watermarkRaf = null
-      return
-    }
-    positionWatermark()
-    watermarkRaf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame(watermarkRafLoop) : null
-  }
-  const styleWatermark = (el, mode) => {
+  const styleWatermark = (el) => {
     const s = el.style
     s.display = 'flex'
     s.alignItems = 'center'
@@ -180,46 +122,16 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
        alphas — the emblem is a soft blur that needs a lift, and the wordmark's
        hatching covers only ~9% of each glyph, so one element-level opacity
        cannot express both. */
-    if (mode === 'hero') {
-      /* In-column absolute (2026-10-24; was a body-level position:fixed strip).
-         The hero column gets isolation:isolate + position:relative from the
-         same :has() rule as the persist mode (tokens.css), so -1 paints above
-         the column's own opaque background and strictly below its content.
-         History of the body-level era: the hero composer wrapper
-         ('*_composerHero') is position:relative + z-index:1 and traps the
-         model-select menu's z-index:20 inside it; a body-level mark at
-         z-index:1 tied with it and won by DOM order, painting over the
-         dropdown (12027 changed px inside the opaque menu box, measured). The
-         z-index:0 fix lost those ties — but a body-level mark can never sit
-         BETWEEN the column's background and its content, which forced the
-         texture stylesheet to skip hero isolation and ship the hero page
-         without grid/hatch. Mounting in-column dissolves the question: the
-         mark (-1) < composerHero (1) < dropdown (20) all stack inside one
-         context. Verified by test/watermark-stacking.test.js. */
-      s.position = 'absolute'
-      s.left = '0'
-      s.right = '0'
-      s.top = ''
-      s.bottom = ''
-      /* Height comes from the stylesheet (`[data-endfield-watermark='hero']`
-         sets it to the band height); the follow loop centres the measured box
-         on the headline. */
-      s.zIndex = '-1'
-      s.transform = ''
-    } else {
-      // Fill the conversation column and sit behind its content. z-index:-1 paints
-      // below in-flow text but still above the column's own background, which is
-      // why the column is given `isolation: isolate` in the stylesheet: without a
-      // stacking context there, -1 would slide behind that background and vanish.
-      s.position = 'absolute'
-      s.left = '0'
-      s.right = '0'
-      s.top = '0'
-      s.bottom = '0'
-      s.height = ''
-      s.zIndex = '-1'
-      s.transform = ''
-    }
+    // Fill the host and sit behind its content. z-index:-1 paints below in-flow
+    // text but still above the host's own background, which is why the column /
+    // frame is given `isolation: isolate` in the stylesheet: without a stacking
+    // context there, -1 would slide behind that background and vanish.
+    s.position = 'absolute'
+    s.left = '0'
+    s.right = '0'
+    s.top = '0'
+    s.bottom = '0'
+    s.zIndex = '-1'
   }
   /* Keep the body attributes in step with the two appearance switches BEFORE
      the streaming fast path below (that path returns early and must not skip an
@@ -233,63 +145,58 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
   }
   const syncWatermarkVisibility = () => {
     applyWatermarkStyle()
-    /* Streaming fast path. A mounted persist-mode mark is still correctly
-       placed while (a) the switches that could turn it off are unchanged,
-       (b) no hero root exists in the document and (c) its host is still
-       attached — all three decidable WITHOUT a single getBoundingClientRect.
-       The observer fires on every body mutation batch, so during token
-       streaming this used to run the full mountPointFor() below (several
-       querySelector(All) + rect reads = one forced layout) per frame. Any
-       check failing here falls through to the full decision, so every real
-       transition — theme off, hero appearing, host detached, persist flipped
-       off — is still caught on the same batch. */
-    /* The host must also still be the one a full decision would pick. The
-        persist fallback re-parents the mark: leaving a page that has no
-        conversation column (e.g. the plugin panel) unmounts the column and the
-        mark moves into the app FRAME; coming BACK mounts a fresh column, and a
-        fast path that only checked host.isConnected would leave the mark
-        stranded in the frame — where the column's own opaque background paints
-        over its z-index:-1 forever (2026-10-26: that was a real bug; the mark
-        only came back after the switch was toggled off/on, the one path that
-        re-ran the full decision). So: a column host must be the document's
-        ONLY column candidate, and a frame/body host requires that no column
-        candidate exists at all. querySelectorAll is cheap; the rect reads stay
-        on the fall-through path only, so streaming still costs no layout. */
-    let hostStillNatural = false
-    if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
-      && typeof document !== 'undefined' && watermarkHost.hasAttribute('data-phase')) {
+    const on = isEnabled() && isWatermarkOn() && isWatermarkPersistOn()
+    /* The new-session page has no mark to mount, so there is nothing to decide:
+       bail out before any rect read. This is the page the user types on, and the
+       body observer fires on every React mutation batch — running the full
+       decision per keystroke would force layout for a layer that is suppressed by
+       design (2026-10-29). The probe is the cheap class/attribute match, no
+       getBoundingClientRect: the live app flips data-phase on the SAME
+       ConversationRoot element, so a hero hint in the DOM means the new-session
+       screen is the current page. Leaving that page removes the hero element, so
+       the very next batch falls through and mounts the mark again. */
+    if (watermarkEl === null && typeof document !== 'undefined'
+      && document.querySelector('[class$="_root"][data-phase="hero"]') !== null) return
+    /* Streaming fast path. A mounted mark is still correctly placed while the
+       switches are unchanged, its host is attached, no new-session column has
+       appeared and its host is still the one a full decision would pick — all
+       decidable WITHOUT a getBoundingClientRect. The observer fires on every
+       body mutation batch, so during token streaming this used to run the full
+       decision (querySelector(All) + rect reads = one forced layout) per frame.
+       Any check failing here falls through to the full decision, so every real
+       transition — feature off, the new-session page appearing, host detached,
+       page switch — is still caught on the same batch.
+       The host must also still be the one a full decision would pick: the
+       fallback re-parents the mark into the app frame when no column exists
+       (a full-page settings view). Coming BACK mounts a fresh column; a fast
+       path that only checked host.isConnected would leave the mark stranded in
+       the frame — where the column's own opaque background paints over its
+       z-index:-1 forever (2026-10-26: that was a real bug). So: a column host
+       must be the document's ONLY column candidate, and a frame/body host
+       requires that no column candidate exists at all. querySelectorAll is
+       cheap; the rect reads stay on the fall-through path only. */
+    if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected && on
+      && typeof document !== 'undefined'
+      && document.querySelector('[class$="_root"][data-phase="hero"]') === null) {
       const columns = document.querySelectorAll('[class$="_root"][data-phase]')
-      hostStillNatural = columns.length === 1 && columns[0] === watermarkHost
-    } else if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
-      && typeof document !== 'undefined'
-      && document.querySelectorAll('[class$="_root"][data-phase]').length === 0) {
-      hostStillNatural = true
+      if (watermarkHost.hasAttribute('data-phase')) {
+        if (columns.length === 1 && columns[0] === watermarkHost) return
+      } else if (columns.length === 0) {
+        return
+      }
     }
-    if (watermarkEl !== null && watermarkHost !== null && watermarkHost.isConnected
-      && hostStillNatural
-      && typeof document !== 'undefined'
-      && watermarkEl.getAttribute('data-endfield-watermark') === 'persist'
-      && isEnabled() && isWatermarkOn() && isWatermarkPersistOn()
-      && document.querySelector('[class$="_root"][data-phase="hero"]') === null) return
-    const on = isEnabled() && isWatermarkOn()
     const target = on ? mountPointFor() : null
-    // Off the hero page the mark only survives when the persist switch is on.
     // parent can be null during very early boot (no <body> yet) — never mount.
     const shouldShow = target !== null && target.parent !== null
-      && (target.mode === 'hero' || isWatermarkPersistOn())
     if (shouldShow && watermarkEl) {
-      // A page change can flip the mode or move the parent — restyle/reparent in place.
-      if (watermarkEl.getAttribute('data-endfield-watermark') !== target.mode) {
-        watermarkEl.setAttribute('data-endfield-watermark', target.mode)
-        styleWatermark(watermarkEl, target.mode)
-      }
+      // A page change can move the parent — reparent in place, never recreate.
       if (watermarkHost !== target.parent) {
         target.parent.appendChild(watermarkEl)
         watermarkHost = target.parent
       }
     } else if (shouldShow && !watermarkEl) {
       const el = document.createElement('div')
-      el.setAttribute('data-endfield-watermark', target.mode)
+      el.setAttribute('data-endfield-watermark', 'persist')
       /* Translation-proofing. The wordmark is a brand name that must never be
          rewritten by Chrome/Edge "translate this page", a Google Translate widget
          or a translator extension.
@@ -305,7 +212,7 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
       el.setAttribute('lang', 'en')
       el.setAttribute('aria-hidden', 'true')
       el.className = 'notranslate'
-      styleWatermark(el, target.mode)
+      styleWatermark(el)
       target.parent.appendChild(el)
       watermarkEl = el
       watermarkHost = target.parent
@@ -314,20 +221,6 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
       watermarkEl = null
       watermarkHost = null
     }
-    // While visible, follow the headline every frame (page switches, sidebar
-    // width changes, animations) — no reliance on observer timing. The persist
-    // placement is pure CSS, so it needs no frame loop.
-    const needsLoop = watermarkEl !== null && watermarkEl.getAttribute('data-endfield-watermark') === 'hero'
-    if (needsLoop && !watermarkRaf && typeof requestAnimationFrame === 'function') {
-      watermarkRaf = requestAnimationFrame(watermarkRafLoop)
-    } else if (!needsLoop && watermarkRaf !== null && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(watermarkRaf)
-      watermarkRaf = null
-    }
-  }
-  const onWatermarkResize = () => { if (watermarkEl) positionWatermark() }
-  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('resize', onWatermarkResize)
   }
   /* The master-switch-off path (entry unmount()) and the run teardown share
      this: with the sheet torn down the mark's `opacity: var(--edge-wm-alpha)`
@@ -337,20 +230,13 @@ export function createWatermark({ prefs, isEnabled, findAppFrame }) {
      window (the store's live reconciler -> unmount), where nothing else removes
      the node. */
   const detach = () => {
-    if (watermarkRaf !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(watermarkRaf)
-    watermarkRaf = null
     if (watermarkEl !== null && watermarkEl.parentNode) watermarkEl.parentNode.removeChild(watermarkEl)
     watermarkEl = null
     watermarkHost = null
   }
-  /* Full run teardown: everything detach() drops, plus the resize listener
-     this factory installed. */
-  const dispose = () => {
-    detach()
-    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
-      window.removeEventListener('resize', onWatermarkResize)
-    }
-  }
+  /* Full run teardown. The hero era had a window resize listener here; with the
+     follow loop gone there is no listener left to release. */
+  const dispose = () => detach()
   return {
     KEY: WATERMARK_KEY,
     PERSIST_KEY: WATERMARK_PERSIST_KEY,

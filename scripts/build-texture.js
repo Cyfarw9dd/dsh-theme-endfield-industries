@@ -37,13 +37,23 @@
  *   owner asked for it on the 新会话/发送/提交/跳过 buttons ("图案复刻官方")
  *   after this texture was measured live on the official site (2026-10-13).
  *
- *   DERIVED VARIANT (not a second download): the official light-button branch
- *   repaints the same image with filter: invert(1). An element
- *   background-image layer cannot carry a filter, so the dark-scheme twin is
- *   DERIVED HERE at build time: the PNG is a colormap image, so inverting the
- *   ink is exactly inverting the PLTE entries (255-R/G/B per entry; tRNS and
- *   IDAT untouched — the indices are the same). Only that one chunk (plus its
- *   CRC) is rewritten; everything else stays byte-for-byte.
+ *   DERIVED VARIANTS (not a second download): two twins are rebuilt from these
+ *   same committed bytes, because an element background-image layer cannot
+ *   carry a filter — the data form of the official `invert(1)` grammar is an
+ *   inverted palette. Both PNGs are colormap images, so inverting the ink is
+ *   exactly inverting the PLTE entries (255-R/G/B per entry; tRNS and IDAT
+ *   untouched — the indices are the same). Only that one chunk (plus its CRC)
+ *   is rewritten; everything else stays byte-for-byte. Twins:
+ *     --edge-btn-tex-inv   the official light-button branch's invert(1)
+ *                          (2026-10-13); keeps the left-fade wrapper.
+ *     --edge-tex-wave-dark the top-right stepped wave on the dark theme
+ *                          (2026-10-29, owner: 「暗色背景下缺少右上角等高线底纹」).
+ *                          The official wave ink is #1a1a1a (the dark base
+ *                          itself, invisible) and the theme had omitted the
+ *                          layer; the inverted twin paints #e5e5e5 at the same
+ *                          per-pixel alpha, i.e. the official contour at the
+ *                          official strength. Only the top-right wave is
+ *                          mirrored; the middle tape-wave stays light-only.
  *
  *   LEFT-FADE WRAPPER: both button-material variants ship inside a one-rect
  *   SVG mask (opacity 0 until x=95 of 320, ramping to 1 at x=165). Reason:
@@ -142,7 +152,7 @@ const crc32 = (buf) => {
    filter: invert(1); as pure data that is PLTE entries -> 255-R/G/B with the
    alpha table and the compressed indices untouched (colormap PNG). Every other
    byte of every other chunk is copied verbatim. */
-const invertPalettePng = (buf) => {
+const invertPalettePng = (buf, label) => {
   let off = 8
   while (off < buf.length) {
     const len = buf.readUInt32BE(off)
@@ -160,7 +170,7 @@ const invertPalettePng = (buf) => {
     }
     off += 12 + len
   }
-  throw new Error('endfield-button-texture.png has no PLTE chunk — the invert derivation expects a colormap image')
+  throw new Error((label || 'png') + ' has no PLTE chunk — the invert derivation expects a colormap image')
 }
 
 /* Left-fade wrapper for the button material. Measured fact: the official ink
@@ -230,12 +240,21 @@ const main = () => {
       line: `${a.file} (${a.note}${extra}) — ${raw.length}B raw, ${Math.round(uri.length / 1024)}KB base64, sha256 ${a.sha256.slice(0, 16)}…`,
     })
   }
-  /* Derived dark twin (see header): rebuilt from the same committed bytes with
+  /* Derived dark twins (see header): rebuilt from the same committed bytes with
      only the PLTE chunk flipped, so the official image and its inverse can
-     never drift apart. Wrapped in the same left-fade mask. */
+     never drift apart. */
+  {
+    const raw = fs.readFileSync(path.join(ROOT, 'assets', 'endfield-wave-bg.png'))
+    const inv = invertPalettePng(raw, 'endfield-wave-bg.png')
+    parts.push({
+      prop: '--edge-tex-wave-dark',
+      uri: 'data:image/png;base64,' + inv.toString('base64'),
+      line: 'endfield-wave-bg.png (derived: PLTE-inverted twin of --edge-tex-wave — the top-right contour at the official alpha, for the dark scheme 2026-10-29) — ' + inv.length + 'B raw, ' + Math.round(inv.length / 1024) + 'KB base64',
+    })
+  }
   {
     const raw = fs.readFileSync(path.join(ROOT, 'assets', 'endfield-button-texture.png'))
-    const inv = invertPalettePng(raw)
+    const inv = invertPalettePng(raw, 'endfield-button-texture.png')
     const uri = wrapFadeSvg(inv)
     parts.push({
       prop: '--edge-btn-tex-inv',
