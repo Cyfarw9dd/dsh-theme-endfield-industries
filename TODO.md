@@ -46,8 +46,9 @@ CHROME_PATH=/usr/bin/chromium-browser npm test   # exit 0、0 行 FAIL（其他�
    - `check.js` 1a：客户端入口的 `?raw` 导入与 `sources.STYLE_FILES` 同名同序；
      以及对统一 `createElement('button', …role: 'menuitemradio')` 的形状断言
      （读 `concatClientJs()`，已去空白敏感）
-3. **`settings-config-forms.test.js` 有硬编码的 React hook slot 序号**（palette 目前
-   `hooks[4]`）。若改变设置面板的 `useState` 顺序，必须同步这个下标。
+3. **`settings-config-forms.test.js` 有硬编码的 React hook slot 序号**（radius 的
+   mode 目前 `hooks[10]`；palette 字段已随 2026-10 配色切换退役）。若改变设置
+   面板的 `useState` 顺序，必须同步这个下标。
 4. 不手改产物：`client.js` 由 `npm run build` 生成；`generated.css` 的围栏区由
    `scripts/build-*.js` 维护。
 5. 改设置面板/`prefs` 契约的套件是行为契约：`settings-rows`、`settings-durable-hold`、

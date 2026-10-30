@@ -24,8 +24,8 @@
 
 - 浏览器半的源码在 `src/`：`src/client/index.js`（JS，含外壳与 `insertCss()`）
   + `src/styles/` 分层样式（`tokens/decor/interaction/chrome/surfaces/overlays.css`
-  手写六层 + `generated.css` 机器生成层；清单即级联顺序）
-  （机器生成的掩码/纹理围栏区）。tsdown 把两者打包成**单文件产物
+  手写六层 + `generated.css` 机器生成层，机器生成的掩码/纹理住在后者的围栏区）。
+  tsdown 把两者打包成**单文件产物
   `client.js`**（DSH 插件加载器的硬约束），与 @deepseek-ai 自家 client 包
   （`tsdown bundle → lib/client.js`）同一条管线；产物提交入库，
   `scripts/build-client.js --check` 保证不过期
@@ -68,18 +68,18 @@
   实例方法（attention 持 audio 与 toasts 的引用），测试接缝（`__attention*`、
   `__notify*`）由入口在组合时挂回 module.exports——与拆分前完全同名同形
 - **body 属性同步已拆成 motion/ 模块**：`src/client/motion/sync.js`
-  （`createMotionSync({ prefs, isEnabled })`）持有 radius class、
-  motion/glass/texture 属性、调色板 class 的全部读写与同步
+  （`createMotionSync({ prefs, isEnabled })`）持有 radius class 与
+  motion/glass/texture/dark-tier 属性的全部读写与同步
   （`syncAll()` 是 mount/reconciler 的统一入口，`detach()` 是 unmount 的对应
   面——按原契约只清 class/glass，motion/texture 属性随样式表失效而留存），
-  以及 scheme / prefers-reduced-motion / findAppFrame 三个 DOM 判定。入口的
+  以及 findAppFrame 这个会话列定位判定（scheme/reduced-motion 两个 DOM 判定随无消费者一并移除；加载屏的 prefers-reduced-motion 就地内联读取）。入口的
   `setReconciler` 注册块只保留 mount/unmount 编排 + 各面 sync；设置面板的
   写入路径经 `motionSync.*` 逐面调用
 - **设置面板已拆成 ui/settings/ 模块**：`src/client/ui/settings/dictionaries.js`
   （zh/en 文案，zh 为键集真源）、`section.js`（locale 注册 + settings.section
   slots 注入 + 整个 React 面板与统一下拉；`createSettingsSection({ services,
   prefs, themeApi, … })` 返回 section 的 dispose）。面板的 useState 顺序被
-  settings-config-forms 按下标钉死（`hooks[6]` = radius 的 mode），搬移保序；
+  settings-config-forms 按下标钉死（`hooks[10]` = radius 的 mode），搬移保序；
   `label` 保持 thunk、`locale:` 仍只在 locale 服务存在时声明。入口至此只剩
   组合根：services → prefs → 各 feature 模块 → settings 注册 → run effect。
   令牌覆盖层是同目录的 `ui/tokens.js`（纯数据，亮/暗成对），入口的 mount()
@@ -91,9 +91,10 @@
   （各层自带行尾换行，层与层之间不插入任何分隔）；
   `check.js` 另有一条守卫断言客户端入口的 `?raw` 导入与清单**同名同序**，
   `selftest.js` 有对应变异案例（把两个 import 调换顺序必须被抓到）
-- 强调色按**调色板 class**（`theme-endfield-gray` / `-wuling`）切换：一个 class
-  翻转全量重绘，无 JS 重绘
-- 选中/光标是**不随调色板**的固定交互灰（官网语法，见调研文档）
+- 强调色只有**谷地黄**一档：可切换配色（终末地灰/武陵青/谷地黄 class）已随
+  2026-10 的设置行退役，`palette` 字段不再声明或读取；check.js 守卫残留的
+  覆盖块与偏好键不再回归
+- 选中/光标是**不随强调色**的固定交互灰（官网语法，见调研文档）
 - 生成物由各自脚本维护（`build-emblem.js` / `build-logo.js` /
   `build-texture.js` 打进 `generated.css` 围栏区），`--check` 防漂移
 
