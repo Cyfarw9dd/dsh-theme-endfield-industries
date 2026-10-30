@@ -2920,7 +2920,7 @@
 						onChange: setLoaderValue
 					}))])]),
 					R.createElement("div", { key: "group-notify" }, [
-						groupTitle("05", "groupNotify", false),
+						groupTitle("04", "groupNotify", false),
 						row("notify", false, [R.createElement("span", { style: labelStyle }, t("notifyRow"), R.createElement("span", { style: hintStyle }, t(notifyOn ? "notifyHintOn" : "notifyHintOff"))), endfieldSelect({
 							value: notifyOn ? "1" : "0",
 							ariaLabel: t("notifyRow"),
@@ -2977,7 +2977,7 @@
 						})])
 					]),
 					R.createElement("div", { key: "group-audio" }, [
-						groupTitle("06", "groupAudio", false),
+						groupTitle("05", "groupAudio", false),
 						row("audio", false, [R.createElement("span", { style: labelStyle }, t("audioRow"), R.createElement("span", { style: hintStyle }, t(audioOn ? "audioHintOn" : "audioHintOff"))), endfieldSelect({
 							value: audioOn ? "1" : "0",
 							ariaLabel: t("audioRow"),

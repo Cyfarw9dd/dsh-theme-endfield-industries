@@ -834,9 +834,9 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
               )
             ]),
           ]),
-          /* --- 05 通知：工业风卡片，三触发 --- */
+          /* --- 04 通知：工业风卡片，三触发 --- */
           R.createElement('div', { key: 'group-notify' }, [
-            groupTitle('05', 'groupNotify', false),
+            groupTitle('04', 'groupNotify', false),
             row('notify', false, [
               R.createElement('span', { style: labelStyle },
                 t('notifyRow'),
@@ -890,12 +890,12 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
               })
             ]),
           ]),
-          /* --- 06 音频：两个生效槽位 + 两个预留槽位 ---
+          /* --- 05 音频：两个生效槽位 + 两个预留槽位 ---
              Every row states WHEN it fires, because that is the whole contract
              of this feature; the two reserved rows say outright that they will
              not fire yet, so a switch that does nothing cannot read as broken. */
           R.createElement('div', { key: 'group-audio' }, [
-            groupTitle('06', 'groupAudio', false),
+            groupTitle('05', 'groupAudio', false),
             row('audio', false, [
               R.createElement('span', { style: labelStyle },
                 t('audioRow'),

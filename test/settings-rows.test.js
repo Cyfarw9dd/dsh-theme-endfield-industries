@@ -210,9 +210,9 @@ pass('settings panel rendered without throwing')
 
 const nodes = walk(tree)
 const buttons = nodes.filter((n) => n.type === 'button')
-/* The rows live inside four group containers (主题 / 背景 / 动画 / 娱乐), so "all
-   rows" means every div whose key is one of the sixteen switch rows, wherever
-   it sits in the tree.
+/* The rows live inside five group containers (主题 / 背景 / 动画 / 通知 /
+   音频), so "all rows" means every div whose key is one of the ROW_KEYS
+   switch rows, wherever it sits in the tree.
 
    ROW_KEYS is BOTH the expected set and the counter, so a new row that is not
    listed here is silently ignored rather than counted — which is exactly what
@@ -242,7 +242,7 @@ if (rowsInGroups.length === rows.length) {
     + rowsInGroups.map((r) => r.props.key).filter((k) => !ROW_KEYS.includes(k)).join(', '))
 }
 
-if (groups.length === 5) pass('rows are grouped into 6 sections (主题/背景/动画/娱乐/通知/音频)')
+if (groups.length === 5) pass('rows are grouped into 5 sections (主题/背景/动画/通知/音频)')
 else fail('expected 5 group containers, found ' + groups.length)
 
 const unkeyed = rows.filter((r) => !r.props || r.props.key === undefined)
@@ -256,7 +256,7 @@ else fail('duplicate row keys: ' + keys.join(', '))
 /* The group headers must be numbered editorial labels in the documented order,
    and the scheme-aware ink rule for them must exist in the stylesheet source. */
 const all = textOf(tree)
-for (const [label, title] of [['01 主题', 'THEME'], ['02 背景', 'BACKGROUND'], ['03 动画', 'ANIMATION'], ['05 通知', 'NOTIFY'], ['06 音频', 'AUDIO']]) {
+for (const [label, title] of [['01 主题', 'THEME'], ['02 背景', 'BACKGROUND'], ['03 动画', 'ANIMATION'], ['04 通知', 'NOTIFY'], ['05 音频', 'AUDIO']]) {
   if (all.includes(label) && all.includes(title)) pass('group header present: ' + label + ' / ' + title)
   else fail('group header missing: ' + label + ' / ' + title)
 }

@@ -39,11 +39,11 @@
 | | 字标样式 | 实心 | `watermarkStyle` |
 | | 徽标版本 | 英文版 | `watermarkEmblem` |
 | 03 动画 | 启动加载动画 | 关 | `loader` |
-| 05 通知 | 工业风通知 | 开 | `notify` |
+| 04 通知 | 工业风通知 | 开 | `notify` |
 | | 任务完成通知 | 开 | `notifyDone` |
 | | 提问通知 | 开 | `notifyQuestion` |
 | | 索权通知 | 开 | `notifyApprove` |
-| 06 音频 | 音频通知 | **关** | `audioEnabled` |
+| 05 音频 | 音频通知 | **关** | `audioEnabled` |
 | | 启动加载动画音 | 开 | `audioBoot` |
 | | 任务开始音 | 开 | `audioTurnStart` |
 | | 任务结束音 | 开 | `audioTurnDone` |
@@ -189,7 +189,7 @@
 
 ---
 
-## 05 通知
+## 04 通知
 
 ### 工业风通知（默认开启）
 
@@ -207,7 +207,7 @@
 
 ---
 
-## 06 音频（默认关闭）
+## 05 音频（默认关闭）
 
 四种提示音，**由宿主进程播放**而不是浏览器：页面最小化、切到别的应用时同样能听到——那恰好是最需要提示的场合。
 完整文档见 [audio-notifications.md](cookbook/audio-notifications.md)。

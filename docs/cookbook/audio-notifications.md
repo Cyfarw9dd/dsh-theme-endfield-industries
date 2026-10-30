@@ -54,7 +54,7 @@
 
 ## 4. 配置
 
-设置页 **设置 › 终末地工业主题设置 › 06 音频**（字段在 profile entry id `theme-endfield` 命名空间，由 DSH 设置服务持久化进 profile 的 `cordis.patch.yml`；兼容下限 DSH 0.2.0，无旧代回落）：
+设置页 **设置 › 终末地工业主题设置 › 05 音频**（字段在 profile entry id `theme-endfield` 命名空间，由 DSH 设置服务持久化进 profile 的 `cordis.patch.yml`；兼容下限 DSH 0.2.0，无旧代回落）：
 
 **总开关 `audioEnabled` 默认关闭**：音效是选择加入（opt-in）的功能，升级到带本功能的版本不会自己开始出声。
 总开关打开后，下面的槽位开关（默认开启）决定具体哪几种情形响。
