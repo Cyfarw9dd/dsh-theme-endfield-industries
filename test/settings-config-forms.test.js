@@ -701,7 +701,7 @@ async function main() {
       ======================================================================= */
   {
     const stub = configFormsStub(
-      { 'theme-endfield': { radius: 'round', texture: 'subtle' } },
+      { 'theme-endfield': { radius: 'round', texture: 'subtle', darkTier: 'warm' } },
       { served: [], loading: ['theme-endfield'] },
     )
     const client = bootClient({ configForms: stub.service })
@@ -737,6 +737,23 @@ async function main() {
         + JSON.stringify(radiusSlot) + ' (this is the reported reset bug)')
     }
 
+    /* darkTier shares the resync line family (its slot is 9 — see the order
+       list above). The setDarkTier call was once dropped from
+       resyncPanelFromPrefs and no test went red; this pins it. */
+    const darkTierSlot = hooks[9]
+    if (darkTierSlot === 'warm') {
+      pass('panel hook state adopted the served darkTier (slot moved off its default)')
+    } else {
+      fail('darkTier slot never re-synced after the section settled: '
+        + JSON.stringify(darkTierSlot) + ' (expected warm — the resync call was dropped once already)')
+    }
+    const darkTierTrigger = panelSelectTrigger(client, '暗色档位')
+    if (darkTierTrigger && textOf(darkTierTrigger).includes('微暖')) {
+      pass('dark-tier trigger re-synced onto 微暖, not the soft default')
+    } else {
+      fail('dark-tier trigger shows ' + (darkTierTrigger ? textOf(darkTierTrigger) : '(no select)') + ' — the served warm never landed')
+    }
+
     const after = panelSelectTrigger(client, '主题圆角')
     // The trigger's visible text reflects the settled radius (圆角), not the default.
     if (after && textOf(after).includes('圆角')) {
@@ -755,7 +772,7 @@ async function main() {
     }
 
     // Adopting a served section must never be mistaken for a user edit.
-    if (stub.writes.some((w) => w.field === 'radius' || w.field === 'texture')) {
+    if (stub.writes.some((w) => w.field === 'radius' || w.field === 'texture' || w.field === 'darkTier')) {
       fail('the theme WROTE back the served values instead of adopting them: ' + JSON.stringify(stub.writes))
     } else {
       pass('late-served section was adopted for reading without being rewritten')

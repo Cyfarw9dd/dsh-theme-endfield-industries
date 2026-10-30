@@ -24,6 +24,9 @@ export const PREFS_FIELD_DEFAULTS = {
   radius: 'square',
   glass: 'off',
   texture: 'standard',
+  /* 暗色档位 soft/warm/neutral，默认 soft（与 index.js FIELD_DEFAULTS 同源；
+     档位字面量的合法性校验在 motion/sync.js 的 DARK_TIER_OPTIONS）。 */
+  darkTier: 'soft',
   motion: 'signal',
   watermark: '1',
   watermarkPersist: '0',

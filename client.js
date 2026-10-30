@@ -92,6 +92,7 @@
 		radius: "square",
 		glass: "off",
 		texture: "standard",
+		darkTier: "soft",
 		motion: "signal",
 		watermark: "1",
 		watermarkPersist: "0",
@@ -2298,6 +2299,7 @@
 						setNotifyApprove(toasts.isApproveOn());
 						setGlass(motionSync.readGlass());
 						setTexture(motionSync.readTexture());
+						setDarkTier(motionSync.readDarkTier());
 						setMode(prefs.get(motionSync.RADIUS_KEY) || "square");
 						setMotion(motionSync.readMotion());
 						setAudioOn(audio.isOn());

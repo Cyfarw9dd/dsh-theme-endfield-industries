@@ -132,6 +132,40 @@ if (defaultMismatch.length === 0) {
   fail('fixture defaults differ from index.js for: ' + defaultMismatch.join(', '))
 }
 
+/* The CLIENT defaults table must mirror the host schema too — not just the
+   fixture. prefsResolveSection() walks PREFS_FIELD_DEFAULTS and prefsGet()
+   falls back to it, so a field the host declares but the client table omits
+   round-trips nowhere: the write persists under the schema, the read ignores
+   it and the switch resets on every refresh (darkTier shipped exactly this
+   way, with every suite green because the fixture happens to know the field). */
+const clientDefaults = (() => {
+  const m = clientSrc.match(/const PREFS_FIELD_DEFAULTS = \{([\s\S]*?)\n\}/)
+  if (!m) return null
+  const out = {}
+  for (const hit of m[1].matchAll(/([A-Za-z]+):\s*'([^']*)'/g)) out[hit[1]] = hit[2]
+  return out
+})()
+if (clientDefaults === null) {
+  fail('could not read PREFS_FIELD_DEFAULTS out of prefs/keys.js — the table is the thing under test')
+} else {
+  const clientMissing = hostFields.filter((f) => !Object.prototype.hasOwnProperty.call(clientDefaults, f))
+  if (clientMissing.length === 0) {
+    pass('the client defaults table covers every declared field (' + hostFields.length + ')')
+  } else {
+    fail('PREFS_FIELD_DEFAULTS (prefs/keys.js) is missing fields the host declares: '
+      + clientMissing.join(', ')
+      + ' -> those reads ignore the stored value and fall back forever')
+  }
+  const clientValueMismatch = hostFields.filter(
+    (f) => Object.prototype.hasOwnProperty.call(clientDefaults, f)
+      && String(clientDefaults[f]) !== String(HOST.FIELD_DEFAULTS[f]))
+  if (clientValueMismatch.length === 0) {
+    pass('the client defaults match the host schema defaults')
+  } else {
+    fail('client defaults differ from index.js for: ' + clientValueMismatch.join(', '))
+  }
+}
+
 /* ---------------------------------------------------------------- harness -- */
 
 /* Stateful stub (same shape as settings-rows): the panel's dropdowns keep

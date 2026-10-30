@@ -173,6 +173,7 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
             setNotifyApprove(toasts.isApproveOn())
             setGlass(motionSync.readGlass())
             setTexture(motionSync.readTexture())
+            setDarkTier(motionSync.readDarkTier())
             setMode(prefs.get(motionSync.RADIUS_KEY) || 'square')
             setMotion(motionSync.readMotion())
             /* The 音频 rows seed themselves from the same store, so they are
