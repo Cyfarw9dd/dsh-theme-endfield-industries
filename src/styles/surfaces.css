@@ -5,6 +5,10 @@
         --dsw-alias-label-caption: #a4a6a1;
         --dsw-alias-label-dimmed: #70736f;
         --dsw-alias-label-primary-dimmed: #d8d9d5;
+        /* inverted 原为字标徽章字母而改（现字母直涂，见下方 brand 块）；暗色下保留
+           是因为它在这_scheme里恰好与上游同向（上游 bluish-800 也是深字浅底），
+           且 #101110 是本主题的暖黑——附件 *_remove 叉叉（浅盘 --edge-dark-label-primary
+           × 此墨）与侧栏版本徽章都由此得益，量值见 palette-contrast.test.js §10g。 */
         --dsw-alias-label-primary-inverted: #101110;
       }
       /* Preset menu descriptions readable without hover in dark */
@@ -141,13 +145,33 @@
       body[data-ds-dark-theme] [class*='_heroGlow'] ellipse {
         fill-opacity: var(--edge-glow-dark) !important;
       }
-      /* Brand wordmark HARNESS chip: signal-yellow box + black letters (both modes) */
-      body {
-        --dsw-alias-label-primary-inverted: var(--edge-accent-ink, #101110);
-      }
+      /* Brand wordmark HARNESS chip: signal-yellow box + black letters (both modes).
+         The letters used to be painted THROUGH a body-level remap of
+         --dsw-alias-label-primary-inverted → accent-ink, but that token is a PAIR
+         token upstream ("the ink that sits on contrast fills", light #fff on
+         neutral-bluish-700 / dark bluish-800 on bluish-50), and every OTHER
+         consumer of it got the remap too. Two of them pair it with a DARK fill in
+         light mode, so the near-black ink landed on near-black surfaces:
+           · the attachment *_remove buttons (composer image thumbnails, file
+             cards, message image rail — the reported "移除叉叉几乎不可见"):
+             background --dsw-alias-button-contrast-fill (#3a3c38 here) × color
+             inverted = 1.70:1;
+           · the sidebar *_buildVersion badge: color inverted on background
+             label-primary (#101110) = 1.00:1.
+         The letters are now painted DIRECTLY instead: the HARNESS chip is the only
+         clipped group in the wordmark svg (clip-path url(#dsh-wordmark-badge-clip)),
+         so this hook cannot reach the DEEPSEEK letters or the whale mark, and the
+         light remap is deleted — remove/buildVersion fall back to upstream's own
+         pairing (light: #fff X, 11.15:1 on this theme's disc). Dark keeps its
+         #101110 override in the warm-gray block above: there the pairing is
+         dark-ink-on-light-disc and #101110 is this theme's warm black. All three
+         pairs are asserted in test/palette-contrast.test.js §10g. */
       [class*='brand'] svg rect,
       [class$='_newSession'] svg rect {
         fill: var(--edge-accent) !important;
+      }
+      [class*='brand'] svg g[clip-path*='wordmark-badge'] path {
+        fill: var(--edge-accent-ink, #101110) !important;
       }
       /* Compaction notice row: soft yellow wash + accent in dark, hover = solid inversion */
       body[data-ds-dark-theme] [class$='_compactionRow'] {

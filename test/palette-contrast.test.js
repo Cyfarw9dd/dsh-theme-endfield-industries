@@ -676,6 +676,74 @@ for (const [name, block] of Object.entries(palettes)) {
   }
 }
 
+/* ---------- 10g. attachment *_remove X + sidebar buildVersion badge ----------
+   The reported bug: hovering a pasted image thumbnail in the composer shows an
+   18px *_remove disc whose X (IconCloseFillRegular, stroke:currentColor) reads
+   the button's color = --dsw-alias-label-primary-inverted on background
+   --dsw-alias-button-contrast-fill. That token is a PAIR token upstream (light
+   #fff on neutral-bluish-700 / dark bluish-800 on bluish-50); this theme used to
+   remap it to accent-ink at the body level for the wordmark chip, so in LIGHT
+   mode the near-black X landed on the theme's own dark disc #3a3c38 - 1.70:1,
+   'the X is almost invisible'. The same leak flattened the sidebar *_buildVersion
+   badge (inverted x label-primary = 1.00:1). The fix paints the chip letters
+   directly (surfaces.css brand block) and deletes the LIGHT remap, so all three
+   consumers get a measured pair again. Values are read from the real rules; the
+   upstream light chain is quoted verbatim below from
+   @deepseek-ai/dsh-client-ui-theme lib/client.js (design_platform_css, body{}) -
+   the same quote-at-write-time precedent as test/hover-check.js. */
+{
+  const noComments = css.replace(/\/[\s\S]*?\*\//g, '')
+  /* 1. structural: the theme must NOT remap the pair token outside dark. Walk
+        every occurrence of the token in the stripped sheet and require its
+        enclosing selector to be the dark scheme block - the regression is
+        precisely a light 'body { ... }' remap coming back. */
+  let sel = ''
+  let lightRemap = false
+  for (const part of noComments.split('}')) {
+    const open = part.lastIndexOf('{')
+    sel = open < 0 ? sel : part.slice(0, open).trim()
+    if (part.includes('--dsw-alias-label-primary-inverted') && !/\[data-ds-dark-theme\]/.test(sel)) lightRemap = true
+  }
+  if (lightRemap) fail('移除叉叉 · 亮色把 --dsw-alias-label-primary-inverted 改成了墨色（配对令牌被劫持，#fff 叉叉会再变近黑）')
+  else pass('移除叉叉 · 亮色不再改写 --dsw-alias-label-primary-inverted（配对令牌还给上游）')
+  /* 2. the wordmark chip keeps its ink letters (the remap's original purpose):
+        the direct-paint rule must exist and carry the accent-ink token. */
+  const chipRule = /\[class\*='brand'\] svg g\[clip-path\*='wordmark-badge'\] path\s*\{[^}]*var\(--edge-accent-ink/.exec(css)
+  if (chipRule) pass('字标徽章 · 字母直涂规则在位（--edge-accent-ink × 强调底 ' + ratio(INK, hex('#fff500')).toFixed(2) + ':1）')
+  else fail('字标徽章 · 字母直涂规则缺失 —— 亮色撤掉令牌改写后字标字母会退回上游白色')
+  /* 3. LIGHT pair: upstream #fff X on this theme's contrast-fill disc. */
+  const UPSTREAM_INVERTED_LIGHT = '#ffffff' /* verbatim: --dsw-alias-label-primary-inverted:var(--dsw-static-neutral-bluish-00); --dsw-static-neutral-bluish-00:#fff */
+  const discLight = (/body \{[^}]*--dsw-alias-button-contrast-fill:\s*(#[0-9a-f]{6})/.exec(noComments) || [])[1]
+  if (!discLight) fail('移除叉叉 · 亮色 contrast-fill 读不到')
+  else {
+    const r = ratio(hex(UPSTREAM_INVERTED_LIGHT), hex(discLight))
+    if (r >= 3) pass('移除叉叉 · 亮色 #fff × 圆盘 ' + discLight + '：' + r.toFixed(2) + ':1 (>=3 非文本下限，修复前 1.70:1)')
+    else fail('移除叉叉 · 亮色只有 ' + r.toFixed(2) + ':1 —— 叉叉又画进了圆盘里')
+  }
+  /* 4. DARK pair: the kept #101110 override x every dark tier's disc. */
+  const xDark = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-label-primary-inverted:\s*(#[0-9a-f]{6})/.exec(noComments) || [])[1]
+  const discDarkRaw = (/body\[data-ds-dark-theme\] \{[^}]*--dsw-alias-button-contrast-fill:\s*var\(--edge-dark-([a-z0-9-]+)\)/.exec(noComments) || [])[1]
+  const tierNames = ['soft', 'neutral', 'warm']
+  const tierDiscs = [...noComments.matchAll(/--edge-dark-label-primary:\s*(#[0-9a-f]{6})/g)].map((m) => m[1])
+  if (xDark !== '#101110' || discDarkRaw !== 'label-primary' || tierDiscs.length !== 3) {
+    fail('移除叉叉 · 暗色读数不齐（x=' + xDark + '，disc var=' + discDarkRaw + '，tiers=' + tierDiscs.length + '）')
+  } else {
+    tierDiscs.forEach((d, i) => {
+      const r = ratio(hex(xDark), hex(d))
+      if (r >= 3) pass('移除叉叉 · 暗色 ' + tierNames[i] + ' ' + xDark + ' × ' + d + '：' + r.toFixed(2) + ':1 (>=3)')
+      else fail('移除叉叉 · 暗色 ' + tierNames[i] + ' 只有 ' + r.toFixed(2) + ':1')
+    })
+  }
+  /* 5. buildVersion badge: upstream #fff on this theme's label-primary ink
+        (light literal from the token layer, never restated here). */
+  const inkLight = (new RegExp("'--dsw-alias-label-primary'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
+  if (!inkLight) fail('版本徽章 · label-primary 亮色令牌读不到')
+  else {
+    const r = ratio(hex(UPSTREAM_INVERTED_LIGHT), hex(inkLight))
+    if (r >= 4.5) pass('版本徽章 · 亮色 #fff × ' + inkLight + '：' + r.toFixed(2) + ':1 (AA，修复前 1.00:1)')
+    else fail('版本徽章 · 亮色只有 ' + r.toFixed(2) + ':1')
+  }
+}
 console.log('')
 if (failures) { console.error(failures + ' palette check(s) failed'); process.exit(1) }
 console.log('all palette-contrast checks passed')
