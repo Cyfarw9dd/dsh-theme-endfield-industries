@@ -3,8 +3,8 @@
  *
  * Extracted from the entry (see TODO.md「入口瘦身」第 3 项): every prefs-driven
  * <body> surface lives here — radius class, motion attribute, glass/texture
- * attributes — plus the DOM predicates the entry's surfaces
- * read (scheme / reduced-motion / app-frame). The entry injects `prefs` and the
+ * and dark-tier attributes — plus the app-frame locator the entry's surfaces
+ * read. The entry injects `prefs` and the
  * master-switch reader `isEnabled`; nothing here touches a closure of apply().
  *
  * The entry calls syncAll() at every reconcile point (mount, the live
@@ -80,22 +80,11 @@ export function createMotionSync({ prefs, isEnabled }) {
     else document.body.classList.remove('theme-endfield-round')
   }
 
-  /* ---------- scheme + motion + frame predicates ------------------------------
-     These three used to live inside the contour engine; the feature is gone
-     but the watermark and loader code still read them (findAppFrame survives as
-     the watermark's third-placement locator; the scheme/reduced-motion
-     predicates stay for the surfaces that will read them again). */
-  const isDarkScheme = () => typeof document !== 'undefined'
-    && document.body
-    && document.body.hasAttribute('data-ds-dark-theme')
-
-  /* Someone who asked the OS for less motion gets the pattern without the motion.
-     The boot plate honours this; checked live
-     rather than cached so changing the OS setting takes effect on the next
-     reconciliation. */
-  const prefersReducedMotion = () => typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  /* ---------- frame predicate ------------------------------------------------
+     Used to live inside the contour engine beside two scheme/motion siblings;
+     the contour feature is gone, the loader reads prefers-reduced-motion inline
+     where it wipes the plate, and this locator is the survivor (the watermark's
+     third-placement). */
   const findAppFrame = () => {
     if (typeof document === 'undefined') return null
     const col = document.querySelector('[class$="_centerCol"], [class*="_centerCol "]')
@@ -140,8 +129,6 @@ export function createMotionSync({ prefs, isEnabled }) {
     readTexture,
     readGlass,
     readDarkTier,
-    isDarkScheme,
-    prefersReducedMotion,
     findAppFrame,
     syncRadiusMode,
     syncMotion,

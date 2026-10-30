@@ -297,12 +297,17 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
           setEnabled(next)
           if (next) { mount(); watermark.sync() }
           else { unmount(); watermark.sync() }
-          /* The watchers are gated on the master switch too, so they have
-             to be reconciled here. unmount() already stops them, but turning
-             the theme back ON must restart them — otherwise the features
-             would stay dead until the next page load. (The reconciler
-             installed below covers the same cases on the next section echo;
-             this keeps the panel's own click path immediate.) */
+          /* The watchers (turn receipt + attention) are gated on the master
+             switch too. unmount() stops them, but turning the theme back ON
+             does NOT restart them here: mount() only restores the token
+             layer, the stylesheet and the body attributes. The restart rides
+             the live reconciler installed below — prefs.set() commits, the
+             form echoes the section back, the store emits, and the
+             reconciler calls turnWatch.sync() / attention.sync() (the bounded
+             settle watch is the backstop when the mirror stays quiet). The
+             click converges in one echo round-trip, not synchronously — the
+             panel owns the write, the reconciler owns every runtime
+             surface. */
         }
         /* 外观：读写 DSH theme 服务里的那一个 preference（与通用设置 › 外观
            同一个），不写本插件的表单；成功与否以服务的回读为准，订阅在挂载
@@ -550,9 +555,10 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
           return rows.join('　·　')
         }
         const pageStyle = { maxWidth: '640px', padding: '4px 0 16px' }
-        /* The ten switches are grouped into four concerns so the page can be
-           scanned instead of read as a flat list: 主题 (master switch +
-           appearance), 背景 (watermark), 动画 (boot loader), 通知 and 音频.
+        /* The settings rows are grouped into five numbered concerns so the
+           page can be scanned instead of read as a flat list: 主题 (master
+           switch + appearance + materials), 背景 (watermark), 动画 (boot
+           loader), 通知 (cards) and 音频 (sounds).
            Each group is an editorial numbered header; rows keep their stable
            React keys. The last row of each group drops its divider so the next
            group header's own rule is the only line between groups.

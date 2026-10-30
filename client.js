@@ -1842,8 +1842,8 @@
 	*
 	* Extracted from the entry (see TODO.md「入口瘦身」第 3 项): every prefs-driven
 	* <body> surface lives here — radius class, motion attribute, glass/texture
-	* attributes — plus the DOM predicates the entry's surfaces
-	* read (scheme / reduced-motion / app-frame). The entry injects `prefs` and the
+	* and dark-tier attributes — plus the app-frame locator the entry's surfaces
+	* read. The entry injects `prefs` and the
 	* master-switch reader `isEnabled`; nothing here touches a closure of apply().
 	*
 	* The entry calls syncAll() at every reconcile point (mount, the live
@@ -1912,8 +1912,6 @@
 			if ((prefs.get(RADIUS_KEY) || "square") === "round") document.body.classList.add("theme-endfield-round");
 			else document.body.classList.remove("theme-endfield-round");
 		};
-		const isDarkScheme = () => typeof document !== "undefined" && document.body && document.body.hasAttribute("data-ds-dark-theme");
-		const prefersReducedMotion = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		const findAppFrame = () => {
 			if (typeof document === "undefined") return null;
 			const col = document.querySelector("[class$=\"_centerCol\"], [class*=\"_centerCol \"]");
@@ -1951,8 +1949,6 @@
 			readTexture,
 			readGlass,
 			readDarkTier,
-			isDarkScheme,
-			prefersReducedMotion,
 			findAppFrame,
 			syncRadiusMode,
 			syncMotion,
