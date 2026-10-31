@@ -43,6 +43,19 @@ export function createMotionSync({ prefs, isEnabled }) {
     if (isEnabled() && value !== 'off') document.body.setAttribute?.('data-endfield-texture', value)
     else document.body.removeAttribute?.('data-endfield-texture')
   }
+  /* 侧栏底纹（可选，default off）：把工程网格画到侧栏的开关（跨缝对齐见
+     decor/sidebar-align.js）。与
+     texture 主开关的关系在 CSS 侧叠放——本属性是**布尔、不带值**（present =
+     on），主开关 off 时 data-endfield-texture 整个不在，规则两把锁一起才开，
+     所以这里不需要（也不应该）重复判主开关；presence 匹配对布尔属性正是
+     texture 主开关注释里「off 档残留值」教训的反面——那一条针对带值属性。 */
+  const SIDEBAR_TEX_KEY = 'dsh-theme-endfield-sidebar-texture'
+  const readSidebarTex = () => prefs.get(SIDEBAR_TEX_KEY) === '1'
+  const syncSidebarTex = () => {
+    if (typeof document === 'undefined' || document.body === null) return
+    if (isEnabled() && readSidebarTex()) document.body.setAttribute?.('data-endfield-sidebar-tex', '')
+    else document.body.removeAttribute?.('data-endfield-sidebar-tex')
+  }
   /* 暗色档位（2026-10-24，所有者选定 C 为默认并做成设置行）：三档梯度全部
      声明在 tokens.css 的 --edge-dark-* 变量里，切换只翻 body 属性、令牌
      （tokens.js 暗色列的 var() 引用）即时重解析——与纹理同一门派，且比它
@@ -103,23 +116,29 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion()
     syncGlass()
     syncTexture()
+    syncSidebarTex()
     syncDarkTier()
   }
   /* The unmount-side counterpart of syncAll: the classes/attributes that only
      mean something under this theme's stylesheet must leave WITH that sheet.
      Note the original contract kept data-endfield-motion / data-endfield-texture
      on the body after unmount (their rules are gone with the sheet, so they are
-     inert); detach() reproduces that exactly rather than "cleaning up more". */
+     inert); detach() reproduces that exactly rather than "cleaning up more".
+     data-endfield-sidebar-tex has no such history to reproduce, so it takes the
+     glass route (removed): a fresh attribute should follow the stated principle,
+     and syncAll() re-derives it on the next mount anyway. */
   const detach = () => {
     // Guarded like every other body touch: an unload race must not throw here.
     if (typeof document === 'undefined' || document.body === null) return
     document.body.classList.remove('theme-endfield-round')
     document.body.removeAttribute?.('data-endfield-glass')
+    document.body.removeAttribute?.('data-endfield-sidebar-tex')
   }
   return {
     RADIUS_KEY,
     MOTION_KEY,
     TEXTURE_KEY,
+    SIDEBAR_TEX_KEY,
     GLASS_KEY,
     DARK_TIER_KEY,
     TEXTURE_OPTIONS,
@@ -127,6 +146,7 @@ export function createMotionSync({ prefs, isEnabled }) {
     DARK_TIER_OPTIONS,
     readMotion,
     readTexture,
+    readSidebarTex,
     readGlass,
     readDarkTier,
     findAppFrame,
@@ -134,6 +154,7 @@ export function createMotionSync({ prefs, isEnabled }) {
     syncMotion,
     syncGlass,
     syncTexture,
+    syncSidebarTex,
     syncDarkTier,
     syncAll,
     detach,

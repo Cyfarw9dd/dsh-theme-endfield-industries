@@ -222,12 +222,12 @@ const buttons = nodes.filter((n) => n.type === 'button')
 /* The row set is the union of both lines of work: main's glass row plus this
    branch's 11 audio rows. The count is asserted below against the rendered tree
    as well, so a row that exists in the page but not in this list still fails. */
-const ROW_KEYS = ['theme', 'scheme', 'motion', 'glass', 'texture', 'dark-tier', 'radius', 'watermark', 'watermark-style', 'watermark-emblem', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
+const ROW_KEYS = ['theme', 'scheme', 'motion', 'glass', 'texture', 'sidebar-tex', 'dark-tier', 'radius', 'watermark', 'watermark-style', 'watermark-emblem', 'watermark-persist', 'loader', 'notify', 'notify-done', 'notify-question', 'notify-approve', 'audio', 'audio-boot', 'audio-start', 'audio-done', 'audio-volume', 'audio-attention', 'audio-fail', 'audio-source', 'audio-dir', 'audio-human', 'audio-diag']
 const rows = nodes.filter((n) => n.type === 'div' && n.props && ROW_KEYS.includes(n.props.key))
 const groups = (tree.children || []).filter((c) => c && c.type === 'div' && c.props && /^group-/.test(c.props.key))
 
-if (rows.length === 27) pass('panel has all 27 setting rows')
-else fail('expected 27 rows, found ' + rows.length)
+if (rows.length === 28) pass('panel has all 28 setting rows')
+else fail('expected 28 rows, found ' + rows.length)
 
 /* Count the rows the way the PAGE defines them — every direct child of a group
    container — so an unlisted new row shows up as a mismatch instead of vanishing. */
@@ -415,6 +415,40 @@ else fail('面板仍含「试听」——音频动作按钮应统一为「预览
   const step2 = driveSelect(() => rendered(), '背景水印', '开启')
   if (step2 === 'ok' && prefStore.get('watermark') === '1') pass('背景水印 重新开启写入 watermark=1')
   else fail('背景水印 re-enable wrote ' + JSON.stringify(prefStore.get('watermark')) + ' [' + step2 + ']')
+}
+/* --- 侧栏底纹 (2026-10-31): texture 的从属行。默认关；主开关 off 时禁用
+   （disabled + title 说明原因，与水印从属行同一形制）；写入走自己的
+   sidebarTexture 字段，关档写回 '0'。 --- */
+{
+  const trig = selectTriggerOf(rendered(), '侧栏底纹')
+  if (trig && textOf(trig).includes('关闭')) pass('侧栏底纹默认关闭（侧栏默认干净，opt-in）')
+  else fail('侧栏底纹 trigger should read 关闭 by default: ' + (trig ? textOf(trig) : '(none)'))
+  /* 主开关 off（纯色）时从属行禁用：走真实用户流（主行下拉切「关闭」），
+     面板状态由 setTextureValue 驱动——直接 setField 不经过面板，React 桩
+     无 effect 不会重同步。 */
+  const offMaster = driveSelect(() => rendered(), '工业底纹', '关闭（纯色）')
+  const disabledTrig = selectTriggerOf(rendered(), '侧栏底纹')
+  if (offMaster === 'ok' && disabledTrig && disabledTrig.props.disabled === true && String(disabledTrig.props.title).includes('工业底纹')) {
+    pass('工业底纹关闭时侧栏底纹行禁用并说明原因')
+  } else {
+    fail('主开关 off 时侧栏底纹行未按从属行禁用: [' + offMaster + '] ' + JSON.stringify(disabledTrig && disabledTrig.props.disabled) + ' / ' + JSON.stringify(disabledTrig && disabledTrig.props.title))
+  }
+  const backMaster = driveSelect(() => rendered(), '工业底纹', '完整（官网默认）')
+  const enabledTrig = selectTriggerOf(rendered(), '侧栏底纹')
+  if (backMaster === 'ok' && enabledTrig && enabledTrig.props.disabled !== true) {
+    pass('工业底纹恢复后侧栏底纹行重新可用')
+  } else {
+    fail('主开关恢复后侧栏底纹行仍禁用: [' + backMaster + ']')
+  }
+  const step = driveSelect(() => rendered(), '侧栏底纹', '开启')
+  if (step === 'ok' && prefStore.get('sidebarTexture') === '1') pass('侧栏底纹 下拉写入 sidebarTexture=1')
+  else fail('侧栏底纹 dropdown wrote ' + JSON.stringify(prefStore.get('sidebarTexture')) + ', expected "1" [' + step + ']')
+  const trigOn = selectTriggerOf(rendered(), '侧栏底纹')
+  if (trigOn && textOf(trigOn).includes('开启')) pass('sidebarTexture=1 后触发器翻转为「开启」')
+  else fail('开启后触发器仍显示: ' + (trigOn ? textOf(trigOn) : '(none)'))
+  const step2 = driveSelect(() => rendered(), '侧栏底纹', '关闭')
+  if (step2 === 'ok' && prefStore.get('sidebarTexture') === '0') pass('侧栏底纹 切回关闭写入 sidebarTexture=0')
+  else fail('侧栏底纹 switch-back wrote ' + JSON.stringify(prefStore.get('sidebarTexture')) + ' [' + step2 + ']')
 }
 /* --- 徽标版本 (2026-10-25): the watermark gap's inverted-triangle Industries
    emblem swaps between the English and Chinese lockups. The row must DEFAULT to

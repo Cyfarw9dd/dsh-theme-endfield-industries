@@ -24,6 +24,10 @@ export const PREFS_FIELD_DEFAULTS = {
   radius: 'square',
   glass: 'off',
   texture: 'standard',
+  /* 侧栏底纹：default-OFF 布尔（存 '1'/'0'，读 === '1'）。与 texture 主开关
+     叠放：主开关 off 时 CSS 侧不画（body[data-endfield-texture] 不在），
+     这里的 '1' 只是记住用户的选择。 */
+  sidebarTexture: '0',
   /* 暗色档位 soft/warm/neutral，默认 soft（与 index.js FIELD_DEFAULTS 同源；
      档位字面量的合法性校验在 motion/sync.js 的 DARK_TIER_OPTIONS）。 */
   darkTier: 'soft',
@@ -94,6 +98,7 @@ export const PREFS_KEY_TO_FIELD = {
   'dsh-theme-endfield-radius': 'radius',
   'dsh-theme-endfield-glass': 'glass',
   'dsh-theme-endfield-texture': 'texture',
+  'dsh-theme-endfield-sidebar-texture': 'sidebarTexture',
   'dsh-theme-endfield-dark-tier': 'darkTier',
   'dsh-theme-endfield-motion': 'motion',
   'dsh-theme-endfield-watermark': 'watermark',

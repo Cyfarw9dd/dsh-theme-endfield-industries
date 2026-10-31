@@ -109,6 +109,7 @@ const FIELD_DEFAULTS = {
   enabled: '1',             // 终末地主题 —— default on
   glass: 'off',             // optional local frost; original material by default
   texture: 'standard',      // 工业底纹 —— off/subtle/standard；默认 standard＝官网 /operator 那套
+  sidebarTexture: '0',      // 侧栏底纹 —— default off；开＝网格+斜纹带铺到侧栏并与会话栏跨缝对齐（decor/sidebar-align.js），需工业底纹非 off
   darkTier: 'soft',         // 暗色档位 —— soft(舒适,VS Code 档)/warm(微暖)/neutral(官网中性)；默认 soft（2026-10-24 所有者定）
   motion: 'signal',          // 按钮动效 —— 合并设计（'signal'=开 / 'off'=关；旧方案名读取时并轨为开）
   radius: 'square',         // 主题圆角 —— 直角

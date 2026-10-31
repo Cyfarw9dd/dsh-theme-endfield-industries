@@ -21,6 +21,8 @@
            · 波纹钉死右上角；波纹带在中下部（top: 50% + 3.8125rem）。
          本主题照此映射到**主内容列 _centerCol**（它就是 DSH 的「内容列」）：
          侧栏与外框**不上纹理**，四个层各自锚定在列内的一个区域。
+         （侧栏后来按所有者要求加了**可选**开关——见下方「侧栏底纹」段；
+         本段与那条绊线守护的是**默认**外观：主开关不带任何侧栏规则。）
 
          官网这些底纹是**静态的**（无 animation/transition），本段一条过渡都不加。 */
 
@@ -91,13 +93,21 @@
         pointer-events: none;
         background-image: linear-gradient(180deg,
           var(--edge-tex-grid-color) 0, var(--edge-tex-grid-color) 50%,
-          transparent 100%);
+          transparent calc(100% - var(--edge-sidebar-tex-bottom, 0px)));
         -webkit-mask-image: var(--edge-tex-grid-mask);
         mask-image: var(--edge-tex-grid-mask);
         -webkit-mask-size: 12.8125rem 12.8125rem;
         mask-size: 12.8125rem 12.8125rem;
         -webkit-mask-repeat: repeat;
         mask-repeat: repeat;
+        /* 跨缝对齐（2026-10-31，owner 要「侧栏和会话栏的底纹对齐」）：侧栏底
+           纹开着时，decor/sidebar-align.js 量出会话根与侧栏根的视口原点差并
+           写入 body 的 --edge-sidebar-align（两值：x y）。会话栏平移到视口原
+           点坐标系（侧栏根就在 x≈0，即全局原点），分界线两侧的网格于是同
+           相。侧栏底纹关着时 JS 撤掉变量，落回 0 0＝官方原始锚定。注意这只
+           动网格遮罩：波纹/光晕是定位插画不是重复纹样，本就不参与对齐。 */
+        -webkit-mask-position: var(--edge-sidebar-align, 0px 0px);
+        mask-position: var(--edge-sidebar-align, 0px 0px);
       }
 
       /* 斜纹：官方 shallowBg 的复刻——**底部一条带**（32.8125rem 高，窄视口收到
@@ -108,8 +118,8 @@
         position: absolute;
         left: 0;
         right: 0;
-        bottom: 0;
-        top: calc(100% - min(32.8125rem, 45%));
+        bottom: var(--edge-sidebar-tex-bottom, 0px);
+        height: calc(min(32.8125rem, 45%) - var(--edge-sidebar-tex-bottom, 0px));
         z-index: -1;
         pointer-events: none;
         background-image: repeating-linear-gradient(-45deg,
@@ -120,8 +130,19 @@
           var(--edge-tex-hatch-color) 63.9512529279% 86.0487470721%,
           transparent 86.0487470721%);
         background-size: .75rem .75rem;
+        /* 跨缝对齐（x 相位）：侧栏底纹开着时，两侧斜纹带的 x 相位由
+           --edge-sidebar-align-x 平移对齐（mod 12 自动取模）；侧栏底纹关着时
+           JS 撤变量，回官方原始锚定。 */
+        background-position: var(--edge-sidebar-align-x, 0px) 0;
         -webkit-mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
         mask-image: linear-gradient(0deg, rgb(0,0,0) 0, rgb(0,0,0) 50%, rgba(0,0,0,0));
+      }
+      /* 侧栏底纹开：会话栏斜纹带与侧栏**同款窗口遮罩**（同盒同渐变——顶缘
+         透明、中段全实、输入卡顶缘渐出），分界线两侧密度剖面逐行一致；侧
+         栏底纹关着时本规则不命中，会话栏保持官方遮罩。 */
+      body[data-endfield-texture][data-endfield-sidebar-tex] [class$='_centerCol'] [class$='_root'][data-phase]::after {
+        -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
+        mask-image: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
       }
 
       /* subtle 档到此为止：网格 + 斜纹两个叠加层，列本身不加任何背景图层。 */
@@ -511,6 +532,125 @@
          degrades to nothing instead (the same call the watermark makes). */
       @supports not ((mask-image: none) or (-webkit-mask-image: none)) {
         [data-endfield-hero-logo] { display: none; }
+      }
+      /* ================= 侧栏底纹（可选开关，默认关） =================
+         主内容列那套底纹（上一段）按官网做法**不挂侧栏与外框**，这是默认
+         外观。本段是所有者的显式选择（设置 › 01 主题 › 侧栏底纹）：打开后把
+         **区域合适**的两层——工程网格（::before，**全程同强度**，见下）与
+         底部斜纹带（::after）——画到侧栏上，并且**两层都跨缝对齐**主内容
+         列（对齐变量见主纹理段的 --edge-sidebar-align / --edge-sidebar-
+         align-x 与 decor/sidebar-align.js；2026-10-31 曾按 owner 要求撤过
+         斜纹带，随后 owner 确认要的是「两种都在且对齐」而非撤出，恢复）。
+         波纹 / 波纹带 / 顶部光晕不入列：它们是宽内容列的构图（右上角停靠、
+         中下部横带），在 ~16rem 的窄列里只剩裁切残片。
+
+         两把锁一起才开：body[data-endfield-texture]（主开关 off 时整个不在）
+         × body[data-endfield-sidebar-tex]（本开关，布尔不带值）。开关逻辑见
+         motion/sync.js syncSidebarTex；设置行在工业底纹行之下，主开关 off 时
+         禁用。
+
+         锚点是侧栏的**不透明内容根**，不是侧栏列——2026-10-31 实机翻车
+         的教训：列（.pI_x6G_sidebarCol）里面还有一层 height:100% 的不透明
+         内容根（.hHd-Xa_root{background:var(--dsw-specific-sidebar-fill)}），
+         挂在列上的 z:-1 伪元素会画在它**之下**、整段无声消失（与会话根那
+         段「_centerCol 里还有一层不透明 wSkVaW_root」是同一个坑，实机像素
+         复现）。内容根经插槽挂载：[data-slot='sidebar'] 是 display:contents
+         的插槽锚点，其直接 div 子元素就是内容根——**与磨砂玻璃的侧栏静
+         态着色同一个钩子**（两个功能共用一只金丝雀，上游改结构一起响）。
+         内容根上游 position:static、class 是 clsx 多枚合成（[class$=] 后缀
+         匹配会静默失配），所以补 position:relative（伪元素包含块）+
+         isolation:isolate（否则 z:-1 逃到祖先层叠上下文＝不可见），用
+         data-slot 锚点不碰类名。伪元素无占用（bundle 全量查过：根上无
+         ::before/::after；新会话按钮的信号箭头在按钮自己的伪上）。
+
+         已知边界：侧栏的文件浏览器视图（SB_kFW_root）自带不透明
+         background:var(--dsw-alias-bg-base)，展开时会在自己的区域内盖住底
+         纹（底色同值，只是没了纹理）；默认会话列表与文件树视图透明，纹理
+         全显。
+
+         墨色与 alpha 复用纹理令牌 --edge-tex-*；侧栏底面是
+         --dsw-specific-sidebar-fill（亮 #e8e8e2、暗 --edge-dark-base，恰与
+         内容列 bg-base 同值），合成对比度由 test/texture.test.js 侧栏段逐档
+         实算、test/palette-contrast.test.js §10h 看守。静态：无过渡、无关键
+         帧；减少透明 / 更高对比偏好下整段让位（段尾）。 */
+      body[data-endfield-texture][data-endfield-sidebar-tex] [data-slot='sidebar'] > div {
+        position: relative;
+        isolation: isolate;
+      }
+      /* 网格：与内容列**共用同一条渐隐带**（50% 列高 → 纯色区上缘）。
+         演变史：第一版照抄内容列全程渐隐 → 中段空档（渐隐终点悬在会话列
+         表中间，纹路断了）→ 拉平成全程同强度 → 等高纯色区后 owner 要求渐
+         变（终点锚纯色区上缘）→ owner 截图指出两侧渐变进度不一致 → 最终：
+         会话栏渐隐终点由 --edge-sidebar-tex-bottom 拉到输入卡顶缘、侧栏渐
+         隐带由 --edge-sidebar-tex-fade 换算到纹理盒坐标，两条渐变在绝对坐
+         标上是同一条带，分界线两侧变淡进度一致。形状仍由官方遮罩瓦片给出
+         （同尺寸平铺）。跨缝相位对齐：网格是周期图案，侧栏根与会话根各自
+         从自己的左上角起铺，对齐由 decor/sidebar-align.js 量出两根的视口原
+         点差、写到 body 的 --edge-sidebar-align，**消费端在会话根的网格
+         ::before**（主纹理段）：会话栏平移，侧栏钉在视口原点不动。 */
+      body[data-endfield-texture][data-endfield-sidebar-tex] [data-slot='sidebar'] > div::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        /* 底部用户区不铺（2026-10-31 owner）：收在 footArea 顶缘，位移由
+           decor/sidebar-align.js 随布局量测写入。 */
+        bottom: var(--edge-sidebar-tex-bottom, 0px);
+        z-index: -1;
+        pointer-events: none;
+        background-image: linear-gradient(180deg,
+          var(--edge-tex-grid-color) 0,
+          var(--edge-tex-grid-color) calc(100% - var(--edge-sidebar-tex-fade, 50%)),
+          transparent 100%);
+        -webkit-mask-image: var(--edge-tex-grid-mask);
+        mask-image: var(--edge-tex-grid-mask);
+        -webkit-mask-size: 12.8125rem 12.8125rem;
+        mask-size: 12.8125rem 12.8125rem;
+        -webkit-mask-repeat: repeat;
+        mask-repeat: repeat;
+      }
+      /* 斜纹带：官方 shallowBg 的复刻，遮罩照官方（底实、上半渐隐）。跨缝
+         对齐走 x 分量单变量 --edge-sidebar-align-x：两侧色带盒都停靠列底、
+         等高 → y 相位天然一致，只需 x 平移；且 raw 位移对 12px 周期天然取
+         模，与网格共用同一量测（mod 205 与 mod 12 各自成立）。 */
+      body[data-endfield-texture][data-endfield-sidebar-tex] [data-slot='sidebar'] > div::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        /* 收在纯色区上缘；带高 = 官方带高 − 纯色区高：**带上缘与内容列那
+           条同高**、下缘与网格同线收束——分界线两侧密度一致。曾给下缘加
+           3.5rem 渐入，但会话栏的斜纹带照官方实心铺到列底（输入卡以下被卡
+           盖住），单侧渐入反而两侧密度错位，已回退。 */
+        bottom: var(--edge-sidebar-tex-bottom, 0px);
+        height: calc(min(32.8125rem, 45%) - var(--edge-sidebar-tex-bottom, 0px));
+        z-index: -1;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(-45deg,
+          transparent 0 13.9512529279%,
+          var(--edge-tex-hatch-color) 13.9512529279% 36.0487470721%,
+          transparent 36.0487470721% 50%,
+          transparent 50% 63.9512529279%,
+          var(--edge-tex-hatch-color) 63.9512529279% 86.0487470721%,
+          transparent 86.0487470721%);
+        background-size: .75rem .75rem;
+        /* 盒子上提了 inset px：补同等 y 相位，斜纹在重叠区仍与会话栏同相
+           （图案 12px 周期，inset 原值即可精确补偿）。遮罩**窗口剖面**：底
+           缘 0（溶入纯色区，无硬切）→ 30% 全实 → 70% 保持 → 顶缘 0（融入
+           网格区）。此前的「终点 alpha」变量被模块按几何夹成 0，整条带被
+           遮没（owner 截图打回「渐变没了」）——窗口剖面让斜纹带两头溶入、
+           中段可见。 */
+        background-position: 0 var(--edge-sidebar-tex-bottom, 0px);
+        -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
+        mask-image: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
+      }
+      /* 降级：与内容列底纹同一条路——要求减少透明/更高对比时整段让位。 */
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        body[data-endfield-texture][data-endfield-sidebar-tex] [data-slot='sidebar'] > div::before,
+        body[data-endfield-texture][data-endfield-sidebar-tex] [data-slot='sidebar'] > div::after {
+          display: none !important;
+        }
       }
       /* Optional bounded frost. No full-window blur, nested filters or animation. */
       body[data-endfield-glass] {

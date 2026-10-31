@@ -102,6 +102,10 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
         const [loaderOn, setLoaderOn] = R.useState(loader.isOn())
         const [glass, setGlass] = R.useState(motionSync.readGlass())
         const [texture, setTexture] = R.useState(motionSync.readTexture())
+        /* 侧栏底纹是 texture 主开关的从属行（主开关 off 时禁用），状态声明
+           紧跟 texture —— settings-config-forms 的挂钩槽位表按 useState 声明
+           序计数，改顺序要同步那张表。 */
+        const [sidebarTex, setSidebarTex] = R.useState(motionSync.readSidebarTex())
         const [darkTier, setDarkTier] = R.useState(motionSync.readDarkTier())
         const [mode, setMode] = R.useState(prefs.get(motionSync.RADIUS_KEY) || 'square')
         const [motion, setMotion] = R.useState(motionSync.readMotion())
@@ -173,6 +177,7 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
             setNotifyApprove(toasts.isApproveOn())
             setGlass(motionSync.readGlass())
             setTexture(motionSync.readTexture())
+            setSidebarTex(motionSync.readSidebarTex())
             setDarkTier(motionSync.readDarkTier())
             setMode(prefs.get(motionSync.RADIUS_KEY) || 'square')
             setMotion(motionSync.readMotion())
@@ -265,6 +270,15 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
           prefs.set(motionSync.TEXTURE_KEY, value)
           setTexture(value)
           motionSync.syncTexture()
+        }
+        /* 侧栏底纹（布尔从属行）：next 从 STORE 读（见上方 toggles 段的教训），
+           与 wmPersist 同一形制。 */
+        const setSidebarTexValue = (value) => {
+          const next = value === '1'
+          if (next === motionSync.readSidebarTex()) return
+          prefs.set(motionSync.SIDEBAR_TEX_KEY, next ? '1' : '0')
+          setSidebarTex(next)
+          motionSync.syncSidebarTex()
         }
         const setDarkTierValue = (value) => {
           if (!motionSync.DARK_TIER_OPTIONS.includes(value)) return
@@ -721,6 +735,19 @@ export function createSettingsSection({ services, prefs, themeApi, scheme, motio
                   value, label: t(value === 'off' ? 'textureOff' : value === 'subtle' ? 'textureSubtle' : 'textureStandard'),
                 })),
                 onChange: setTextureValue,
+              })
+            ]),
+            /* 侧栏底纹：texture 的从属行，主开关 off（纯色）时禁用——与水印
+               从属行同一形制（disabled + title 说明原因）。 */
+            row('sidebar-tex', false, [
+              R.createElement('span', { style: labelStyle }, t('sidebarTexRow'),
+                R.createElement('span', { style: hintStyle }, t('sidebarTexHint'))),
+              endfieldSelect({
+                value: sidebarTex ? '1' : '0', ariaLabel: t('sidebarTexRow'),
+                options: [{ value: '0', label: t('off') }, { value: '1', label: t('on') }],
+                disabled: texture === 'off',
+                title: texture === 'off' ? t('sidebarTexNeed') : '',
+                onChange: setSidebarTexValue,
               })
             ]),
             row('dark-tier', false, [

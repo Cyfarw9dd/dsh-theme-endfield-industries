@@ -12,6 +12,7 @@ import { createWatermark } from './decor/watermark.js'
 import { createHeroLogo } from './decor/hero-logo.js'
 import { createLoader } from './decor/loader.js'
 import { createBodyObserver } from './decor/body-observer.js'
+import { createSidebarAlign } from './decor/sidebar-align.js'
 import { createAudioPrefs } from './notify/audio.js'
 import { createToasts } from './notify/toast.js'
 import { createAttentionWatch } from './notify/attention.js'
@@ -162,6 +163,10 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
     const bodyObserver = createBodyObserver()
     bodyObserver.add(() => watermark.sync())
     bodyObserver.add(() => heroLogo.sync())
+    /* 侧栏底纹 × 会话栏网格的跨缝对齐：换页（元素挂卸）与宽度变化都要重算
+       —— bodyObserver 批次负责前者并触发重查找，RO 负责后者（见模块头注）。 */
+    const sidebarAlign = createSidebarAlign()
+    bodyObserver.add(() => sidebarAlign.sync())
     bodyObserver.start()
 
     let disposeToken = () => {}
@@ -174,6 +179,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
 
     disposeStyles = insertCss(TOKENS_CSS + DECOR_CSS + INTERACTION_CSS + CHROME_CSS + SURFACES_CSS + OVERLAYS_CSS + GENERATED_CSS)
       motionSync.syncAll()
+      // 属性开关不经过 bodyObserver（它只看 childList），这里补一次对齐量测。
+      sidebarAlign.sync()
     }
     const unmount = () => {
       if (!mounted) return
@@ -186,6 +193,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       // that gives them meaning (guarded like every other body touch: an
       // unload race must not throw here).
       motionSync.detach()
+      // 对齐变量由主题样式表消费，主题一撤变量也该走（下次 mount 的 sync 会重算）。
+      sidebarAlign.detach()
       // The plate is styled by the theme stylesheet just torn down — an orphaned
       // plate would sit there as an unstyled black-less div, so drop it too.
       loader.destroy()
@@ -246,6 +255,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
       if (enabledNext) {
         // These sync helpers read the store on each call, so no snapshot passing.
         motionSync.syncAll()
+        // 同上：纹理/侧栏底纹属性翻转不产生 childList 批次，对齐在这里跟着重算。
+        sidebarAlign.sync()
         watermark.sync()
         heroLogo.sync()
         turnWatch.sync()
@@ -305,6 +316,8 @@ function apply(ctx) {    // Idempotency: the installed bundle can be applied mor
          disposed run is not wired back into the page. Both live in the
          observer's own dispose(). */
       bodyObserver.dispose()
+      // The alignment observer owns a ResizeObserver; it goes with the run too.
+      sidebarAlign.dispose()
       // The watermark's rAF handle, resize listener and node all go with the run.
       watermark.dispose()
       // The plate owns a rAF handle and a fixed DOM node; both must go with the run.

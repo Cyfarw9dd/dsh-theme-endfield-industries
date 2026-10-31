@@ -19,7 +19,7 @@ const path = require('path')
 /* Single definition of how the stylesheet composes (src/styles manifest). */
 const sources = require('../scripts/lib/sources.js')
 /* 暗色三档梯度从真值口读取（fixtures/theme-values.js），逐档合成 */
-const { TIERS, LADDERS } = require('./fixtures/theme-values.js')
+const { TIERS, LADDERS, resolveDark } = require('./fixtures/theme-values.js')
 
 const ROOT = path.resolve(__dirname, '..')
 /* The sync layer moved to src/client/motion/sync.js with the module split, so
@@ -138,6 +138,132 @@ else fail('index.js FIELD_DEFAULTS has no texture default — the switch would r
     pass('叠加层在内容之下（z-index:-1 + isolation）——装饰不盖文字')
   } else {
     fail('网格叠加层不在内容之下：需要 z-index:-1，否则纹理画在正文上面')
+  }
+}
+
+
+/* ---------- 1c. 侧栏底纹：可选开关（默认关），两层 + 双双跨缝对齐 ----------
+   默认外观侧栏干净（1b 绊线管住主纹理段）。本段钉住 2026-10-31 owner 要求
+   的 opt-in：body[data-endfield-texture]（主开关，off 时属性整个不在）×
+   body[data-endfield-sidebar-tex]（本开关，布尔不带值）两把锁一起才画；
+   画**两层**——工程网格（::before，全程同强度）与底部斜纹带（::after），
+   都 z-index:-1 在内容之下——并经 --edge-sidebar-align（网格，两值）与
+   --edge-sidebar-align-x（斜纹带，仅 x：两侧色带盒等高停靠列底，y 相位天
+   然一致）与会话栏对应层跨缝对齐；静态；偏好降级整段让位；合成对比度在
+   侧栏自己的底面 --dsw-specific-sidebar-fill 上逐档落在装饰区间。 */
+{
+  /* 段起点回退到本段注释的 /* 开符：从标题文字起切会留下没有开符的头注
+     正文，注释清洗正则配不上对，散文里的 '::before'/_sidebarCol 字样就会
+     混进规则断言（§1b 的教训反过来咬人）。 */
+  const START = css.lastIndexOf('/*', css.indexOf('侧栏底纹（可选开关'))
+  const END = css.indexOf('Optional bounded frost')
+  const section = START >= 0 && END > START ? css.slice(START, END) : ''
+  if (!section) {
+    fail('侧栏底纹段缺失（decor.css「侧栏底纹（可选开关」→「Optional bounded frost」之间）')
+  } else {
+    const noComments = section.replace(/\/\*[\s\S]*?\*\//g, '')
+    /* 主纹理段（侧栏段之前）无注释副本：两侧渐隐带的对齐断言要用。 */
+    const mainStart = css.lastIndexOf('/*', css.indexOf('背景纹理：官网'))
+    const mainSection = css.slice(mainStart, css.indexOf('侧栏底纹（可选开关'))
+    /* 段内每条选择器：动侧栏的必须带两把锁（选择器 = '{' 之前的全部文本）。
+       锚点必须是不透明内容根 [data-slot='sidebar'] > div——第一版挂在侧栏列
+       （[class$='_sidebarCol']）上，被列里那层 height:100% 的不透明内容根
+       整个盖住，实机不可见（2026-10-31 翻车复现）；这条绊线防它回来。 */
+    const selectors = [...noComments.matchAll(/([^{}]+)\{/g)].map((m) => m[1])
+      .filter((s) => s.includes("[data-slot='sidebar']"))
+    const gated = selectors.length >= 2
+      && selectors.every((s) => /body\[data-endfield-texture\]\[data-endfield-sidebar-tex\]/.test(s))
+    if (gated) pass('侧栏底纹每条规则都锁在不透明内容根上（双锁 + 插槽锚点，' + selectors.length + ' 条）')
+    else fail('侧栏底纹锚点/门控不对（应 [data-slot=sidebar] > div × 双属性锁）：' + JSON.stringify(selectors))
+    if (!/\[class\$='_sidebarCol'\]/.test(noComments)) pass('不再挂在侧栏列上（列锚会被不透明内容根盖住）')
+    else fail('侧栏底纹又挂到侧栏列上了——列内 height:100% 的不透明内容根会把 z:-1 伪元素整个盖住')
+    /* 两层叠加都在内容之下，与主纹理同一机制。 */
+    const pseudoRule = noComments.slice(noComments.indexOf('::before'), noComments.indexOf('::before') + 700)
+    if (/z-index:\s*-1/.test(pseudoRule)) pass('侧栏叠加层在内容之下（z-index:-1 + isolation）')
+    else fail('侧栏网格叠加层不在内容之下：需要 z-index:-1')
+    /* 两侧渐隐带对齐（2026-10-31 owner「两侧最终渐变对齐」）：会话栏渐隐
+       终点由 --edge-sidebar-tex-bottom 拉到输入卡顶缘，侧栏渐隐带由
+       --edge-sidebar-tex-fade 换算到纹理盒坐标——两条渐变在绝对坐标上是
+       同一条带（50% 列高 → 输入卡顶缘），分界线两侧变淡进度一致。 */
+    const sidebarFade = /linear-gradient\(180deg,\s*var\(--edge-tex-grid-color\) 0,\s*var\(--edge-tex-grid-color\) calc\(100% - var\(--edge-sidebar-tex-fade, 50%\)\),\s*transparent 100%\)/.test(noComments)
+    const contentFade = /transparent calc\(100% - var\(--edge-sidebar-tex-bottom, 0px\)\)/.test(mainSection.replace(/\/\*[\s\S]*?\*\//g, ''))
+    const fadeWired = src.includes('--edge-sidebar-tex-fade')
+    if (sidebarFade && contentFade && fadeWired) pass('两侧渐隐带对齐（同一区间：50% 列高 → 输入卡顶缘）')
+    else fail('渐隐带未对齐：侧栏式=' + sidebarFade + '，会话栏式=' + contentFade + '，写入端=' + fadeWired)
+    /* 斜纹带遮罩**窗口剖面**：底缘 0（溶入纯色区）→ 30% 全实 → 70% 保持 →
+       顶缘 0（融入网格区）。此前的「终点 alpha」变量被模块按几何夹成 0，
+       整条带被遮没（owner 截图打回「渐变没了」），这里是绊线。带高须扣掉
+       纯色区（带上缘与会话栏带同高）。 */
+    if (/linear-gradient\(180deg,\s*rgba\(0,0,0,0\) 0,\s*rgba\(0,0,0,1\) 30%,\s*rgba\(0,0,0,1\) 70%,\s*rgba\(0,0,0,0\) 100%\)/.test(noComments)
+      && /height:\s*calc\(min\(32\.8125rem, 45%\) - var\(--edge-sidebar-tex-bottom, 0px\)\)/.test(noComments)) {
+      pass('斜纹带遮罩窗口剖面（两头溶入、中段可见），带高扣纯色区')
+    } else {
+      fail('侧栏斜纹带遮罩/带高不在位——窗口剖面被回退或带高未扣纯色区')
+    }
+    /* 波纹不入列：段里不得引用波纹/波纹带素材（区域锚定，不是照抄全栈）。
+       斜纹带在列（::after），但波纹两级与光晕仍只在内容列。 */
+    if (!/--edge-tex-wave|--edge-tex-tape/.test(noComments)) pass('侧栏画网格 + 斜纹带（波纹/波纹带仍只在内容列）')
+    else fail('侧栏段引用了波纹素材——窄列里只剩裁切残片，不入列')
+    /* 两层各自的对齐消费端都要在：网格吃两值变量，斜纹带吃 x 单值变量。
+       缺一头，那一层就跨缝错相位。 */
+    const mainNoC = mainSection.replace(/\/\*[\s\S]*?\*\//g, '')
+    const gridAligned = /mask-position:\s*var\(--edge-sidebar-align,\s*0px 0px\)/.test(mainNoC)
+    const hatchAligned = /background-position:\s*var\(--edge-sidebar-align-x,\s*0px\)\s*0/.test(mainNoC)
+    const produces = src.includes('--edge-sidebar-align') && src.includes('--edge-sidebar-align-x') && src.includes('ResizeObserver')
+    if (gridAligned && hatchAligned && produces) pass('跨缝对齐接线在位（网格两值变量 + 斜纹带 x 变量 × sidebar-align.js 量测写入）')
+    else fail('跨缝对齐接线断头：网格=' + gridAligned + '，斜纹带=' + hatchAligned + '，写入端=' + produces)
+    /* 底部用户区不铺：两层都消费 --edge-sidebar-tex-bottom（::before 的
+       bottom、::after 的 bottom 与 background-position-y 补相），client 里
+       有量测写入端（量 footArea/settingsArea 顶缘）。 */
+    const bottomUses = (noComments.match(/--edge-sidebar-tex-bottom/g) || []).length
+    const bottomWired = src.includes('--edge-sidebar-tex-bottom') && src.includes("[class$='_footArea']")
+      && src.includes('data-composer-card')
+    if (bottomUses >= 3 && bottomWired) pass('底部纯色区（用户区 + 与输入卡等高）接线在位（两层收底 × y 补相 × sidebar-align.js 量测写入）')
+    else fail('底部纯色区接线断头：CSS 消费 ' + bottomUses + ' 处（应 ≥3），写入端=' + bottomWired)
+    /* 静态：无过渡、无关键帧、不预建合成层。 */
+    if (!/transition\s*:/.test(noComments) && !/@keyframes/.test(noComments) && !/will-change/.test(noComments)) {
+      pass('侧栏底纹段是静态的（无 transition / @keyframes / will-change）')
+    } else {
+      fail('侧栏底纹段出现了过渡/关键帧/will-change')
+    }
+    /* 降级：与主纹理段同一条 prefers 路径。 */
+    if (/prefers-reduced-transparency:\s*reduce/.test(noComments) && /display:\s*none/.test(noComments)) {
+      pass('侧栏底纹在减少透明/更高对比偏好下整段关闭')
+    } else {
+      fail('侧栏底纹缺少 prefers-reduced-transparency / prefers-contrast 降级')
+    }
+  }
+  /* 开关接线端到端：键映射、默认关、sync 属性装卸。 */
+  if (/'dsh-theme-endfield-sidebar-texture': 'sidebarTexture'/.test(keysSrc)) pass('prefs 键映射到 schema 字段 sidebarTexture')
+  else fail('PREFS_KEY_TO_FIELD 缺 dsh-theme-endfield-sidebar-texture 条目——开关不会持久化')
+  const host2 = fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8')
+  if (/sidebarTexture: '0'/.test(host2)) pass('host 默认 sidebarTexture=0（侧栏默认干净，opt-in）')
+  else fail('index.js FIELD_DEFAULTS 缺 sidebarTexture 默认——开关每次加载都会复位')
+  if (/removeAttribute\?\.\('data-endfield-sidebar-tex'\)/.test(src.replace(/\s+/g, ' '))) pass('关档通过移除属性实现（布尔属性 presence 匹配）')
+  else fail('syncSidebarTex 没有在关档移除 data-endfield-sidebar-tex')
+  /* 装饰强度：墨/alpha 复用主纹理令牌，但底面是侧栏自己的 fill——从真值口
+     读色（tokens.js 覆盖表），亮暗逐档合成过带，不复述数值。 */
+  const lightBlock2 = blockWithLoose('body { --edge-tex-ink: #181818;')
+  const darkBlock2 = blockWithLoose('body[data-ds-dark-theme] { --edge-tex-ink: #e9e9e3;')
+  const fillLightM = /'--dsw-specific-sidebar-fill'\s*:\s*\{\s*light:\s*'(#[0-9a-f]{6})'/.exec(src)
+  const fillDarkRaw = /'--dsw-specific-sidebar-fill'\s*:\s*\{[^}]*?dark:\s*'([^']+)'/.exec(src)
+  const pct2 = (v) => parseFloat(v) / 100
+  const li = varIn(lightBlock2, '--edge-tex-ink'), lg = pct2(varIn(lightBlock2, '--edge-tex-grid-a')), lh = pct2(varIn(lightBlock2, '--edge-tex-hatch-a'))
+  const di = varIn(darkBlock2, '--edge-tex-ink'), dg = pct2(varIn(darkBlock2, '--edge-tex-grid-a')), dh = pct2(varIn(darkBlock2, '--edge-tex-hatch-a'))
+  if (!fillLightM || !fillDarkRaw || !li || !di) {
+    fail('侧栏底纹 · 令牌或侧栏底色读不到（tokens.js / decor.css 结构变了？）')
+  } else {
+    const band2 = (label, ink, a, bgHex) => {
+      const r = ratio(over(hex(ink), hex(bgHex), a), hex(bgHex))
+      if (r >= 1.06 && r <= 1.6) pass('侧栏底纹 · ' + label + ' = ' + r.toFixed(2) + ':1（装饰区间）')
+      else fail('侧栏底纹 ' + label + ' 出装饰区间：' + r.toFixed(2) + ':1')
+    }
+    band2('亮 网格', li, lg, fillLightM[1])
+    band2('亮 斜纹', li, lh, fillLightM[1])
+    for (const t of TIERS) {
+      band2('暗·' + t + ' 网格', di, dg, resolveDark(fillDarkRaw[1], t))
+      band2('暗·' + t + ' 斜纹', di, dh, resolveDark(fillDarkRaw[1], t))
+    }
   }
 }
 
@@ -319,14 +445,20 @@ for (const prop of ['--edge-tex-grid-mask', '--edge-tex-wave', '--edge-tex-tape'
   else fail('纹理段用了 will-change')
   /* The SURFACE rules must carry the texture through background-* alone. The
      tri-colour signal rule is a real element with a real 2px height, so it is
-     excluded from this check rather than pretending it is a background layer. */
+     excluded from this check rather than pretending it is a background layer.
+     Lines consuming the side-bar alignment vars (--edge-sidebar-tex-*) are
+     also expected: the equal-height flat + cross-seam alignment (2026-10-31
+     owner) is MEASURED geometry written by sidebar-align.js, not decorative
+     layout — its bottom/height keep the texture boxes on the same absolute
+     band as the main column. */
   const surfaceRules = section.slice(0, section.indexOf('.endfield-settings .endfield-settings-group-title'))
     .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.includes('--edge-sidebar-tex-')).join('\n')
   /* `position: relative` on the host and `position: fixed` on the overlay ARE the
      texture's carrying mechanism (the grid needs its own layer), so they are
      expected; what must not appear is a size/spacing property. */
   if (!/(^|[;{\s])(width|height|padding|margin)\s*:/.test(surfaceRules)) {
-    pass('承载面只用背景属性，不改任何布局属性')
+    pass('承载面只用背景属性，不改任何布局属性（对齐量测几何除外）')
   } else {
     fail('承载面出现了布局属性——纹理必须只走 background-*')
   }

@@ -725,11 +725,11 @@ async function main() {
     // bug ("the panel's state never moved off its boot defaults") and it cannot
     // be confused by anything in the render helper.
     const hooks = client.hooks()
-    /* 0-indexed: the 10th useState is `mode` (radius: enabled, scheme, wmOn,
-       wmPersist, wmHatch, wmEmblem, loader, glass, texture, darkTier, mode).
-       Keep this list in step with the panel's useState order in
+    /* 0-indexed: the 11th useState is `mode` (radius: enabled, scheme, wmOn,
+       wmPersist, wmHatch, wmEmblem, loader, glass, texture, sidebarTex, darkTier,
+       mode). Keep this list in step with the panel's useState order in
        src/client/ui/settings/section.js. */
-    const radiusSlot = hooks[10]
+    const radiusSlot = hooks[11]
     if (radiusSlot === 'round') {
       pass('panel hook state adopted the served radius (slot moved off its default)')
     } else {
@@ -737,10 +737,10 @@ async function main() {
         + JSON.stringify(radiusSlot) + ' (this is the reported reset bug)')
     }
 
-    /* darkTier shares the resync line family (its slot is 9 — see the order
-       list above). The setDarkTier call was once dropped from
-       resyncPanelFromPrefs and no test went red; this pins it. */
-    const darkTierSlot = hooks[9]
+    /* darkTier shares the resync line family (its slot is 10 — see the order
+       list above; sidebarTex inserted at 9 shifted it). The setDarkTier call was
+       once dropped from resyncPanelFromPrefs and no test went red; this pins it. */
+    const darkTierSlot = hooks[10]
     if (darkTierSlot === 'warm') {
       pass('panel hook state adopted the served darkTier (slot moved off its default)')
     } else {

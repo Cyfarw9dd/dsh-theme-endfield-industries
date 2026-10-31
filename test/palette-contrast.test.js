@@ -744,6 +744,48 @@ for (const [name, block] of Object.entries(palettes)) {
     else fail('版本徽章 · 亮色只有 ' + r.toFixed(2) + ':1')
   }
 }
+
+/* ---------- 10h. 侧栏底纹（可选开关）：网格/斜纹压在侧栏自己的底面上 ----------
+   与 10f 同一条规则：装饰墨按它的 alpha 合成到**它实际铺的底**上。侧栏
+   底纹（decor.css「侧栏底纹（可选开关」段，默认关）复用主纹理令牌
+   --edge-tex-ink / grid / hatch，铺在 --dsw-specific-sidebar-fill 上
+   （亮 #e8e8e2、暗 --edge-dark-base＝bg-base 同源）。两层均跨缝对齐主内
+   容列（texture.test.js 1c 段看守接线）。值全部从真实声明读；逐档合成
+   （1c 段另有逐档三档全量，此处默认档与 10f 对齐）。 */
+{
+  const noC = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const flat = noC.replace(/\n\s*/g, ' ')
+  /* 规则必须双锁（主纹理开关 × 侧栏开关）且锚在不透明内容根上——锚侧栏
+     列会被列内不透明内容根盖住（2026-10-31 实机翻车），这里是它的绊线。 */
+  const gate = /body\[data-endfield-texture\]\[data-endfield-sidebar-tex\] \[data-slot='sidebar'\] > div::before\s*\{[^}]*var\(--edge-tex-grid-color\)/.test(flat)
+    && /body\[data-endfield-texture\]\[data-endfield-sidebar-tex\] \[data-slot='sidebar'\] > div::after\s*\{[^}]*var\(--edge-tex-hatch-color\)/.test(flat)
+  if (gate) pass('侧栏底纹 · 网格/斜纹规则双锁在位（主开关 × 侧栏开关）')
+  else fail('侧栏底纹 · 规则缺失或未上双锁')
+  const tok = (name) => (new RegExp(name + ":\\s*(#[0-9a-f]{6})").exec(noC) || [])[1]
+  const alpha = (name) => (new RegExp(name + ":\\s*(\\d+)%").exec(noC) || [])[1]
+  const inkLight = tok('--edge-tex-ink'), aGridL = alpha('--edge-tex-grid-a'), aHatchL = alpha('--edge-tex-hatch-a')
+  const inkDarkM = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-ink:\s*(#[0-9a-f]{6})/.exec(flat)
+  const aGridD = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-grid-a:\s*(\d+)%/.exec(flat)
+  const aHatchD = /body\[data-ds-dark-theme\]\s*\{[^}]*--edge-tex-hatch-a:\s*(\d+)%/.exec(flat)
+  const fillLight = (new RegExp("'--dsw-specific-sidebar-fill'\\s*:\\s*\\{\\s*light:\\s*'(#[0-9a-f]{6})'", 'i').exec(clientSrc) || [])[1]
+  const fillDarkRaw = (new RegExp("'--dsw-specific-sidebar-fill'\\s*:\\s*\\{[^}]*?dark:\\s*'([^']+)'", 'i').exec(clientSrc) || [])[1]
+  if (!gate || !inkLight || !aGridL || !aHatchL || !inkDarkM || !aGridD || !aHatchD || !fillLight || !fillDarkRaw) {
+    fail('侧栏底纹 · 令牌或侧栏底色读不到')
+  } else {
+    const cases = [
+      ['亮 网格', hex(inkLight), Number(aGridL) / 100, fillLight],
+      ['亮 斜纹', hex(inkLight), Number(aHatchL) / 100, fillLight],
+      ['暗 网格', hex(inkDarkM[1]), Number(aGridD[1]) / 100, resolveDark(fillDarkRaw)],
+      ['暗 斜纹', hex(inkDarkM[1]), Number(aHatchD[1]) / 100, resolveDark(fillDarkRaw)],
+    ]
+    for (const [label, ink, a, surface] of cases) {
+      const r = ratio(over(ink, hex(surface), a), hex(surface))
+      if (r >= 1.06 && r <= 1.6) pass('侧栏底纹 · ' + label + '合成 = ' + r.toFixed(2) + ':1（装饰区间，与会话列底纹同档）')
+      else fail('侧栏底纹 ' + label + '出装饰区间：' + r.toFixed(2) + ':1')
+    }
+  }
+}
+
 console.log('')
 if (failures) { console.error(failures + ' palette check(s) failed'); process.exit(1) }
 console.log('all palette-contrast checks passed')
