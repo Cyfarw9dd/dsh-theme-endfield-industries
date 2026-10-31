@@ -246,7 +246,12 @@
          边界（本次不改）：轨迹视图的提示词 diff（@deepseek-ai/dsh-client-ui-
          trajectory 的 `.Y0dWHa_promptDiffLine*`，display:block + 淡底）有同样的
          「每行一个圆角块」现象，但属于另一个界面/组件、也无人上报；真要修时
-         它的钩子形状是 [class*='_promptDiffLine']。 */
+         注意：上游 0.2.1 起把该语义段细分为 promptDiffLinemeta / context /
+         added / removed 四个子段（0.2.1-rc.4/rc.5 安装树实测），裸 _promptDiffLine
+         尾段已不存在，包含匹配要对着四个子段写。此处刻意不写出选择器字面量：
+         dsh-drift-probe.js 逐字提取本文件里的 [class 系选择器形状，注释里的
+         字面量同样会被当成活契约去安装树里找——2026-10-31 雷达 #33 的误红
+         正是旧注释里这一句。 */
       body:not(.theme-endfield-round) [data-review-view],
       body:not(.theme-endfield-round) [data-review-view] [data-diff-side],
       body:not(.theme-endfield-round) [data-review-view] [data-diff-line],
