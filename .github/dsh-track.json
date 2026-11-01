@@ -1,9 +1,9 @@
 {
-  "dshVersion": "0.2.1-rc.4",
+  "dshVersion": "0.2.1-rc.5",
   "distTags": {
-    "alpha": "0.2.1-alpha.5",
-    "latest": "0.2.1-rc.2",
-    "next": "0.2.1-rc.4"
+    "latest": "0.2.1-rc.5",
+    "alpha": "0.2.2-alpha.2",
+    "next": "0.2.1-rc.5"
   },
-  "updatedAt": "2026-10-27T12:26:35.858Z"
+  "updatedAt": "2026-11-01T08:06:52.862Z"
 }
