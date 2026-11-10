@@ -109,8 +109,9 @@ const compareVersions = (a, b) => {
 }
 
 /* 候选选择：按 WATCHED 顺序找第一个「不等于记录且严格更新」的通道目标；
-   相等或更旧的通道记入 skipped。记录为 null（首次运行）时任何目标都算新。
-   解析不了的版本号直接抛错——绝不静默跳过。 */
+   相等 → 无事件（静默跳过、不记 note：追平不是「落后」，上游把 rc 提进
+   latest 后这就是常态）；更旧 → 记入 skipped 留 note。记录为 null（首次
+   运行）时任何目标都算新。解析不了的版本号直接抛错——绝不静默跳过。 */
 const pickCandidate = (tags, recorded, watched = WATCHED) => {
   const skipped = []
   for (const t of watched) {

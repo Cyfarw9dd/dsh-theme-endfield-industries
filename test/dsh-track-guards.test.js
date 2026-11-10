@@ -8,9 +8,10 @@
  * 本文件钉死那次事故换来的防护，以及 2026-10-24 版本语义切换（镜像→own semver）的契约：
  *
  *   1. pickCandidate / compareVersions（.github/scripts/dsh-track.js）：
- *      通道目标必须比记录「严格更新」才算候选；latest 落后 next 是 DSH 的
- *      常态（rc 构建只发 next），不算事件。事故现场的通道快照与已验证
- *      版本从 .github/dsh-track.json 真实读取，不在测试里复述数值。
+ *      通道目标必须比记录「严格更新」才算候选；latest 落后或追平记录都是
+ *      DSH 的常态（rc 只发 next、稳定后提升 latest），不算事件。事故现场
+ *      已冻结成字面量场景（记录文件是活文件，latest 追平后形态会变）；
+ *      活文件只重放与通道位置无关的不变量。
  *   2. 验证 job 必须在跑 test:ci 之前安装 devDependencies（tsdown 门禁），
  *      否则验证一律红在 scripts/build-client.js --check 上。
  *   3. 报警 job 的 if 必须以状态检查函数开头（!cancelled()）——不含状态
@@ -59,11 +60,40 @@ eq(normalizeDistTags([{ latest: '1' }, { latest: '2' }]), null, '多元素数组
 
 /* ---------- 2. pickCandidate：事故现场重放 ---------- */
 
+/* 记录文件是**活文件**：雷达每验证成功一次就覆写一次（2026-11-01 cbbb5a1 起
+   latest 已追平记录），watched 通道相对记录的位置（落后/追平/反超）随上游
+   发版节奏漂移——在这里断言「latest 必然落后」会在下一次追平时误红（正是
+   2026-11-07/10 两轮雷达的失败方式）。活文件只重放与位置无关的不变量；
+   位置契约由下面的冻结场景钉死。 */
 const replay = pickCandidate(state.distTags, state.dshVersion)
-eq(replay.version, null,
-  '事故重放：next=' + state.distTags.next + ' / latest=' + state.distTags.latest +
-  ' 对记录 ' + state.dshVersion + ' 不再产生候选')
-eq(replay.skipped.some((s) => s.channel === 'latest'), true, '落后的 latest 记入 skipped（note 可追溯）')
+eq(replay.version === null || compareVersions(replay.version, state.dshVersion) > 0, true,
+  '活文件重放：候选若存在必比记录 ' + state.dshVersion + ' 严格更新（旧版本绝不复活）')
+for (const s of replay.skipped) {
+  eq(compareVersions(s.version, state.dshVersion) < 0, true,
+    'skipped 里的 ' + s.channel + '=' + s.version + ' 确实落后于记录（note 可追溯）')
+}
+if (['next', 'latest'].every((ch) => compareVersions(state.distTags[ch], state.dshVersion) <= 0)) {
+  eq(replay.version, null,
+    '活文件重放：watched 通道都不比记录 ' + state.dshVersion + ' 新 → 无候选')
+}
+
+/* 冻结的事故现场（2026-10-23~24）：rc.3 只发 next，latest 钉在 rc.2。断言
+   曾经直接重放记录文件，但记录是活文件——上游把 rc.5 提进 latest（cbbb5a1）
+   之后「latest 落后」不再成立。场景在此冻结成字面量，不再随发版节奏漂移。 */
+eq(pickCandidate({ next: '0.2.1-rc.3', latest: '0.2.1-rc.2' }, '0.2.1-rc.3'),
+  { version: null, channel: null, skipped: [{ channel: 'latest', version: '0.2.1-rc.2' }] },
+  '事故冻结重放：落后的 latest 记入 skipped（note 可追溯），不产生候选')
+
+/* 追平态（2026-11-01 cbbb5a1 的真实形态，即两次雷达误红的直接现场）：
+   等于记录的通道不产生事件，也不记 note——追平不是「落后」，静默是刻意的。 */
+eq(pickCandidate({ next: '0.2.1-rc.5', latest: '0.2.1-rc.5' }, '0.2.1-rc.5'),
+  { version: null, channel: null, skipped: [] },
+  'latest 追平记录 → 无候选、无 note')
+
+/* 反超态：稳定版越过 rc 通道时 latest 比记录新，是正当事件，照常追。 */
+eq(pickCandidate({ next: '0.2.2-rc.1', latest: '0.2.2' }, '0.2.2-rc.1'),
+  { version: '0.2.2', channel: 'latest', skipped: [] },
+  'latest 反超记录（稳定版越过 rc）→ 照常产生候选')
 
 eq(pickCandidate({ next: '0.2.2-rc.1', latest: '0.2.1-rc.3' }, '0.2.1-rc.3'),
   { version: '0.2.2-rc.1', channel: 'next', skipped: [] }, 'next 出真正的新版本照常追')
