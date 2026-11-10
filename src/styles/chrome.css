@@ -470,9 +470,9 @@
       /* 官方结构映射：SubpageTab 每个页签自带 0 3rem 水平 padding（盘子恒宽、
          文字居中），激活时文字左移 −1.75rem 腾出箭头位。按官方/主题体量比
          ≈ 0.46（文字 28px/13px）折算：padding 22px、滑移 −13px、箭头 ⌀16px、
-         分隔线 1.5×18px、倒角 2px（官方 4px/60px 盒）。布局验算（gap 36）：
-         相邻盘子边缘隔 12px，分隔线居中两侧各 ≈6px，箭头与文字净距 27px。
-         padding 全页签恒定，无跳版。 */
+         分隔线 1.5×18px、倒角 2px（官方 4px/60px 盒）。布局（0.2.2-rc.1
+         起）：相邻页签盒隔 12px，洗面即盒面（不相交），分隔线居沟心两侧
+         各 6px。padding 全页签恒定，无跳版。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
         padding: 0 22px 9px;
         /* 点击切换动效（2026-10-15 用户指定，官方三路并行渐变里可迁移的两路）：
@@ -500,9 +500,9 @@
       /* 分隔线底座：每个页签的 ::after 都预建线盒（1.5×18、border-l1），
          常态 opacity 0——app 原生选中底线（.tabActive::after 的 accent 底
          与 left:0/right:0/bottom:-1px/height:2px 几何）被这里的几何+底色
-         整体改写取代（旧「background:0 0 清底线」规则已并入本条）。预建
-         盒子后，切换只是同一条沟两侧宿主的交叉淡入淡出，零「创造几何」
-         代价（与角标/指示线同一门派）。 */
+         整体改写取代（旧「background:0 0 清底线」规则已并入本条）。线盒
+         常驻、归属静态（见下方竖分隔线段），不再随激活位置交叉淡入——
+         单个 ::after 挂不了两条沟线，三页签时代必须静态归属。 */
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
         content: '';
         position: absolute;
@@ -511,19 +511,23 @@
         height: 18px;
         background: var(--dsw-alias-border-l1);
         opacity: 0;
-        transition: opacity .2s ease;
       }
       [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
         content: '';
         position: absolute;
-        /* 几何外扩：应用页签原生零水平内边距，上一版 inset:0 的洗面「刚刚把
-           文字罩下来」（用户实测）；现在 padding 22px 已给盘内呼吸位，负偏移
-           −12px 再把盘子边缘衬出字外（官方盘沿永远在字外），上 −4px，bottom
-           5px 止于分划线上方。倒角＝--edge-radius（2026-10-24 起对齐官网 4px，
-         不再按 0.46 折算）——伪元素不在全局圆角清单（[class] 只命中元素），
-         必须在此写明。 */
-        left: -12px;
-        right: -12px;
+        /* 洗面 = 页签自己的盒子（水平 inset 0），**不再向左右外扩**。
+           0.1.x 时代上游页签零水平内边距、页签间 gap 36px，洗面左右各外扩
+           12px 把盘沿衬出字外；0.2.2-rc.1（2026-11）改了间距模型：外层多了
+           .wSkVaW_viewTabs（gap 32px），页签带 −10px 命中区外扩，相邻页签
+           盒子只隔 12px——外扩 12px 会让相邻两个洗面重叠 12px（悬停未选页签
+           时叠出更深的灰条，用户实测 2026-11-10）。现在 22px 水平 padding
+           本身就是官方 3rem 的 0.46 折算（呼吸位在 padding 里，不在外扩里），
+           盒子之间的 12px 空气即官方页签间距，洗面永不相交。
+           上 −4px / bottom 5px 保留：洗面不越分划线。倒角＝--edge-radius
+           （2026-10-24 起对齐官网 4px，不再按 0.46 折算）——伪元素不在全局
+           圆角清单（[class] 只命中元素），必须在此写明。 */
+        left: 0;
+        right: 0;
         top: -4px;
         bottom: 5px;
         border-radius: var(--edge-radius);
@@ -548,25 +552,25 @@
         background-size: 16px 16px;
         opacity: 1;
       }
-      /* 官方竖分隔线（#d9d9d9 × 0.1875/2.5rem → 1.5×18px，缩放后），沟中心
-         居于相邻盘子之间。绘制归属（官方是独立 DOM 元素，这里借 ::after）：
-         · 非首个、非激活的页签：点亮自己的左沟线；
-         · 首个页签闲置且紧邻的下一个是激活页签（:has(+…)）：它的左沟线
-           无人画（激活侧 ::after 保持熄灭），由它自己点亮右沟线。
-         恰好覆盖两页签的全部组合；若上游未来放第三个页签，最坏情形是
-         激活页签左邻缺一条线（登记为已知边界）。分支只写定位与
-         opacity——线盒在底座已预建，切换零几何创建、只做交叉淡入。 */
-      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child):not([class$='_tabActive'])::after {
-        left: -18.75px;
+      /* 官方竖分隔线（#d9d9d9 × 0.1875/2.5rem → 1.5×18px，缩放后），沟心
+         居于相邻两盘之间，首尾隐藏（官网语义：页签之间一条线，行端不画）。
+         归属：**除首个页签外，每个页签静态点亮自己的左沟线**——每对相邻
+         页签恰好一条线，与激活位置无关。
+         历史：2 页签时代按「闲置侧绘制」归属（非首闲置画左沟 / 首签闲置
+         且下一激活画右沟），切换时两侧宿主交叉淡入。2026-11-10 上游加了
+         第三个页签（统计）兑现了旧注释里的「已知边界」：[闲置, 闲置, 激活]
+         时末段沟线无人绘制（激活侧既不画左沟、前一侧又够不着右沟），而
+         单个 ::after 不可能同时挂左右两条线——改为静态归属，顺带拿掉了
+         交叉淡入（官网分隔线本就是静态元素）。
+         沟心坐标：0.2.2-rc.1 相邻页签盒只隔 12px（viewTabs gap 32px −
+         页签自身 −10px 命中区外扩 ×2），中线在 −6px，线宽 1.5px 时左缘
+         −6.75px（上版按 36px 间隔算 −18.75px）。 */
+      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):not(:first-child)::after {
+        left: -6.75px;
         right: auto;
         opacity: 1;
       }
-      [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']):first-child:not([class$='_tabActive']):has(+ [class$='_tabActive'])::after {
-        left: auto;
-        right: -18.75px;
-        opacity: 1;
-      }
-      /* 减效降级：切换动画全部关闭（含 label 滑移与两条伪元素的淡入），
+      /* 减效降级：切换动画全部关闭（含 label 滑移与洗面/箭头的淡入），
          只保留瞬时状态翻转——本主题自加（官网无此降级，已登记分歧）。 */
       @media (prefers-reduced-motion: reduce) {
         [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive']) {
@@ -575,8 +579,7 @@
         [class$='_centerCol'] [class$='_tabs'] [class$='_tabLabel'] {
           transition: none;
         }
-        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before,
-        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::after {
+        [class$='_centerCol'] [class$='_tabs'] :is([class$='_tab'],[class$='_tabActive'])::before {
           transition: none;
         }
       }

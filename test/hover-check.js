@@ -123,30 +123,50 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     <button class="plainHover" id="chipGuard">范围外</button>
   </div>
   <div class="panel pI_x6G_centerCol">
-    <!-- The app's real tab rules (ui-conversation), verbatim, including the
-         active underline ::after the theme must clear AND the label span
-         (overflow:hidden) the theme's slide must not clip. The SELECTED tab
-         keeps the app's class order 'wSkVaW_tab wSkVaW_tabActive' — the
-         compound suffix is exactly what silently killed the first
-         :is()-less version. -->
+    <!-- The app's real tab rules (ui-conversation), verbatim from the shipped
+         bundle, including the active underline ::after the theme must clear AND
+         the label span (overflow:hidden) the theme's slide must not clip. The
+         SELECTED tab keeps the app's class order 'wSkVaW_tab wSkVaW_tabActive' —
+         the compound suffix is exactly what silently killed the first
+         :is()-less version.
+         STRUCTURE UPDATED 2026-11-10 (0.2.2-rc.1, the 统计 tab release): the
+         row gained a .wSkVaW_viewTabs wrapper (gap 32px) and each tab carries
+         a -10px hit-area margin (--dsh-tab-hit-inline), so the BORDER boxes
+         are only 12px apart — the previous copy of the 0.1.x spacing (gap
+         36px, zero padding, no hit margins) is exactly why the theme's 12px
+         wash overhang silently started to overlap its neighbour. -->
     <style>
-      .wSkVaW_tabs{gap:36px;margin-top:10px;padding-left:8px;display:flex;position:relative}
-      .wSkVaW_tab{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;
-        padding:0 0 9px;font-size:13px;font-weight:500;line-height:16px;position:relative}
-      .wSkVaW_tab:after{content:"";background:0 0;border-radius:2px;height:2px;position:absolute;bottom:-1px;left:0;right:0}
+      .wSkVaW_tabs{box-sizing:border-box;flex-wrap:wrap;gap:16px 20px;width:100%;min-width:0;margin-top:10px;padding-left:8px;display:flex;position:relative}
+      .wSkVaW_viewTabs{flex-wrap:wrap;gap:32px;min-width:0;min-height:25px;display:flex}
+      .wSkVaW_tab{--dsh-tab-hit-inline:10px;box-sizing:border-box;min-height:35px;margin:-10px calc(-1 * var(--dsh-tab-hit-inline)) 0;padding:10px var(--dsh-tab-hit-inline) 9px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;font-size:13px;font-weight:500;line-height:16px;position:relative}
+      .wSkVaW_tab:after{content:"";right:var(--dsh-tab-hit-inline);bottom:-1px;left:var(--dsh-tab-hit-inline);background:0 0;border-radius:2px;height:2px;position:absolute}
       .wSkVaW_tabActive{color:var(--dsw-alias-state-business-primary)}
       .wSkVaW_tabActive:after{background:var(--dsw-alias-state-business-primary)}
       .wSkVaW_tabLabel{text-overflow:ellipsis;white-space:nowrap;max-width:88px;display:block;overflow:hidden}
     </style>
     <div class="wSkVaW_tabs">
-      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSel"><span class="wSkVaW_tabLabel" id="labSel">对话</span></button>
-      <button class="wSkVaW_tab" id="tabIdle"><span class="wSkVaW_tabLabel" id="labIdle">轨迹</span></button>
+      <div class="wSkVaW_viewTabs">
+        <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSel"><span class="wSkVaW_tabLabel" id="labSel">对话</span></button>
+        <button class="wSkVaW_tab" id="tabIdle"><span class="wSkVaW_tabLabel" id="labIdle">轨迹</span></button>
+      </div>
     </div>
-    <!-- Reversed activeness: exercises the OTHER divider rule (first tab idle
-         while its next sibling is active draws the RIGHT gutter via :has(+…)). -->
+    <!-- Reversed activeness: first tab idle while its next sibling is active. -->
     <div class="wSkVaW_tabs" style="margin-top:24px">
-      <button class="wSkVaW_tab" id="tabIdleFirst"><span class="wSkVaW_tabLabel" id="labIdleFirst">对话</span></button>
-      <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSelSecond"><span class="wSkVaW_tabLabel" id="labSelSecond">轨迹</span></button>
+      <div class="wSkVaW_viewTabs">
+        <button class="wSkVaW_tab" id="tabIdleFirst"><span class="wSkVaW_tabLabel" id="labIdleFirst">对话</span></button>
+        <button class="wSkVaW_tab wSkVaW_tabActive" id="tabSelSecond"><span class="wSkVaW_tabLabel" id="labSelSecond">轨迹</span></button>
+      </div>
+    </div>
+    <!-- Three tabs (2026-11-10 用户上报的直接现场): 统计 appended by upstream,
+         active, with both left neighbours idle — the ONLY combination the old
+         idle-side attribution left without a gutter, and the one where the
+         wash overlap was reported. -->
+    <div class="wSkVaW_tabs" style="margin-top:24px">
+      <div class="wSkVaW_viewTabs">
+        <button class="wSkVaW_tab" id="tabThreeIdle1"><span class="wSkVaW_tabLabel" id="labThreeIdle1">对话</span></button>
+        <button class="wSkVaW_tab" id="tabThreeMid"><span class="wSkVaW_tabLabel" id="labThreeMid">轨迹</span></button>
+        <button class="wSkVaW_tab wSkVaW_tabActive" id="tabThreeLast"><span class="wSkVaW_tabLabel" id="labThreeLast">统计</span></button>
+      </div>
     </div>
   </div>
   <script>window.__ModuleLoader__={load:(m)=>{window.__MOD__=m}}</script>
@@ -339,15 +359,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const washIdle = await evaluate("window.__pseudo__('tabIdle','::before','backgroundColor')")
     if (washIdle === 'rgba(0, 0, 0, 0.04)') pass('悬停洗面 = 官方 #f3f3f3 档（纸面 rgba .04）  [' + washIdle + ']')
     else fail('悬停洗面色漂移（应 rgba(0,0,0,0.04)，黑遮罩回归？）  [' + washIdle + ']')
-    /* the wash plate must BREATHE around the text: the app's tab buttons have no
-       horizontal padding, so inset:0 hugs the glyphs ("刚刚把文字罩下来", user
-       report). Official SubpageTab gets this from 0 3rem padding; here negative
-       offsets extend the plate ±12px/−4px past the border box. */
+    /* the wash plate = the tab's own border box (horizontal inset 0): 22px
+       padding IS the official 0.46 × 3rem breathing, so no overhang is needed.
+       The overhang was the 0.1.x-era answer to "zero upstream padding, gap
+       36px"; against 0.2.2-rc.1's 12px box gaps a 12px overhang made the
+       hovered plate overlap the active plate by 12px (reported 2026-11-10,
+       the 统计 tab release). Pin the geometry that makes overlap impossible. */
     const idleRect = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabIdle'))"))
     const washW = parseFloat(await evaluate("window.__pseudo__('tabIdle','::before','width')"))
     const washTop = await evaluate("window.__pseudo__('tabIdle','::before','top')")
-    if (washW >= idleRect.w + 24 - 0.5) pass('洗面外扩左右各 12px（' + washW.toFixed(1) + 'px ≥ 文字盒 ' + idleRect.w.toFixed(1) + '+24，不贴字）')
-    else fail('洗面退回贴字几何  [洗面 ' + washW.toFixed(1) + 'px vs 盒 ' + idleRect.w.toFixed(1) + 'px]')
+    if (Math.abs(washW - idleRect.w) < 0.5) pass('洗面 = 页签盒（水平 inset 0，22px padding 承担呼吸位）  [洗面 ' + washW.toFixed(1) + 'px = 盒 ' + idleRect.w.toFixed(1) + 'px]')
+    else fail('洗面越出页签盒（左右外扩回归 → 相邻洗面重叠）  [洗面 ' + washW.toFixed(1) + 'px vs 盒 ' + idleRect.w.toFixed(1) + 'px]')
+    /* the reported bug, as an invariant: two neighbouring plates must not
+       intersect. Boxes are 12px apart in 0.2.2-rc.1; overlap came back only
+       because the plate was extended 12px past its box. */
+    const selRectA = JSON.parse(await evaluate("JSON.stringify(window.__rect__('tabSel'))"))
+    const plateGap = idleRect.x - (selRectA.x + selRectA.w)
+    if (plateGap >= 0) pass('相邻洗面盒不相交（洗面间距 ' + plateGap.toFixed(1) + 'px ≥ 0）')
+    else fail('相邻洗面重叠 ' + plateGap.toFixed(1) + 'px — 洗面又越出页签盒（2026-11-10 回归）')
     if (washTop === '-4px') pass('洗面上扩 4px  [' + washTop + ']')
     else fail('洗面上缘贴字  [top=' + washTop + ']')
     const beforeIdleRest = await evaluate("window.__pseudo__('tabIdle','::before','opacity')")
@@ -393,14 +422,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     const divIdle = await evaluate("window.__pseudo__('tabIdle','::after','backgroundColor')")
     const divIdleLeft = await evaluate("window.__pseudo__('tabIdle','::after','left')")
     const divIdleW = await evaluate("window.__pseudo__('tabIdle','::after','width')")
-    if (divIdle === 'rgb(216, 217, 213)' && divIdleLeft === '-18.75px' && divIdleW === '1.5px') pass('竖分隔线 = 官方 #d9d9d9 档（左沟，闲置侧绘制）  [' + divIdle + ' @' + divIdleLeft + ']')
-    else fail('左沟分隔线不对  [' + divIdle + ' @' + divIdleLeft + ' w=' + divIdleW + ']')
-    const divFirst = await evaluate("window.__pseudo__('tabIdleFirst','::after','right')")
-    const divFirstBg = await evaluate("window.__pseudo__('tabIdleFirst','::after','backgroundColor')")
-    if (divFirst === '-18.75px' && divFirstBg === 'rgb(216, 217, 213)') pass('竖分隔线右沟分支（首签闲置 + :has(+) 命中）  [' + divFirst + ']')
-    else fail('右沟分隔线不对（:has(+) 失效？）  [right=' + divFirst + ' bg=' + divFirstBg + ']')
+    if (divIdle === 'rgb(216, 217, 213)' && divIdleLeft === '-6.75px' && divIdleW === '1.5px') pass('竖分隔线 = 官方 #d9d9d9 档（静态左沟，沟心居 12px 间隙中线）  [' + divIdle + ' @' + divIdleLeft + ']')
+    else fail('分隔线几何/颜色不对  [' + divIdle + ' @' + divIdleLeft + ' w=' + divIdleW + ']')
+    /* the gutter must sit INSIDE the 12px air between the two plates. */
+    const gutterLeft = idleRect.x - 6.75
+    if (gutterLeft > selRectA.x + selRectA.w && gutterLeft + 1.5 <= idleRect.x) pass('分隔线落在两洗面之间的空气带里（' + gutterLeft.toFixed(2) + ' ∈ (' + (selRectA.x + selRectA.w).toFixed(1) + ', ' + idleRect.x.toFixed(1) + ')）')
+    else fail('分隔线压进洗面  [x=' + gutterLeft.toFixed(2) + ']')
+    const divFirst = await evaluate("window.__pseudo__('tabIdleFirst','::after','opacity')")
+    if (divFirst === '0') pass('首个页签不画左沟（首尾隐藏）  [@' + divFirst + ']')
+    else fail('首个页签画了左沟  [opacity=' + divFirst + ']')
+    /* THREE TABS, the case the old idle-side attribution could not cover:
+       [闲置, 闲置, 激活] used to leave the last pair without a gutter. */
+    const div3 = []
+    for (const id of ['tabThreeIdle1', 'tabThreeMid', 'tabThreeLast']) {
+      div3.push({ o: await evaluate("window.__pseudo__('" + id + "','::after','opacity')"),
+        l: await evaluate("window.__pseudo__('" + id + "','::after','left')") })
+    }
+    if (div3[0].o === '0' && div3[1].o === '1' && div3[2].o === '1' && div3[1].l === '-6.75px' && div3[2].l === '-6.75px') pass('三页签 [闲置,闲置,激活]：每对相邻页签恰好一条沟线（末段不漏，激活侧也画左沟）')
+    else fail('三页签沟线归属不对（末段漏线回归？）  [' + JSON.stringify(div3) + ']')
     const activeAfter = await evaluate("window.__pseudo__('tabSel','::after','opacity')")
-    if (activeAfter === '0') pass('激活页签 ::after 线盒熄灭（箭头在 ::before，不画线）  [@' + activeAfter + ']')
+    if (activeAfter === '0') pass('激活页签在首位时不画沟（首尾隐藏；箭头在 ::before）  [@' + activeAfter + ']')
     else fail('激活页签 ::after 不应亮线  [opacity=' + activeAfter + ']')
     /* real pointer onto the SELECTED tab: the compound class must get the wash too,
        and it must STAY at the active step (official keeps #e5e5e5 on hover) */
@@ -428,13 +469,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     await sleep(90)
     const midIndent = parseFloat(await evaluate("window.__translate__('labIdle')"))
     const midWash = parseFloat(await evaluate("window.__pseudo__('tabIdle','::before','opacity')"))
-    const midDiv = parseFloat(await evaluate("window.__pseudo__('tabSel','::after','opacity')"))
+    const midDiv = parseFloat(await evaluate("window.__pseudo__('tabIdle','::after','opacity')"))
     if (midIndent < -0.5 && midIndent > -12.5) pass('切换中程：文字滑移进行中  [translateX ' + midIndent.toFixed(1) + 'px ∈ (−13,0)]')
     else fail('滑移未动画化（中程采样 ' + midIndent.toFixed(1) + 'px 应在 −13 与 0 之间）')
     if (midWash > 0.02 && midWash < 0.98) pass('切换中程：洗面+箭头淡入进行中  [opacity ' + midWash.toFixed(2) + ']')
     else fail('洗面淡入未动画化  [opacity ' + midWash.toFixed(2) + ']')
-    if (midDiv > 0.02 && midDiv < 0.98) pass('切换中程：分隔线交叉淡入进行中  [opacity ' + midDiv.toFixed(2) + ']')
-    else fail('分隔线淡入未动画化  [opacity ' + midDiv.toFixed(2) + ']')
+    /* gutters are STATIC now (single ::after can paint only one gutter; the
+       idle-side crossfade could not cover 3 tabs) — lit before, during and
+       after the switch, never fading. */
+    if (midDiv === 1) pass('切换中程：分隔线静态常亮（不再交叉淡入，官网语义）  [opacity ' + midDiv.toFixed(2) + ']')
+    else fail('分隔线不应淡入/淡出（静态归属）  [opacity ' + midDiv.toFixed(2) + ']')
     await sleep(400)
     const endIndent = await evaluate("window.__translate__('labIdle')")
     const endWash = await evaluate("window.__pseudo__('tabIdle','::before','opacity')")
